@@ -2372,7 +2372,8 @@ glue (void)
           fprintf (asmFile, "; overlayable register banks\n");
           fprintf (asmFile, "%s", iComments2);
           if (RegBankUsed[0])
-            fprintf (asmFile, "\t.area REG_BANK_0\t(REL,OVR,DATA)\n\t.ds 8\n");
+            fprintf (asmFile, "\t.area REG_BANK_0\t(REL,OVR,DATA)\n\t.ds %d\n",
+                     (TARGET_IS_MCS251 ? 16 : 8));   /* MCS-251 has R0-R15 */
           if (RegBankUsed[1] || options.parms_in_bank1)
             fprintf (asmFile, "\t.area REG_BANK_1\t(REL,OVR,DATA)\n\t.ds 8\n");
           if (RegBankUsed[2])

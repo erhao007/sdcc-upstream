@@ -81,6 +81,9 @@ public:
 
   // PSW flag helpers (8051-compatible CY/AC/OV; N/Z in PSW1, TODO)
   void set_flags_add8(t_mem a, t_mem b, t_mem r);
+  void set_nz(t_mem r, int width);         // set PSW1 N/Z for width-byte result
+  int  get_n(void);                        // PSW1.7
+  int  get_z(void);                        // PSW1.6
 
   // core instruction implementations (Source mode encodings)
   int inst_ret251(void);
@@ -103,7 +106,7 @@ public:
   int exec_0b(t_mem sub, int dec);        // 0B/1B-prefixed (INC/DEC family)
 
 protected:
-  class cl_memory_cell *psw1;
+  t_mem psw1;                       // MCS-251 PSW1: bit7=N, bit6=Z (SFR 0xA0)
 };
 
 
