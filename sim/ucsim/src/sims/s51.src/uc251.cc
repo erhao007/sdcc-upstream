@@ -977,9 +977,74 @@ cl_uc251::exec_inst(void)
     case 0xc3: /* CLR CY */
       bits->set(0xd7, 0);
       return(resGO);
-    case 0xb3: /* CPL CY */
-      bits->set(0xd7, (bits->read(0xd7)) ? 0 : 0x80);
+    case 0xd3: /* SETB CY */
+      bits->set(0xd7, 1);
       return(resGO);
+    case 0xb3: /* CPL CY */
+      bits->set(0xd7, (bits->read(0xd7)) ? 0 : 1);
+      return(resGO);
+
+    /* Bit operations on bit51 operands (classic 8051 bit addressing,      */
+    /* shared opcode mapping with mcs51).  bit address 0x00-0x7F -> IRAM    */
+    /* 0x20-0x2F, 0x80-0xFF -> bit-addressable SFRs; decoded by the         */
+    /* inherited 'bits' address space.                                      */
+    case 0xc2: /* CLR bit */
+      bits->write(fetch(), 0);
+      return(resGO);
+    case 0xd2: /* SETB bit */
+      bits->write(fetch(), 1);
+      return(resGO);
+    case 0xb2: /* CPL bit */
+      {
+	t_mem b= fetch();
+	bits->write(b, bits->read(b) ? 0 : 1);
+	return(resGO);
+      }
+    case 0x72: /* ORL C,bit */
+      bits->write(0xd7, bits->read(0xd7) | bits->read(fetch()));
+      return(resGO);
+    case 0x82: /* ANL C,bit */
+      bits->write(0xd7, bits->read(0xd7) & bits->read(fetch()));
+      return(resGO);
+    case 0xa0: /* ORL C,/bit */
+      bits->write(0xd7, bits->read(0xd7) | (bits->read(fetch()) ? 0 : 1));
+      return(resGO);
+    case 0xb0: /* ANL C,/bit */
+      bits->write(0xd7, bits->read(0xd7) & (bits->read(fetch()) ? 0 : 1));
+      return(resGO);
+    case 0xa2: /* MOV C,bit */
+      bits->write(0xd7, bits->read(fetch()));
+      return(resGO);
+    case 0x92: /* MOV bit,C */
+      bits->write(fetch(), bits->read(0xd7));
+      return(resGO);
+    case 0x10: /* JBC bit,rel (clear bit and jump if set) */
+      {
+	t_mem b= fetch();
+	t_mem rel= fetch();
+	int v= bits->read(b);
+	if (v)
+	  bits->write(b, 0);
+	if (v)
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
+    case 0x20: /* JB bit,rel */
+      {
+	t_mem b= fetch();
+	t_mem rel= fetch();
+	if (bits->read(b))
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
+    case 0x30: /* JNB bit,rel */
+      {
+	t_mem b= fetch();
+	t_mem rel= fetch();
+	if (!bits->read(b))
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
 
     case 0x74: /* MOV A,#data */
       acc->write(fetch());
