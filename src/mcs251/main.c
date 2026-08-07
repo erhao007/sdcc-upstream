@@ -197,6 +197,10 @@ _mcs251_setDefaultOptions (void)
      8-bit frame pointer is needed. */
   options.xdata_loc = 0x010000;
   options.omitFramePtr = 1;
+  /* MCS-251 has 256 bytes of IRAM (region 00:0000-00:00FF), unlike the
+     mcs51 default of 128.  Tell the linker so it can place __start__stack
+     (and thus the SPX hardware stack) in the full 256-byte window. */
+  options.iram_size = 0x100;
 }
 
 static const char *
