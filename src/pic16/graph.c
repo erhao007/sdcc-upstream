@@ -19,7 +19,7 @@
    Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 -------------------------------------------------------------------------*/
 
-/* $Id: graph.c 9490 2016-01-31 11:44:32Z molnarkaroly $ */
+/* $Id$ */
 
 #include "graph.h"
 

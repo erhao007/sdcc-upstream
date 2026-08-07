@@ -389,6 +389,9 @@ enum {
   W_OPTIONAL_ARITHMETIC         = 359, // pointer to _Optional could not be proven to be non-null at pointer arithmetic
   W_NONCONST_STRINGLIT          = 360, // string literal assigned to pointer to non-const
   W_QUALIFIED_RETURN            = 361, // qualifier on return type has no effect
+  E_BUILTIN_EXPECT_INTEGRAL     = 362, // __builtin_expect arguments must be integral
+  E_AUTO_TYPE_DECLARATION       = 363, // invalid __auto_type declaration
+  E_BUILTIN_OVERFLOW_TYPES      = 364, // invalid generic overflow builtin arguments
 
   // If you get a merge conflict here, some #pragma disable_warning in support/valdiag and support/regression will likely need to be adapted to the resolution. Check there!
 

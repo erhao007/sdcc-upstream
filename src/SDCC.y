@@ -74,7 +74,7 @@ bool uselessDecl = true;
 #define YYDEBUG 1
 
 %}
-%expect 4
+%expect 10
 
 %union {
     attribute  *attr;       /* attribute                              */
@@ -92,7 +92,8 @@ bool uselessDecl = true;
 
 %token <yychar> IDENTIFIER TYPE_NAME ADDRSPACE_NAME
 %token <val> CONSTANT
-%token SIZEOF COUNTOF OFFSETOF
+%token SIZEOF COUNTOF OFFSETOF BUILTIN_CONSTANT_P BUILTIN_EXPECT
+%token BUILTIN_TYPES_COMPATIBLE_P
 %token PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token AND_OP OR_OP
 %token ATTR_START TOK_SEP
@@ -100,6 +101,8 @@ bool uselessDecl = true;
 %token <yyint> SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token <yyint> XOR_ASSIGN OR_ASSIGN
 %token TYPEDEF EXTERN STATIC AUTO REGISTER CONSTEXPR CODE EEPROM INTERRUPT SFR SFR16 SFR32 ADDRESSMOD
+%token AUTO_TYPE
+%token SD_EXTENSION
 %token AT SBIT REENTRANT USING  XDATA DATA IDATA PDATA ELLIPSIS CRITICAL
 %token NONBANKED BANKED SHADOWREGS SD_WPARAM
 %token SD_BOOL SD_CHAR SD_SHORT SD_INT SD_LONG SIGNED UNSIGNED SD_FLOAT DOUBLE FIXED16X16 SD_CONST VOLATILE SD_VOID BIT OPTIONAL
@@ -137,7 +140,7 @@ bool uselessDecl = true;
 %type <attr> attribute_specifier_sequence attribute_specifier_sequence_opt attribute_specifier attribute_list attribute attribute_opt
 %type <sym> identifier attribute_token declarator declarator2 direct_declarator array_declarator enumerator_list enumerator
 %type <sym> member_declarator function_declarator
-%type <sym> member_declarator_list member_declaration member_declaration_list
+%type <sym> member_declarator_list member_declaration member_declaration_list struct_body
 %type <sym> declaration init_declarator_list init_declarator simple_declaration
 %type <sym> declaration_list identifier_list
 %type <sym> kr_declaration kr_declaration_list
@@ -182,8 +185,39 @@ primary_expression
    | CONSTANT        { $$ = newAst_VALUE ($1); }
    | string_literal_val
    | '(' expression ')'    { $$ = $2; }
+   | '(' compound_statement ')'
+                      {
+                        if (!options.std_gnu)
+                          werror (E_SYNTAX_ERROR);
+                        $$ = $2 ? $2 : newNode (BLOCK, NULL, NULL);
+                        $$->isStmtExpr = 1;
+                      }
    | generic_selection
    | predefined_constant
+   | BUILTIN_CONSTANT_P '(' assignment_expr ')'
+                      {
+                        if (!options.std_gnu)
+                          werror (E_SYNTAX_ERROR);
+                        $$ = newAst_VALUE (constIntVal (
+                          constExprTree ($3) && !hasSEFcalls ($3) ?
+                          "1" : "0"));
+                      }
+   | BUILTIN_EXPECT '(' assignment_expr ',' assignment_expr ')'
+                      {
+                        if (!options.std_gnu)
+                          werror (E_SYNTAX_ERROR);
+                        $$ = newNode (BUILTIN_EXPECT, $3, $5);
+                      }
+   | BUILTIN_TYPES_COMPATIBLE_P '(' type_name ',' type_name ')'
+                      {
+                        if (!options.std_gnu)
+                          werror (E_SYNTAX_ERROR);
+                        checkTypeSanity ($3, "(__builtin_types_compatible_p)");
+                        checkTypeSanity ($5, "(__builtin_types_compatible_p)");
+                        $$ = newAst_VALUE (constIntVal (
+                          compareTypeCompatible ($3, $5) ?
+                          "1" : "0"));
+                      }
    ;
 
 predefined_constant
@@ -321,7 +355,7 @@ unary_expression
                  else
                    SPEC_OPTIONAL (type->next) = false;
                  $$ = newNode (CAST, newAst_LINK(type), $$);
-                 $$->values.cast.semDeref = true;
+                 $$->semDeref = true;
                }
            }
          else if ($1 == '*' && IS_AST_OP ($2) && $2->opval.op == '&' && $2->right == NULL)
@@ -335,6 +369,7 @@ unary_expression
    | COUNTOF '(' type_name ')'      { $$ = newAst_VALUE (countofOp ($3)); }
    | ALIGNOF '(' type_name ')'      { $$ = newAst_VALUE (alignofOp ($3)); }
    | OFFSETOF '(' type_name ',' offsetof_member_designator ')' { $$ = offsetofOp($3, $5); }
+   | SD_EXTENSION unary_expression { $$ = $2; }
    ;
 
 unary_operator
@@ -625,6 +660,13 @@ storage_class_specifier
                   $$ = newLink (SPECIFIER);
                   SPEC_TYPEDEF($$) = 1;
                }
+   | SD_EXTENSION {
+                  /* GNU __extension__ silences pedantic warnings around a
+                     declaration that uses an extension; SDCC accepts the
+                     extended construct anyway, so the prefix is an empty
+                     specifier that contributes nothing to the decl. */
+                  $$ = newLink (SPECIFIER);
+               }
    | EXTERN    {
                   $$ = newLink(SPECIFIER);
                   SPEC_EXTR($$) = 1;
@@ -641,6 +683,12 @@ storage_class_specifier
    | AUTO      {
                   $$ = newLink (SPECIFIER);
                   SPEC_SCLS($$) = S_AUTO;
+               }
+   | AUTO_TYPE {
+                  if (!options.std_gnu)
+                    werror (E_SYNTAX_ERROR);
+                  $$ = newLink (SPECIFIER);
+                  SPEC_AUTO_TYPE($$) = 1;
                }
    | REGISTER  {
                   $$ = newLink (SPECIFIER);
@@ -877,13 +925,13 @@ struct_or_union_specifier
                   werror(E_BAD_TAG, $3->tag, $1==STRUCT ? "struct" : "union");
             }
         }
-   '{' member_declaration_list '}'
+   struct_body
         {
           structdef *sdef;
           symbol *sym, *dsym;
 
           // check for errors in structure members
-          for (sym=$6; sym; sym=sym->next)
+          for (sym=$5; sym; sym=sym->next)
             {
               if (IS_ABSOLUTE(sym->etype))
                 {
@@ -908,25 +956,42 @@ struct_or_union_specifier
             }
 
           /* Create a structdef   */
-          $3->fields = reverseSyms($6);        /* link the fields */
-          $3->size = compStructSize($1, $3);   /* update size of  */
+          $3->fields = reverseSyms($5);        /* link the fields */
+          if ($5 == NULL)
+            {
+              /* GNU C: empty struct/union body ("struct x { };").  The
+                 struct is complete but has no members and size zero. */
+              $3->size = 0;
+              $3->b_empty_complete = true;
+            }
+          else
+            {
+              $3->size = compStructSize($1, $3);   /* update size of  */
+            }
           promoteAnonStructs ($1, $3);
 
           if ($3->redefinition) // Since C23, multiple definitions for struct / union are allowed, if they are compatible and have the same tags. The current standard draft N3047 allows redeclarations of unions to have a different order of the members. We don't. The rule in N3047 is now considered a mistake by many, and will hopefully be changed to the SDCC behaviour via a national body comment for the final version of the standard.
             {
               sdef = findSymWithBlock (StructTab, $3->tagsym, currBlockno, NestLevel);
               bool compatible = options.std_c23 && sdef->tagsym && $3->tagsym && !strcmp (sdef->tagsym->name, $3->tagsym->name);
-              for (symbol *fieldsym1 = sdef->fields, *fieldsym2 = $3->fields; compatible; fieldsym1 = fieldsym1->next, fieldsym2 = fieldsym2->next)
+              symbol *fieldsym1 = sdef->fields;
+              symbol *fieldsym2 = $3->fields;
+              while (compatible)
                 {
-                  if (!fieldsym1 && !fieldsym2)
-                    break;
                   if (!fieldsym1 || !fieldsym2)
-                    compatible = false;
-                  else if (strcmp (fieldsym1->name, fieldsym2->name))
-                    compatible = false;
-                  else if (compareType (fieldsym1->type, fieldsym2->type, true) <= 0)
-                    compatible = false;
-               }
+                    {
+                      compatible = fieldsym1 == fieldsym2;
+                      break;
+                    }
+                  if (strcmp (fieldsym1->name, fieldsym2->name) ||
+                      compareType (fieldsym1->type, fieldsym2->type, true) <= 0)
+                    {
+                      compatible = false;
+                      break;
+                    }
+                  fieldsym1 = fieldsym1->next;
+                  fieldsym2 = fieldsym2->next;
+                }
               if (!compatible)
                 {
                   werror(E_STRUCT_REDEF_INCOMPATIBLE, $3->tag);
@@ -986,6 +1051,18 @@ member_declaration_list
           sym->next = $1;
 
            $$ = $2;
+        }
+   ;
+
+/* GNU C allows an empty struct/union body ("struct foo { };").  Zephyr's
+   per-arch structs (e.g. _cpu_arch) rely on this extension. */
+struct_body
+   : '{' member_declaration_list '}'  { $$ = $2; }
+   | '{' '}'
+        {
+          if (!options.std_gnu)
+            werror (E_SYNTAX_ERROR);
+          $$ = NULL;
         }
    ;
 
@@ -2218,7 +2295,7 @@ label
      }
    | attribute_specifier_sequence_opt CASE constant_range_expr ':'
      {
-       if (!options.std_c2y)
+       if (!options.std_c2y && !options.std_gnu)
          werror (E_CASE_RANGE_C2Y);
 
        if (STACK_EMPTY(swStk))
@@ -2279,7 +2356,17 @@ block_item_list
 
 expression_statement
    : expression_opt ';'
-   | attribute_specifier_sequence expression ';'           { $$ = $2; seqPointNo++;}
+     {
+       $$ = $1;
+       if ($$)
+         $$->isExprStmt = 1;
+     }
+   | attribute_specifier_sequence expression ';'
+     {
+       $$ = $2;
+       $$->isExprStmt = 1;
+       seqPointNo++;
+     }
    ;
 
 else_statement
@@ -2520,6 +2607,13 @@ external_declaration
    : function_definition
         {
           // blockNo = 0;
+        }
+   | ';'
+        {
+          /* Empty declaration (C23, also a common GNU C idiom in headers
+             such as Zephyr's). */
+          if (!options.std_c23 && !options.std_gnu)
+            werror (E_SYNTAX_ERROR);
         }
    | declaration
         {
@@ -3062,6 +3156,8 @@ implicit_block
        NestLevel -= SUBLEVEL_UNIT;
        currBlockno = STACK_POP(blockNum);
        $$ = createBlock($1, $2);
+       if ($$)
+         $$->isImplicitBlock = 1;
        cleanUpLevel(StructTab, NestLevel + SUBLEVEL_UNIT);
      }
    | declaration_after_statement
@@ -3070,6 +3166,8 @@ implicit_block
        NestLevel -= SUBLEVEL_UNIT;
        currBlockno = STACK_POP(blockNum);
        $$ = createBlock($1, NULL);
+       if ($$)
+         $$->isImplicitBlock = 1;
        cleanUpLevel(StructTab, NestLevel + SUBLEVEL_UNIT);
      }
    ;

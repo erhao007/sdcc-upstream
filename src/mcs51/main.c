@@ -178,7 +178,7 @@ _mcs51_finaliseOptions (void)
       break;
     }
 
-  /* mcs51 has an assembly coded float library that's almost always reentrant */
+  /* The MCS-51 assembly float library is reentrant. */
   if (!options.useXstack)
     options.float_rent = 1;
 
@@ -247,6 +247,8 @@ _mcs51_genAssemblerStart (FILE * of)
 static void
 mcs51_genAtomicSupport (struct dbuf_s *oBuf, unsigned int startaddr)
 {
+  const char *returnInsn = "ret";
+
 //  if (!options.std_c11)
 //    return;
 
@@ -290,21 +292,21 @@ mcs51_genAtomicSupport (struct dbuf_s *oBuf, unsigned int startaddr)
                      "\tcjne\ta, ar2, .+#5\n"
                      "\tmov\ta, r3\n"
                      "\tmov\t@r0, a\n"
-                     "\tret\n"
-                     "\tnop\n");
+                     "\t%s\n"
+                     "\tnop\n", returnInsn);
   dbuf_printf (oBuf, "sdcc_atomic_compare_exchange_pdata_impl:\n"
                      "\tmovx\ta, @r0\n"
                      "\tcjne\ta, ar2, .+#5\n"
                      "\tmov\ta, r3\n"
                      "\tmovx\t@r0, a\n"
-                     "\tret\n"
-                     "\tnop\n");
+                     "\t%s\n"
+                     "\tnop\n", returnInsn);
   dbuf_printf (oBuf, "sdcc_atomic_compare_exchange_xdata_impl:\n"
                      "\tmovx\ta, @dptr\n"
                      "\tcjne\ta, ar2, .+#5\n"
                      "\tmov\ta, r3\n"
                      "\tmovx\t@dptr, a\n"
-                     "\tret\n");
+                     "\t%s\n", returnInsn);
   dbuf_printf (oBuf, "sdcc_atomic_exchange_rollback_end::\n\n");
 
   // The following two routines just need to be in jnb range of the above ones, they don't have alignment requirements.
@@ -319,10 +321,10 @@ mcs51_genAtomicSupport (struct dbuf_s *oBuf, unsigned int startaddr)
                      "\tmov\ta, r2\n"
                      "\txch\ta, @r0\n"
                      "\tmov\tdpl, a\n"
-                     "\tret\n"
+                     "\t%s\n"
                      "sdcc_atomic_exchange_exit:\n"
                      "\tmov\tdpl, r3\n"
-                     "\tret\n");
+                     "\t%s\n", returnInsn, returnInsn);
 
   // If the value of the byte at b:dptr is the value of r2, store the value
   // of r3 into that byte. Return the new value of that byte in a.
@@ -376,6 +378,7 @@ _mcs51_genIVT (struct dbuf_s *oBuf, symbol **interrupts, int maxInterrupts)
 
   if (!options.norestartseqatomics)
     mcs51_genAtomicSupport (oBuf, nextbyteaddr);
+
 
   return true;
 }
@@ -506,6 +509,7 @@ instructionSize(char *inst, char *op1, char *op2)
   #define IS_C(s) (*(s) == 'c' && *(s+1) == '\0')
   #define IS_Rn(s) (*(s) == 'r' && *(s+1) >= '0' && *(s+1) <= '7')
   #define IS_atRi(s) (*(s) == '@' && *(s+1) == 'r')
+
 
   /* Based on the current (2003-08-22) code generation for the
      small library, the top instruction probability is:
@@ -675,6 +679,7 @@ mcs51operandCompare (const void *key, const void *member)
   return strcmp((const char *)key, ((mcs51operanddata *)member)->name);
 }
 
+
 static void
 updateOpRW (asmLineNode *aln, const char *op_in, const char *optype)
 {
@@ -684,6 +689,7 @@ updateOpRW (asmLineNode *aln, const char *op_in, const char *optype)
      where a leading '/' denotes the negation.  Ignore that here.  */
   if (*op_in == '/')
     op_in += 1;
+
 
   /* Ignore dots or brackets in operand (bit numbes) for operand table search.
      But remember that it's a bit access for special case handling.  */
@@ -917,7 +923,7 @@ getRegsWritten (lineNode *line)
   return line->aln->regsWritten;
 }
 
-static const char * models[] = 
+static const char * models[] =
 {
   "small",  "small-xstack",  "small-stack-auto",  "small-xstack-auto",
   "medium", "medium-xstack", "medium-stack-auto", "medium-xstack-auto",
@@ -973,14 +979,17 @@ static const char *_asmCmd[] =
   "sdas8051", "$l", "$3", "$2", "$1.asm", NULL
 };
 
-static const char * const _libs[] = { "mcs51", STD_LIB, STD_INT_LIB, STD_LONG_LIB, STD_FP_LIB, NULL, };
+static const char * const _libs[] = {
+  "mcs51", STD_LIB, STD_INT_LIB, STD_LONG_LIB, "liblonglong", STD_FP_LIB,
+  NULL,
+};
 
 /* Globals */
 PORT mcs51_port =
 {
   TARGET_ID_MCS51,
   "mcs51",
-  "MCU 8051",                   /* Target name */
+  "MCU 8051",                  /* Target name */
   NULL,                         /* Processor name */
   {
     glue,
@@ -1014,7 +1023,7 @@ PORT mcs51_port =
     getRegsWritten,
     mcs51DeadMove,
     mcs51notUsed,
-    NULL,
+    mcs51CanAssign,
     mcs51notUsedFrom,
     NULL,
     NULL,
@@ -1099,7 +1108,7 @@ PORT mcs51_port =
   hasExtBitOp,                  /* hasExtBitOp */
   oclsExpense,                  /* oclsExpense */
   FALSE,                        /* use_dw_for_init */
-  TRUE,                         /* little_endian */
+  TRUE,                         /* MCS51 keeps the SDCC little-endian ABI. */
   0,                            /* leave lt */
   0,                            /* leave gt */
   1,                            /* transform <= to ! > */

@@ -913,3 +913,9 @@ mcs51notUsedFrom (const char *what, const char *label, lineNode *head)
 
   return false;
 }
+
+bool
+mcs51CanAssign (const char *dst, const char *src, const char *exotic)
+{
+  return true;
+}

@@ -36,7 +36,7 @@
 
 #ifndef __PTRDIFF_T_DEFINED
 #define __PTRDIFF_T_DEFINED
-#if defined (__SDCC_mcs51) || defined (__SDCC_ds390)
+#if defined (__SDCC_mcs51) || defined (__SDCC_mcs251) || defined (__SDCC_ds390)
   typedef long int ptrdiff_t;
 #else
   typedef int ptrdiff_t; // 16 bit ptrdiff_t is in violation of the ISO C99, C11, C17 standards, but complies with C90 and C23.
@@ -45,7 +45,12 @@
 
 #ifndef __SIZE_T_DEFINED
 #define __SIZE_T_DEFINED
+#if defined (__SDCC_mcs251)
+  /* The native MCS-251 ABI uses a 32-bit object-size type. */
+  typedef unsigned long size_t;
+#else
   typedef unsigned int size_t;
+#endif
 #endif
 
 #if __STDC_VERSION__ >= 201112L
@@ -86,4 +91,3 @@ typedef typeof(nullptr) nullptr_t;
 #endif
 
 #endif
-

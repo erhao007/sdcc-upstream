@@ -51,6 +51,13 @@ typedef struct ast
   unsigned initMode:1;
   unsigned reversed:1;
   unsigned inlined:1;
+  unsigned isExprStmt:1;
+  unsigned isImplicitBlock:1;
+  unsigned isStmtExpr:1;
+  unsigned literalFromCast:1;  /* EX_VALUE literal resulting from a cast */
+  unsigned removedCast:1;      /* explicit cast has been removed */
+  unsigned implicitCast:1;     /* compiler added this cast */
+  unsigned semDeref:1;         /* semantic &* dereference of _Optional */
   long level;                   /* level for expr */
   int block;                    /* block number   */
   int seqPoint;                 /* sequence point */
@@ -92,15 +99,6 @@ typedef struct ast
       symbol *condLabel;        /* conditional label     */
     }
     forVals;
-    struct
-    {
-      unsigned literalFromCast:1;       /* true if this is an EX_VALUE of LITERAL
-                                         * type resulting from a typecast.
-                                         */
-      unsigned removedCast:1;   /* true if the explicit cast has been removed */
-      unsigned implicitCast:1;  /* true if compiler added this cast */
-      bool semDeref:1;          /* semantic dereference, i.e. a &* removing _Optional represented as cast - we just need to pass this flag from the parser to the iCode */
-    } cast;
     int argreg;                 /* argreg number when operand type == EX_OPERAND */
   }
   values;
@@ -209,6 +207,7 @@ ast *createRMW (ast *, unsigned, ast *);
 symbol * createFunctionDecl (symbol *);
 ast *createFunction (symbol *, ast *);
 ast *createBlock (symbol *, ast *);
+ast *statementExpressionResult (ast *);
 ast *createLabel (symbol *, ast *);
 ast *createCase (ast *, ast *, ast *);
 ast *createCaseRange (ast *, ast *, ast *, ast *);
@@ -232,6 +231,8 @@ int setAstFileLine (ast *tree, const char *filename, int lineno);
 symbol *funcOfType (const char *name, sym_link *rtype, sym_link *argtype, int nArgs, int rent);
 symbol *funcOfType2 (const char *name, sym_link *rtype, sym_link *largtype, sym_link *rargtype, int rent);
 symbol *funcOfTypeVarg (const char *name, const char *, int, const char **);
+symbol *funcOfTypeVargReentrant (const char *name, const char *, int,
+                                 const char **);
 ast *initAggregates (symbol *, initList *, ast *);
 bool astHasVolatile (ast *tree);
 bool hasSEFcalls (ast *);

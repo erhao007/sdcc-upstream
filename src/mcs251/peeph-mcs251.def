@@ -1,0 +1,714 @@
+// MCS251-only rules are appended to the mature MCS-51 rule set.
+
+// MCS251 scalar register tuples follow the native big-endian register-file
+// order.  The generator still visits the least-significant byte first, so a
+// scalar load reaches the odd low register before the even high register.
+
+replace {
+	mov	r0,%1
+	mov	r1,(%1 + 1)
+} by {
+	mov	wr0,%1
+} if notVolatile(%1)
+
+replace {
+	mov	r2,%1
+	mov	r3,(%1 + 1)
+} by {
+	mov	wr2,%1
+} if notVolatile(%1)
+
+replace {
+	mov	r4,%1
+	mov	r5,(%1 + 1)
+} by {
+	mov	wr4,%1
+} if notVolatile(%1)
+
+replace {
+	mov	r6,%1
+	mov	r7,(%1 + 1)
+} by {
+	mov	wr6,%1
+} if notVolatile(%1)
+
+replace {
+	mov	r1,(%1 + 1)
+	mov	r0,%1
+} by {
+	mov	wr0,%1
+} if notVolatile(%1)
+
+replace {
+	mov	r3,(%1 + 1)
+	mov	r2,%1
+} by {
+	mov	wr2,%1
+} if notVolatile(%1)
+
+replace {
+	mov	r5,(%1 + 1)
+	mov	r4,%1
+} by {
+	mov	wr4,%1
+} if notVolatile(%1)
+
+replace {
+	mov	r7,(%1 + 1)
+	mov	r6,%1
+} by {
+	mov	wr6,%1
+} if notVolatile(%1)
+
+replace {
+	mov	%1,r0
+	mov	(%1 + 1),r1
+} by {
+	mov	%1,wr0
+} if notVolatile(%1)
+
+replace {
+	mov	%1,r2
+	mov	(%1 + 1),r3
+} by {
+	mov	%1,wr2
+} if notVolatile(%1)
+
+replace {
+	mov	%1,r4
+	mov	(%1 + 1),r5
+} by {
+	mov	%1,wr4
+} if notVolatile(%1)
+
+replace {
+	mov	%1,r6
+	mov	(%1 + 1),r7
+} by {
+	mov	%1,wr6
+} if notVolatile(%1)
+
+replace {
+	mov	(%1 + 1),r1
+	mov	%1,r0
+} by {
+	mov	%1,wr0
+} if notVolatile(%1)
+
+replace {
+	mov	(%1 + 1),r3
+	mov	%1,r2
+} by {
+	mov	%1,wr2
+} if notVolatile(%1)
+
+replace {
+	mov	(%1 + 1),r5
+	mov	%1,r4
+} by {
+	mov	%1,wr4
+} if notVolatile(%1)
+
+replace {
+	mov	(%1 + 1),r7
+	mov	%1,r6
+} by {
+	mov	%1,wr6
+} if notVolatile(%1)
+
+replace {
+	mov	wr0,%1
+	mov	wr2,(%1 + 2)
+} by {
+	mov	dr0,%1
+} if notVolatile(%1)
+
+replace {
+	mov	wr4,%1
+	mov	wr6,(%1 + 2)
+} by {
+	mov	dr4,%1
+} if notVolatile(%1)
+
+replace {
+	mov	wr2,(%1 + 2)
+	mov	wr0,%1
+} by {
+	mov	dr0,%1
+} if notVolatile(%1)
+
+replace {
+	mov	wr6,(%1 + 2)
+	mov	wr4,%1
+} by {
+	mov	dr4,%1
+} if notVolatile(%1)
+
+replace {
+	mov	%1,wr0
+	mov	(%1 + 2),wr2
+} by {
+	mov	%1,dr0
+} if notVolatile(%1)
+
+replace {
+	mov	%1,wr4
+	mov	(%1 + 2),wr6
+} by {
+	mov	%1,dr4
+} if notVolatile(%1)
+
+replace {
+	mov	(%1 + 2),wr2
+	mov	%1,wr0
+} by {
+	mov	%1,dr0
+} if notVolatile(%1)
+
+replace {
+	mov	(%1 + 2),wr6
+	mov	%1,wr4
+} by {
+	mov	%1,dr4
+} if notVolatile(%1)
+
+// MOVH writes the high word of a native dword register.  With the big-endian
+// register tuple this is also the C scalar's high word.
+replace {
+	mov	r1,#0x00
+	mov	r0,#0x00
+	orl	ar1,#%1
+	orl	ar0,#%2
+} by {
+	movh	dr0,#((%2 << 8) | %1)
+}
+
+replace {
+	mov	r5,#0x00
+	mov	r4,#0x00
+	orl	ar5,#%1
+	orl	ar4,#%2
+} by {
+	movh	dr4,#((%2 << 8) | %1)
+}
+
+// Logical operations can use native words once both the register tuple and
+// the memory operand are in big-endian order.  A is required to be dead
+// because the byte-at-a-time sequence leaves its final source byte there.
+replace {
+	mov	a,(%1 + 1)
+	anl	a,r7
+	mov	dpl,a
+	mov	a,%1
+	anl	a,r6
+	mov	dph,a
+} by {
+	anl	wr6,%1
+	mov	dpl,r7
+	mov	dph,r6
+} if notVolatile(%1), notUsed('a' 'r6' 'r7')
+
+replace {
+	mov	a,(%1 + 1)
+	orl	a,r7
+	mov	dpl,a
+	mov	a,%1
+	orl	a,r6
+	mov	dph,a
+} by {
+	orl	wr6,%1
+	mov	dpl,r7
+	mov	dph,r6
+} if notVolatile(%1), notUsed('a' 'r6' 'r7')
+
+replace {
+	mov	a,(%1 + 1)
+	xrl	a,r7
+	mov	dpl,a
+	mov	a,%1
+	xrl	a,r6
+	mov	dph,a
+} by {
+	xrl	wr6,%1
+	mov	dpl,r7
+	mov	dph,r6
+} if notVolatile(%1), notUsed('a' 'r6' 'r7')
+
+replace {
+	mov	a,(%1 + 1)
+	anl	a,r7
+	mov	dpl,a
+	mov	a,%1
+	anl	a,r6
+	mov	dph,a
+	eret
+} by {
+	anl	wr6,%1
+	mov	dpl,r7
+	mov	dph,r6
+	eret
+} if notVolatile(%1)
+
+replace {
+	mov	a,(%1 + 1)
+	orl	a,r7
+	mov	dpl,a
+	mov	a,%1
+	orl	a,r6
+	mov	dph,a
+	eret
+} by {
+	orl	wr6,%1
+	mov	dpl,r7
+	mov	dph,r6
+	eret
+} if notVolatile(%1)
+
+replace {
+	mov	a,(%1 + 1)
+	xrl	a,r7
+	mov	dpl,a
+	mov	a,%1
+	xrl	a,r6
+	mov	dph,a
+	eret
+} by {
+	xrl	wr6,%1
+	mov	dpl,r7
+	mov	dph,r6
+	eret
+} if notVolatile(%1)
+
+replace {
+	mov	a,(%1 + 3)
+	anl	ar7,a
+	mov	a,(%1 + 2)
+	anl	ar6,a
+	mov	a,(%1 + 1)
+	anl	ar5,a
+	mov	a,%1
+	anl	ar4,a
+} by {
+	anl	wr4,%1
+	anl	wr6,(%1 + 2)
+} if notVolatile(%1), notUsed('a')
+
+replace {
+	mov	a,(%1 + 3)
+	orl	ar7,a
+	mov	a,(%1 + 2)
+	orl	ar6,a
+	mov	a,(%1 + 1)
+	orl	ar5,a
+	mov	a,%1
+	orl	ar4,a
+} by {
+	orl	wr4,%1
+	orl	wr6,(%1 + 2)
+} if notVolatile(%1), notUsed('a')
+
+replace {
+	mov	a,(%1 + 3)
+	xrl	ar7,a
+	mov	a,(%1 + 2)
+	xrl	ar6,a
+	mov	a,(%1 + 1)
+	xrl	ar5,a
+	mov	a,%1
+	xrl	ar4,a
+} by {
+	xrl	wr4,%1
+	xrl	wr6,(%1 + 2)
+} if notVolatile(%1), notUsed('a')
+
+replace {
+	mov	a,(%1 + 3)
+	anl	ar7,a
+	mov	a,(%1 + 2)
+	anl	ar6,a
+	mov	a,(%1 + 1)
+	anl	ar5,a
+	mov	a,%1
+	anl	ar4,a
+	mov	dpl,r7
+	mov	dph,r6
+	mov	b,r5
+	mov	a,r4
+	eret
+} by {
+	anl	wr4,%1
+	anl	wr6,(%1 + 2)
+	mov	dpl,r7
+	mov	dph,r6
+	mov	b,r5
+	mov	a,r4
+	eret
+} if notVolatile(%1)
+
+replace {
+	mov	a,(%1 + 3)
+	orl	ar7,a
+	mov	a,(%1 + 2)
+	orl	ar6,a
+	mov	a,(%1 + 1)
+	orl	ar5,a
+	mov	a,%1
+	orl	ar4,a
+	mov	dpl,r7
+	mov	dph,r6
+	mov	b,r5
+	mov	a,r4
+	eret
+} by {
+	orl	wr4,%1
+	orl	wr6,(%1 + 2)
+	mov	dpl,r7
+	mov	dph,r6
+	mov	b,r5
+	mov	a,r4
+	eret
+} if notVolatile(%1)
+
+replace {
+	mov	a,(%1 + 3)
+	xrl	ar7,a
+	mov	a,(%1 + 2)
+	xrl	ar6,a
+	mov	a,(%1 + 1)
+	xrl	ar5,a
+	mov	a,%1
+	xrl	ar4,a
+	mov	dpl,r7
+	mov	dph,r6
+	mov	b,r5
+	mov	a,r4
+	eret
+} by {
+	xrl	wr4,%1
+	xrl	wr6,(%1 + 2)
+	mov	dpl,r7
+	mov	dph,r6
+	mov	b,r5
+	mov	a,r4
+	eret
+} if notVolatile(%1)
+
+// Fold byte operations with one 16-bit literal into the native immediate WR
+// forms.  The first captured byte is the scalar LSB and therefore occupies
+// the low odd register.
+replace {
+	mov	a,#%1
+	anl	a,r7
+	mov	dpl,a
+	mov	a,#%2
+	anl	a,r6
+	mov	dph,a
+	eret
+} by {
+	anl	wr6,#((%2 << 8) | %1)
+	mov	dpl,r7
+	mov	dph,r6
+	eret
+}
+
+replace {
+	mov	a,#%1
+	orl	a,r7
+	mov	dpl,a
+	mov	a,#%2
+	orl	a,r6
+	mov	dph,a
+	eret
+} by {
+	orl	wr6,#((%2 << 8) | %1)
+	mov	dpl,r7
+	mov	dph,r6
+	eret
+}
+
+replace {
+	mov	a,#%1
+	xrl	a,r7
+	mov	dpl,a
+	mov	a,#%2
+	xrl	a,r6
+	mov	dph,a
+	eret
+} by {
+	xrl	wr6,#((%2 << 8) | %1)
+	mov	dpl,r7
+	mov	dph,r6
+	eret
+}
+
+// The scalar tuple already has the native WR6 order, so comparison needs no
+// byte exchange before the word instruction.
+replace {
+	clr	c
+	mov	a,r7
+	subb	a,#%1
+	mov	a,r6
+	subb	a,#%2
+	clr	a
+	rlc	a
+	mov	dpl,a
+	eret
+} by {
+	cmp	wr6,#((%2 << 8) | %1)
+	clr	a
+	rlc	a
+	mov	dpl,a
+	eret
+}
+
+replace {
+	ecall	%1
+	eret
+} by {
+	; MCS251 tail call: preserve the 24-bit return frame owned by our caller
+	ejmp	%1
+} if optimizeReturn(), notSame(%1 '_longjmp')
+
+replace {
+	ecall	%1
+%2:
+	eret
+} by {
+	; MCS251 tail call: preserve the 24-bit return frame owned by our caller
+	ejmp	%1
+	;
+} if optimizeReturn(), notSame(%1 '_longjmp'), labelRefCount(%2 0)
+
+// === MCS251 code-size optimizations ===
+
+// Eliminate redundant 24-bit dptr reload when dptr is preserved across
+// a simple arithmetic operation.  The generator materializes the full
+// 24-bit address before every @dpx access even when dptr was not touched.
+//
+// Pattern: read-modify-write with immediate add
+replace {
+	mov	dptr,#%1
+	mov	dpxl,#%2
+	mov	a,@dpx
+	add	a,#%3
+	mov	dptr,#%1
+	mov	dpxl,#%2
+	mov	@dpx,a
+} by {
+	mov	dptr,#%1
+	mov	dpxl,#%2
+	mov	a,@dpx
+	add	a,#%3
+	mov	@dpx,a
+}
+
+// Same for addc (high byte of 32-bit increment)
+replace {
+	mov	dptr,#%1
+	mov	dpxl,#%2
+	mov	a,@dpx
+	addc	a,#%3
+	mov	dptr,#%1
+	mov	dpxl,#%2
+	mov	@dpx,a
+} by {
+	mov	dptr,#%1
+	mov	dpxl,#%2
+	mov	a,@dpx
+	addc	a,#%3
+	mov	@dpx,a
+}
+
+// Redundant dptr reload in consecutive identical address loads
+replace {
+	mov	dptr,#%1
+	mov	dpxl,#%2
+	mov	dptr,#%1
+	mov	dpxl,#%2
+} by {
+	mov	dptr,#%1
+	mov	dpxl,#%2
+}
+
+// Merge consecutive inc spx,#4 into fewer larger increments.
+// The prologue expands stack allocation as a run of inc spx,#4
+// instructions.  An inc spx,#4 is 3 bytes; two of them (6 bytes)
+// can be replaced by inc spx,#4 + inc spx,#4... wait, we can't
+// make a single larger inc.  But we CAN eliminate inc/dec pairs
+// that cancel out.
+
+// Two inc spx,#4 can be written as one inc spx,#4 + inc spx,#4.
+// Since MCS251 has no inc spx,#8, this is already optimal.
+//
+// However, we CAN merge the epilogue dec chain with the prologue inc.
+// If a function's prologue has inc spx,#4; ...; inc spx,#4 and
+// epilogue has dec spx,#4; ...; dec spx,#4, the peephole can't
+// help because they're far apart.
+
+// What we CAN do: eliminate redundant push/pop of the same register
+// when they cancel out within a basic block.
+
+// Eliminate push acc; ... (no use of acc or stack); pop acc
+// This requires knowing that acc is not used between push and pop.
+// The peephole can only match exact sequences, so we target
+// the simplest case: push acc immediately followed by pop acc
+replace {
+	push	acc
+	pop	acc
+} by {
+	; peephole: removed redundant push/pop acc
+}
+
+// push arN followed immediately by pop arN
+replace {
+	push	ar0
+	pop	ar0
+} by {
+	; peephole: removed redundant push/pop ar0
+}
+
+replace {
+	push	ar1
+	pop	ar1
+} by {
+	; peephole: removed redundant push/pop ar1
+}
+
+replace {
+	push	ar2
+	pop	ar2
+} by {
+	; peephole: removed redundant push/pop ar2
+}
+
+replace {
+	push	ar3
+	pop	ar3
+} by {
+	; peephole: removed redundant push/pop ar3
+}
+
+replace {
+	push	ar4
+	pop	ar4
+} by {
+	; peephole: removed redundant push/pop ar4
+}
+
+replace {
+	push	ar5
+	pop	ar5
+} by {
+	; peephole: removed redundant push/pop ar5
+}
+
+replace {
+	push	ar6
+	pop	ar6
+} by {
+	; peephole: removed redundant push/pop ar6
+}
+
+replace {
+	push	ar7
+	pop	ar7
+} by {
+	; peephole: removed redundant push/pop ar7
+}
+
+// Store to XDATA followed by reload of the same 24-bit address
+// for another store.  The mov @dpx,a does not invalidate dptr.
+replace {
+	mov	dptr,#%1
+	mov	dpxl,#%2
+	mov	@dpx,a
+	mov	dptr,#%1
+	mov	dpxl,#%2
+} by {
+	mov	dptr,#%1
+	mov	dpxl,#%2
+	mov	@dpx,a
+	; dptr preserved, reuse for next access
+}
+
+
+// Merge byte-pair hardware-stack loads into native 16-bit WR loads.
+// The generator ships 16-bit stack operands through the accumulator one
+// byte at a time:  mov a,@spx-0xNNNN; mov r7,a; mov a,@spx-0x(NNNN+1);
+// mov r6,a  (10 bytes) becomes the native little-endian word load
+// mov wr6,@spx-0x(NNNN+1)  (4 bytes, 6 bytes saved).  inSequence() proves
+// the hex offsets are consecutive.  The byte order was verified against
+// QEMU: WRj loads Rj from the lower address and Rj+1 from the higher one,
+// which is exactly what the accumulator pair produced.
+replace {
+	mov	a,@spx-0x%1
+	mov	r7,a
+	mov	a,@spx-0x%2
+	mov	r6,a
+} by {
+	mov	wr6,@spx-0x%2
+} if inSequence('1' %1 %2)
+
+replace {
+	mov	a,@spx-0x%1
+	mov	r5,a
+	mov	a,@spx-0x%2
+	mov	r4,a
+} by {
+	mov	wr4,@spx-0x%2
+} if inSequence('1' %1 %2)
+
+replace {
+	mov	a,@spx-0x%1
+	mov	r3,a
+	mov	a,@spx-0x%2
+	mov	r2,a
+} by {
+	mov	wr2,@spx-0x%2
+} if inSequence('1' %1 %2)
+
+replace {
+	mov	a,@spx-0x%1
+	mov	r1,a
+	mov	a,@spx-0x%2
+	mov	r0,a
+} by {
+	mov	wr0,@spx-0x%2
+} if inSequence('1' %1 %2)
+
+// Merge byte-pair hardware-stack stores into native 16-bit WR stores.
+replace {
+	mov	a,r7
+	mov	@spx-0x%1,a
+	mov	a,r6
+	mov	@spx-0x%2,a
+} by {
+	mov	@spx-0x%2,wr6
+} if inSequence('1' %1 %2)
+
+replace {
+	mov	a,r5
+	mov	@spx-0x%1,a
+	mov	a,r4
+	mov	@spx-0x%2,a
+} by {
+	mov	@spx-0x%2,wr4
+} if inSequence('1' %1 %2)
+
+replace {
+	mov	a,r3
+	mov	@spx-0x%1,a
+	mov	a,r2
+	mov	@spx-0x%2,a
+} by {
+	mov	@spx-0x%2,wr2
+} if inSequence('1' %1 %2)
+
+replace {
+	mov	a,r1
+	mov	@spx-0x%1,a
+	mov	a,r0
+	mov	@spx-0x%2,a
+} by {
+	mov	@spx-0x%2,wr0
+} if inSequence('1' %1 %2)

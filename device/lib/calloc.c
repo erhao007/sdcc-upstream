@@ -30,7 +30,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#if defined(__SDCC_mcs51) || defined(__SDCC_ds390) || defined(__SDCC_ds400)
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251) || defined(__SDCC_ds390) || defined(__SDCC_ds400)
 #define HEAPSPACE __xdata
 #elif defined(__SDCC_pdk13) || defined(__SDCC_pdk14) || defined(__SDCC_pdk15)
 #define HEAPSPACE __near
@@ -38,7 +38,7 @@
 #define HEAPSPACE
 #endif
 
-#if defined(__SDCC_mcs51) || defined(__SDCC_ds390) || defined(__SDCC_ds400)
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251) || defined(__SDCC_ds390) || defined(__SDCC_ds400)
 void HEAPSPACE *calloc (size_t nmemb, size_t size)
 #else
 void *calloc (size_t nmemb, size_t size)
@@ -46,6 +46,14 @@ void *calloc (size_t nmemb, size_t size)
 {
 	void HEAPSPACE *ptr;
 
+#if defined(__SDCC_mcs251)
+	size_t msize;
+
+	if (size && nmemb > SIZE_MAX / size)
+		return(0);
+
+	msize = nmemb * size;
+#else
 	unsigned long msize = (unsigned long)nmemb * (unsigned long)size;
 
 	_Static_assert(sizeof(unsigned long) >= sizeof(size_t) * 2,
@@ -53,10 +61,10 @@ void *calloc (size_t nmemb, size_t size)
 
 	if (msize > SIZE_MAX)
 		return(0);
+#endif
 
 	if (ptr = malloc(msize))
 		memset(ptr, 0, msize);
 
 	return(ptr);
 }
-

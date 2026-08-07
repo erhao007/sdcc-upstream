@@ -1,0 +1,261 @@
+VPATH        = @srcdir@
+srcdir       = @srcdir@
+top_builddir = @top_builddir@
+top_srcdir   = @top_srcdir@
+
+CPPFLAGS += -I.
+SOURCES = gen.c main.c peep.c ralloc.c rtrack.c
+PEEPRULES = peeph.rul
+.DEFAULT_GOAL := all
+
+peeph.rul: $(top_srcdir)/src/mcs51/peeph.def $(srcdir)/peeph-mcs251.def
+	$(AWK) -f $(top_srcdir)/src/SDCCpeeph.awk $^ > $@
+
+.PHONY: check
+check: all
+	$(PYTHON) $(srcdir)/tests/check-backend-isolation.py \
+		--mcs251-source $(srcdir)/main.c \
+		--mcs251-peep-source $(srcdir)/peep.c \
+		--mcs251-rtrack-source $(srcdir)/rtrack.c \
+		--mcs251-gen-source $(srcdir)/gen.c \
+		--mcs251-gen-lower-source $(srcdir)/gen_lower.c.inc \
+		--mcs251-ralloc-source $(srcdir)/ralloc.c \
+		--mcs51-source $(top_srcdir)/src/mcs51/main.c \
+		--mcs51-peep-source $(top_srcdir)/src/mcs51/peep.c \
+		--mcs51-rtrack-source $(top_srcdir)/src/mcs51/rtrack.c \
+		--mcs51-gen-source $(top_srcdir)/src/mcs51/gen.c \
+		--mcs51-ralloc-source $(top_srcdir)/src/mcs51/ralloc.c
+	$(PYTHON) $(srcdir)/tests/check-language-modes.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--source $(srcdir)/tests/language-mode.c
+	$(PYTHON) $(srcdir)/tests/check-target-macros.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--device-include $(top_srcdir)/device/include
+	$(PYTHON) $(srcdir)/tests/check-static-inline.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--source $(srcdir)/tests/static-inline-emission.c
+	$(PYTHON) $(srcdir)/tests/check-compound-literal-codegen.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--source $(srcdir)/tests/compound-literal-argument.c
+	$(PYTHON) $(srcdir)/tests/check-gnu-extensions.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--device-include $(top_srcdir)/device/include \
+		--empty-aggregate-source \
+			$(srcdir)/tests/gnu-empty-aggregate.c \
+		--keyword-alias-source \
+			$(srcdir)/tests/gnu-keyword-aliases.c \
+		--attribute-source \
+			$(srcdir)/tests/gnu-attributes.c \
+		--invalid-attribute-source \
+			$(srcdir)/tests/gnu-attribute-invalid.c \
+		--types-compatible-source \
+			$(srcdir)/tests/gnu-types-compatible.c \
+		--invalid-types-compatible-source \
+			$(srcdir)/tests/gnu-types-compatible-invalid.c \
+		--builtin-expect-source \
+			$(srcdir)/tests/gnu-builtin-expect.c \
+		--invalid-builtin-expect-source \
+			$(srcdir)/tests/gnu-builtin-expect-invalid.c \
+		--builtin-constant-p-source \
+			$(srcdir)/tests/gnu-builtin-constant-p.c \
+		--invalid-builtin-constant-p-source \
+			$(srcdir)/tests/gnu-builtin-constant-p-invalid.c \
+		--has-builtin-source \
+			$(srcdir)/tests/gnu-has-builtin.c \
+		--bit-builtins-source \
+			$(srcdir)/tests/gnu-bit-builtins.c \
+		--invalid-bit-builtins-source \
+			$(srcdir)/tests/gnu-bit-builtins-invalid.c \
+		--byte-swap-builtins-source \
+			$(srcdir)/tests/gnu-byte-swap-builtins.c \
+		--invalid-byte-swap-builtins-source \
+			$(srcdir)/tests/gnu-byte-swap-builtins-invalid.c \
+		--overflow-builtins-source \
+			$(srcdir)/tests/gnu-overflow-builtins.c \
+		--invalid-overflow-builtins-source \
+			$(srcdir)/tests/gnu-overflow-builtins-invalid.c \
+		--typed-overflow-builtins-source \
+			$(srcdir)/tests/gnu-typed-overflow-builtins.c \
+		--invalid-typed-overflow-builtins-source \
+			$(srcdir)/tests/gnu-typed-overflow-builtins-invalid.c \
+		--auto-type-source \
+			$(srcdir)/tests/gnu-auto-type.c \
+		--invalid-auto-type-source \
+			$(srcdir)/tests/gnu-auto-type-invalid.c \
+		--multiple-auto-type-source \
+			$(srcdir)/tests/gnu-auto-type-multiple.c \
+		--declarator-auto-type-source \
+			$(srcdir)/tests/gnu-auto-type-declarator.c \
+		--empty-declaration-source \
+			$(srcdir)/tests/gnu-empty-declaration.c \
+		--compound-literal-source \
+			$(srcdir)/tests/conditional-compound-literal.c \
+		--statement-expression-source \
+			$(srcdir)/tests/gnu-statement-expressions.c \
+		--case-range-source \
+			$(srcdir)/tests/gnu-case-ranges.c \
+		--extension-source \
+			$(srcdir)/tests/gnu-extension-keyword.c
+	$(PYTHON) $(srcdir)/tests/check-diagnostics.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--incompatible-extern-source \
+			$(srcdir)/tests/incompatible-extern.c \
+		--compatible-extern-array-source \
+			$(srcdir)/tests/compatible-extern-array.c \
+		--compatible-block-extern-source \
+			$(srcdir)/tests/compatible-block-extern-struct.c \
+		--incompatible-shadowed-struct-source \
+			$(srcdir)/tests/incompatible-shadowed-struct.c \
+		--invalid-wide-bitfield-source \
+			$(srcdir)/tests/invalid-wide-bitfields.c
+	$(PYTHON) $(srcdir)/tests/check-c23-struct-redefinitions.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--compatible-c23-struct-source \
+			$(srcdir)/tests/compatible-c23-struct.c \
+		--incompatible-c23-struct-source \
+			$(srcdir)/tests/incompatible-c23-struct.c
+	$(SHELL) $(srcdir)/tests/check-driver.sh \
+		$(top_builddir)/bin/sdcc \
+		$(srcdir)/tests/compiler-smoke.c \
+		$(top_srcdir)/device/include \
+		$(top_srcdir)/device/lib/_atof.c \
+		$(top_srcdir)/device/lib/_fsneq.c \
+		$(top_srcdir)/device/lib/bsearch.c \
+		$(top_srcdir)/device/lib/_setjmp.c \
+		$(top_srcdir)/device/lib/_gptrget.c \
+		$(top_srcdir)/device/lib/_gptrgetc.c \
+		$(top_srcdir)/device/lib/_gptrput.c \
+		$(top_srcdir)/device/lib/_decdptr.c \
+		$(top_srcdir)/device/lib/sprintf.c \
+		$(top_srcdir)/device/lib/vprintf.c
+	$(SHELL) $(srcdir)/tests/check-codegen.sh \
+		$(top_builddir)/bin/sdcc \
+		$(srcdir)/tests/native-optimization.c \
+		$(srcdir)/tests/call-24bit.c \
+		$(srcdir)/tests/interrupt-vector.c \
+		$(srcdir)/tests/aggregate-initializer.c \
+		$(srcdir)/tests/memory-model.c \
+		$(top_srcdir)/device/lib/bsearch.c \
+		$(top_srcdir)/device/lib/_mullonglong.c \
+		$(top_srcdir)/device/lib/_divuint.c \
+		$(top_srcdir)/device/include
+	$(PYTHON) $(srcdir)/tests/check-native-isa-selection.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--source $(srcdir)/tests/native-extension.c
+	$(PYTHON) $(srcdir)/tests/check-register-allocation.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--source $(srcdir)/tests/register-pressure.c
+	$(PYTHON) $(srcdir)/tests/check-wide-shift-jump-table.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--source $(srcdir)/tests/large-switch.c
+	$(PYTHON) $(srcdir)/tests/check-endianness.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--source $(srcdir)/tests/endianness-layout.c \
+		--aggregate-source $(srcdir)/tests/aggregate-return.c
+	$(PYTHON) $(srcdir)/tests/check-elf-output.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--source $(srcdir)/tests/elf-output-probe.c
+
+QEMU_MCS251 ?= $(HOME)/oss/qemu/builds/build-mcs251/qemu-system-mcs251
+QEMU_MCS51 ?= $(HOME)/oss/qemu/builds/build-mcs51/qemu-system-mcs51
+QEMU_TRACE_DIR ?=
+MCS251_LIBRARY_DIR ?= $(top_builddir)/device/lib/build/mcs251-small
+MCS251_STACK_AUTO_LIBRARY_DIR ?= $(top_builddir)/device/lib/build/mcs251-small-stack-auto
+MCS251_LARGE_LIBRARY_DIR ?= $(top_builddir)/device/lib/build/mcs251-large
+MCS251_LARGE_STACK_AUTO_LIBRARY_DIR ?= $(top_builddir)/device/lib/build/mcs251-large-stack-auto
+
+.PHONY: check-qemu check-official-qemu check-uart-qemu check-gdbstub
+check-qemu: all check-official-qemu check-gdbstub
+	$(PYTHON) $(srcdir)/tests/check-qemu.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--sdas251 $(top_builddir)/bin/sdas251 \
+		--qemu $(QEMU_MCS251) \
+		--main-source $(srcdir)/tests/far-main.c \
+		--far-source $(srcdir)/tests/far-callee.c \
+		--crt0 $(srcdir)/tests/crt0.asm \
+		--runtime-source $(srcdir)/tests/runtime-main.c \
+		--statement-expression-source \
+			$(srcdir)/tests/statement-expression-runtime.c \
+		--bit-builtins-source \
+			$(srcdir)/tests/gnu-bit-builtins-runtime.c \
+		--byte-swap-builtins-source \
+			$(srcdir)/tests/gnu-byte-swap-builtins-runtime.c \
+		--size-type-source $(srcdir)/tests/size-type-runtime.c \
+		--register-pressure-source \
+			$(srcdir)/tests/register-pressure.c \
+		--wide-shift-source $(srcdir)/tests/large-switch.c \
+		--overflow-builtins-source \
+			$(srcdir)/tests/gnu-overflow-builtins-runtime.c \
+		--typed-overflow-builtins-source \
+			$(srcdir)/tests/gnu-typed-overflow-builtins-runtime.c \
+		--optimization-runtime-source \
+			$(srcdir)/tests/optimization-runtime.c \
+		--abi-regression-source $(srcdir)/tests/abi-regression-runtime.c \
+		--longlong-source $(srcdir)/tests/longlong-runtime.c \
+		--startup-memory-source $(srcdir)/tests/startup-memory.c \
+		--setjmp-spx-source $(srcdir)/tests/setjmp-spx-runtime.c \
+		--endianness-runtime-source \
+			$(srcdir)/tests/endianness-runtime.c \
+		--aggregate-source $(srcdir)/tests/aggregate-return.c \
+		--memory-model-main-source $(srcdir)/tests/memory-model-runtime.c \
+		--memory-model-source $(srcdir)/tests/memory-model.c \
+		--device-include $(top_srcdir)/device/include \
+		--library-dir $(MCS251_LIBRARY_DIR) \
+		--stack-auto-library-dir $(MCS251_STACK_AUTO_LIBRARY_DIR) \
+		--large-library-dir $(MCS251_LARGE_LIBRARY_DIR) \
+		--large-stack-auto-library-dir $(MCS251_LARGE_STACK_AUTO_LIBRARY_DIR) \
+		$(if $(QEMU_TRACE_DIR),--trace-dir $(QEMU_TRACE_DIR)/mcs251)
+
+check-official-qemu: all
+	$(PYTHON) $(srcdir)/tests/official/check-official-examples.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--qemu $(QEMU_MCS251) \
+		--source-dir $(srcdir)/tests/official \
+		--device-include $(top_srcdir)/device/include \
+		--library-dir $(MCS251_LIBRARY_DIR)
+
+check-uart-qemu: all
+	$(PYTHON) $(srcdir)/tests/official/check-official-examples.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--qemu $(QEMU_MCS251) \
+		--source-dir $(srcdir)/tests/official \
+		--device-include $(top_srcdir)/device/include \
+		--library-dir $(MCS251_LIBRARY_DIR) \
+		--uart-only
+
+check-gdbstub: all
+	$(PYTHON) $(srcdir)/tests/check-gdbstub.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--qemu $(QEMU_MCS251) \
+		--source $(srcdir)/tests/debug-smoke.c \
+		--device-include $(top_srcdir)/device/include \
+		--library-dir $(MCS251_LIBRARY_DIR)
+
+.PHONY: check-mcs51-qemu
+check-mcs51-qemu: all
+	$(PYTHON) $(srcdir)/tests/check-mcs51-qemu.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--qemu $(QEMU_MCS51) \
+		--source $(srcdir)/tests/mcs51-regression.c \
+		--statement-expression-source \
+			$(srcdir)/tests/statement-expression-runtime.c \
+		--bit-builtins-source \
+			$(srcdir)/tests/gnu-bit-builtins-runtime.c \
+		--byte-swap-builtins-source \
+			$(srcdir)/tests/gnu-byte-swap-builtins-runtime.c \
+		--size-type-source $(srcdir)/tests/size-type-runtime.c \
+		--register-pressure-source \
+			$(srcdir)/tests/register-pressure.c \
+		--overflow-builtins-source \
+			$(srcdir)/tests/gnu-overflow-builtins-runtime.c \
+		--typed-overflow-builtins-source \
+			$(srcdir)/tests/gnu-typed-overflow-builtins-runtime.c \
+		--longlong-source $(srcdir)/tests/longlong-runtime.c \
+		--device-include $(top_srcdir)/device/include \
+		--library-dir $(top_builddir)/device/lib/build/small \
+		--stack-auto-library-dir \
+			$(top_builddir)/device/lib/build/small-stack-auto \
+		--baseline-digest $(srcdir)/tests/mcs51-regression.sha256 \
+		$(if $(QEMU_TRACE_DIR),--trace-dir $(QEMU_TRACE_DIR)/mcs51)
+
+include $(srcdir)/../port.mk

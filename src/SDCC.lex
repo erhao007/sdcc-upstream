@@ -85,6 +85,7 @@ int lexLineno = 1;
 
 /* local definitions */
 static struct dbuf_s asmbuff; /* reusable _asm buffer */
+static unsigned int gnuAttrDepth;
 
 /* forward declarations */
 int yyerror (char *s);
@@ -97,8 +98,43 @@ static int check_type (void);
 static void checkCurrFile (const char *s);
 %}
 
-%x asm
+%x asm gccattr
 %%
+ /* Accept the GNU spelling as a syntax carrier. Individual attributes acquire
+    semantics only when they have dedicated front-end and code-generation
+    support. */
+"__attribute"|"__attribute__" {
+  count ();
+  gnuAttrDepth = 0;
+  BEGIN (gccattr);
+}
+<gccattr>\"(\\.|[^\\\"\n])*\" {
+  count ();
+}
+<gccattr>'(\\.|[^\\'\n])*' {
+  count ();
+}
+<gccattr>"("          {
+  count ();
+  gnuAttrDepth++;
+}
+<gccattr>")"          {
+  count ();
+  if (gnuAttrDepth && --gnuAttrDepth == 0)
+    BEGIN (INITIAL);
+}
+<gccattr>\n           {
+  count ();
+}
+<gccattr>.            {
+  count ();
+}
+<gccattr><<EOF>>      {
+  BEGIN (INITIAL);
+  werror (E_SYNTAX_ERROR);
+  return 0;
+}
+
 "__asm"                {
   count ();
   if (asmbuff.buf == NULL)
@@ -127,6 +163,7 @@ static void checkCurrFile (const char *s);
 }
 
  /* C90 */
+"__auto_type"           { count (); return AUTO_TYPE; }
 "auto"                  { count (); return AUTO; }
 "break"                 { count (); return BREAK; }
 "case"                  { count (); return CASE; }
@@ -198,6 +235,23 @@ static void checkCurrFile (const char *s);
 "_Countof"              { count (); return COUNTOF; }
 "_Lengthof"             { count (); return COUNTOF; }  /* kept for compatibility with earlier drafts */
 
+ /* GNU alternate keyword spellings */
+"__alignof"             { count (); return ALIGNOF; }
+"__alignof__"           { count (); return ALIGNOF; }
+"__const"               { count (); return SD_CONST; }
+"__const__"             { count (); return SD_CONST; }
+"__inline"              { count (); return INLINE; }
+"__inline__"            { count (); return INLINE; }
+"__restrict"            { count (); return RESTRICT; }
+"__restrict__"          { count (); return RESTRICT; }
+"__signed"              { count (); return SIGNED; }
+"__signed__"            { count (); return SIGNED; }
+"__typeof"              { count (); return TYPEOF; }
+"__typeof__"            { count (); return TYPEOF; }
+"__extension__"         { count (); return SD_EXTENSION; }
+"__volatile"            { count (); return VOLATILE; }
+"__volatile__"          { count (); return VOLATILE; }
+
  /* SDCC-specific intrinsic named address spaces (as per Embedded C TS) */
 "__code"                { count (); TKEYWORD (CODE); }
 "__data"                { count (); TKEYWORD (DATA); }
@@ -229,6 +283,9 @@ static void checkCurrFile (const char *s);
 "__sfr32"               { count (); TKEYWORD (SFR32); }
 "__sbit"                { count (); TKEYWORD (SBIT); }
 "__builtin_offsetof"    { count (); return OFFSETOF; }
+"__builtin_constant_p"  { count (); return BUILTIN_CONSTANT_P; }
+"__builtin_expect"      { count (); return BUILTIN_EXPECT; }
+"__builtin_types_compatible_p" { count (); return BUILTIN_TYPES_COMPATIBLE_P; }
 "__using"               { count (); TKEYWORD (USING); }
 "__naked"               { count (); TKEYWORD (NAKED); }
 "_JavaNative"           { count (); TKEYWORD (JAVANATIVE); }
@@ -246,7 +303,6 @@ static void checkCurrFile (const char *s);
 "__z88dk_shortcall"     { count (); return Z88DK_SHORTCALL; }
 "__z88dk_params_offset" { count (); return Z88DK_PARAMS_OFFSET; }
 "__addressmod"          { count (); return ADDRESSMOD; }
-"__typeof"              { count (); return TYPEOF; }
 "_Optional"             { count (); return OPTIONAL; }
 
 ({L}|{UCN}|{UTF8IDF1ST})({L}|{D}|{UCN}|{UTF8IDF})*  {
@@ -1384,4 +1440,3 @@ yyerror (char *s)
 
   return 0;
 }
-

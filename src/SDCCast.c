@@ -214,11 +214,6 @@ copyAstValues (ast * dest, ast * src)
       AST_FOR (dest, loopExpr) = copyAst (AST_FOR (src, loopExpr));
       break;
 
-    case CAST:
-      dest->values.cast.literalFromCast = src->values.cast.literalFromCast;
-      dest->values.cast.removedCast = src->values.cast.removedCast;
-      dest->values.cast.implicitCast = src->values.cast.implicitCast;
-      dest->values.cast.semDeref = src->values.cast.semDeref;
     }
 }
 
@@ -254,6 +249,13 @@ copyAst (ast * src)
   dest->reversed = src->reversed;
   dest->inlined = src->inlined;
   dest->initMode = src->initMode;
+  dest->isExprStmt = src->isExprStmt;
+  dest->isImplicitBlock = src->isImplicitBlock;
+  dest->isStmtExpr = src->isStmtExpr;
+  dest->literalFromCast = src->literalFromCast;
+  dest->removedCast = src->removedCast;
+  dest->implicitCast = src->implicitCast;
+  dest->semDeref = src->semDeref;
 
   if (src->ftype)
     dest->etype = getSpec (dest->ftype = copyLinkChain (src->ftype));
@@ -858,10 +860,11 @@ funcOfType2 (const char *name, sym_link *rtype, sym_link *largType, sym_link *ra
 }
 
 /*-----------------------------------------------------------------*/
-/* funcOfTypeVarg :- function of type with name and argtype        */
+/* funcOfTypeVargInternal :- function with individual arg types    */
 /*-----------------------------------------------------------------*/
-symbol *
-funcOfTypeVarg (const char *name, const char *rtype, int nArgs, const char **atypes)
+static symbol *
+funcOfTypeVargInternal (const char *name, const char *rtype, int nArgs,
+                        const char **atypes, int reentrant)
 {
   symbol *sym;
   int i;
@@ -873,6 +876,7 @@ funcOfTypeVarg (const char *name, const char *rtype, int nArgs, const char **aty
   DCL_TYPE (sym->type) = FUNCTION;
   sym->type->next = typeFromStr (rtype);
   sym->etype = getSpec (sym->type);
+  FUNC_ISREENT (sym->type) = reentrant;
 
   /* if arguments required */
   if (nArgs)
@@ -895,6 +899,26 @@ funcOfTypeVarg (const char *name, const char *rtype, int nArgs, const char **aty
   sym->cdef = 1;
   allocVariables (sym);
   return sym;
+}
+
+/*-----------------------------------------------------------------*/
+/* funcOfTypeVarg :- function of type with name and argtype        */
+/*-----------------------------------------------------------------*/
+symbol *
+funcOfTypeVarg (const char *name, const char *rtype, int nArgs,
+                const char **atypes)
+{
+  return funcOfTypeVargInternal (name, rtype, nArgs, atypes, 0);
+}
+
+/*-----------------------------------------------------------------*/
+/* funcOfTypeVargReentrant :- reentrant function with arg types    */
+/*-----------------------------------------------------------------*/
+symbol *
+funcOfTypeVargReentrant (const char *name, const char *rtype,
+                         int nArgs, const char **atypes)
+{
+  return funcOfTypeVargInternal (name, rtype, nArgs, atypes, 1);
 }
 
 /*-----------------------------------------------------------------*/
@@ -1026,11 +1050,11 @@ processParms (ast * func, value * defParm, ast ** actParm, int *parmNumber,     
 
       /* don't perform integer promotion of explicitly typecasted variable arguments
        * if sdcc extensions are enabled */
-      if (options.std_sdcc && (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_MOS6502_LIKE || TARGET_PIC_LIKE) &&
+      if (options.std_sdcc && (TARGET_MCS51_LIKE || TARGET_MOS6502_LIKE || TARGET_PIC_LIKE) &&
         IFFUNC_HASVARARGS (functype) &&
         (IS_CAST_OP (*actParm) ||
-          (IS_AST_SYM_VALUE (*actParm) && AST_VALUES (*actParm, cast.removedCast)) ||
-          (IS_AST_LIT_VALUE (*actParm) && AST_VALUES (*actParm, cast.literalFromCast))))
+          (IS_AST_SYM_VALUE (*actParm) && (*actParm)->removedCast) ||
+          (IS_AST_LIT_VALUE (*actParm) && (*actParm)->literalFromCast)))
         {
           /* Parameter was explicitly typecast; don't touch it. */
           return 0;
@@ -1067,7 +1091,7 @@ processParms (ast * func, value * defParm, ast ** actParm, int *parmNumber,     
           *actParm = newNode (CAST, newType, *actParm);
           (*actParm)->filename = (*actParm)->right->filename;
           (*actParm)->lineno = (*actParm)->right->lineno;
-          AST_VALUES (*actParm, cast.implicitCast) = 1;
+          (*actParm)->implicitCast = 1;
 
           *actParm = decorateType (*actParm, resultType, true);
         }
@@ -1112,7 +1136,7 @@ processParms (ast * func, value * defParm, ast ** actParm, int *parmNumber,     
       *actParm = newNode (CAST, newAst_LINK (defParm->type), pTree);
       (*actParm)->filename = (*actParm)->right->filename;
       (*actParm)->lineno = (*actParm)->right->lineno;
-      AST_VALUES (*actParm, cast.implicitCast) = 1;
+      (*actParm)->implicitCast = 1;
       *actParm = decorateType (*actParm, IS_GENPTR (defParm->type) ? RESULT_TYPE_GPTR : resultType, true);
     }
 
@@ -1259,6 +1283,7 @@ createIvalStruct (ast *sym, sym_link *type, initList *ilist, ast *rootValue)
     }
 
   // Handle the rest and fill in the gaps.
+  unsigned prevEnd = 0;
   for (symbol *sflds = SPEC_STRUCT (type)->fields; sflds; sflds = sflds->next)
     {
       if (isinSet (initialized_fields, sflds)) // Already initalized by designated initializer
@@ -1267,6 +1292,19 @@ createIvalStruct (ast *sym, sym_link *type, initList *ilist, ast *rootValue)
       /* skip past unnamed bitfields */
       if (sflds && IS_BITFIELD (sflds->type) && SPEC_BUNNAMED (sflds->etype))
         continue;
+
+      /* Anonymous-union members are promoted into the enclosing structure
+         and therefore share storage offsets.  Once the first member has
+         consumed an initializer, skip the overlapping aliases instead of
+         consuming the following structure member's initializer.  Bitfields
+         are exempt because several distinct bitfields can share a byte. */
+      if (TARGET_IS_MCS251 && !IS_BITFIELD (sflds->type) &&
+          sflds->offset < prevEnd)
+        {
+          if (sflds->offset + getSize (sflds->type) > prevEnd)
+            prevEnd = sflds->offset + getSize (sflds->type);
+          continue;
+        }
 
       /* if we have come to end */
       if (!iloop && (!AST_SYMBOL (rootValue)->islocal || SPEC_STAT (etype)))
@@ -1278,6 +1316,7 @@ createIvalStruct (ast *sym, sym_link *type, initList *ilist, ast *rootValue)
       lAst = decorateType (resolveSymbols (lAst), RESULT_TYPE_NONE, true);
       rast = decorateType (resolveSymbols (createIval (lAst, sflds->type, iloop, rast, rootValue, 1)), RESULT_TYPE_NONE, true);
       addSet (&initialized_fields, sflds);
+      prevEnd = sflds->offset + getSize (sflds->type);
       iloop = iloop ? iloop->next : NULL;
 
       /* Unions can only initialize a single field */
@@ -1901,7 +1940,8 @@ constExprTree (ast *cexpr)
           // the offset of a struct field will never change
           return TRUE;
         }
-      if (IS_AST_SYM_VALUE (cexpr) && SPEC_CONSTEXPR (AST_SYMBOL (cexpr)->type))
+      if (IS_AST_SYM_VALUE (cexpr) &&
+          SPEC_CONSTEXPR (AST_SYMBOL (cexpr)->etype))
         {
           // a C23 constexpr is by definition a constant expression
           return TRUE;
@@ -2946,21 +2986,59 @@ getLeftResultType (ast * tree, RESULT_TYPE resultType)
     }
 }
 
+static void gatherImplicitVariables (ast *tree, ast *block,
+                                     symbol *before);
+
+static void
+gatherImplicitVariablesInInitializers (initList *ilist, ast *block,
+                                       symbol *before)
+{
+  for (; ilist; ilist = ilist->next)
+    {
+      if (ilist->type == INIT_NODE)
+        gatherImplicitVariables (ilist->init.node, block, before);
+      else if (ilist->type == INIT_DEEP)
+        gatherImplicitVariablesInInitializers (ilist->init.deep, block,
+                                               before);
+    }
+}
+
+static void
+addImplicitVariableToBlock (ast *block, symbol *sym, symbol *before)
+{
+  symbol **decl = &(block->values.sym);
+
+  wassert (sym->next == NULL);
+  while (*decl && *decl != before)
+    {
+      wassert (*decl != sym);
+      decl = &((*decl)->next);
+    }
+
+  sym->next = *decl;
+  *decl = sym;
+}
+
 /*------------------------------------------------------------------*/
-/* gatherImplicitVariables:  adds the symbols created by            */
-/*            replaceAstWithTemporary to the declarations list of   */
-/*            the innermost block that contains them                */
+/* gatherImplicitVariables:  adds compiler-created symbols to the   */
+/*            declarations list of the innermost containing block   */
 /*------------------------------------------------------------------*/
-void
-gatherImplicitVariables (ast *tree, ast *block)
+static void
+gatherImplicitVariables (ast *tree, ast *block, symbol *before)
 {
   if (!tree)
     return;
 
   if (tree->type == EX_OP && tree->opval.op == BLOCK)
     {
+      symbol *decl;
+
       /* keep track of containing scope */
       block = tree;
+      for (decl = block->values.sym; decl; decl = decl->next)
+        if (decl->ival)
+          gatherImplicitVariablesInInitializers (decl->ival, block,
+                                                 decl);
     }
   if (tree->type == EX_OP && tree->opval.op == '=' && tree->left->type == EX_VALUE && tree->left->opval.val->sym)
     {
@@ -2973,17 +3051,7 @@ gatherImplicitVariables (ast *tree, ast *block)
           wassertl (block != NULL, "implicit variable not contained in block");
           wassert (assignee->next == NULL);
           if (block != NULL)
-            {
-              symbol **decl = &(block->values.sym);
-
-              while (*decl)
-                {
-                  wassert (*decl != assignee);  /* should not already be in list */
-                  decl = &((*decl)->next);
-                }
-
-              *decl = assignee;
-            }
+            addImplicitVariableToBlock (block, assignee, before);
           assignee->implicitaddtoblock = false;
         }
     }
@@ -2993,15 +3061,10 @@ gatherImplicitVariables (ast *tree, ast *block)
       symbol *tempsym = AST_SYMBOL (tree);
       if (block != NULL)
         {
-          symbol **decl = &(block->values.sym);
-
-          while (*decl)
-            {
-              wassert (*decl != tempsym);  /* should not already be in list */
-              decl = &((*decl)->next);
-            }
-
-          *decl = tempsym;
+          if (tempsym->ival)
+            gatherImplicitVariablesInInitializers (tempsym->ival, block,
+                                                   before);
+          addImplicitVariableToBlock (block, tempsym, before);
           AST_SYMBOL (tree)->iscomplit = false;
         }
     }
@@ -3017,8 +3080,8 @@ gatherImplicitVariables (ast *tree, ast *block)
           sym->isinscope = 1;
           sym = sym->next;
         }
-      gatherImplicitVariables (tree->left, block);
-      gatherImplicitVariables (tree->right, block);
+      gatherImplicitVariables (tree->left, block, NULL);
+      gatherImplicitVariables (tree->right, block, NULL);
       sym = tree->values.sym;
       while (sym)
         {
@@ -3028,8 +3091,8 @@ gatherImplicitVariables (ast *tree, ast *block)
     }
   else
     {
-      gatherImplicitVariables (tree->left, block);
-      gatherImplicitVariables (tree->right, block);
+      gatherImplicitVariables (tree->left, block, before);
+      gatherImplicitVariables (tree->right, block, before);
     }
 }
 
@@ -3540,7 +3603,7 @@ optStdLibCall (ast *tree, RESULT_TYPE resulttype)
       node->lineno = parm->lineno;
 
       node->left = newNode (CAST, newAst_LINK (copyLinkChain (FUNC_ARGS(memcpy_sym->type)->type)), parm);
-      node->left->values.cast.implicitCast = 1;
+      node->left->implicitCast = 1;
       node->left->lineno = parm->lineno;
       node->left->filename = node->left->left->filename = parm->filename;
       node->left = decorateType (node->left, RESULT_TYPE_GPTR, true);
@@ -3596,6 +3659,436 @@ rewriteAstNodeVal (ast *tree, value *val)
   tree->decorated = 0;
   
   rewriteAstJoinSideEffects (tree, oLeft, oRight);
+}
+
+typedef enum
+{
+  BIT_BUILTIN_NONE,
+  BIT_BUILTIN_CLZ,
+  BIT_BUILTIN_CTZ,
+  BIT_BUILTIN_POPCOUNT,
+  BIT_BUILTIN_FFS,
+} bitBuiltinOperation;
+
+/*------------------------------------------------------------------*/
+/* bitBuiltinInfo - identify GNU bit-count builtins and their width */
+/*------------------------------------------------------------------*/
+static bitBuiltinOperation
+bitBuiltinInfo (const char *name, unsigned int *width)
+{
+  static const struct
+  {
+    const char *name;
+    bitBuiltinOperation operation;
+    unsigned char sizeKind;
+  } builtins[] =
+  {
+    {"__builtin_clz", BIT_BUILTIN_CLZ, 0},
+    {"__builtin_clzl", BIT_BUILTIN_CLZ, 1},
+    {"__builtin_clzll", BIT_BUILTIN_CLZ, 2},
+    {"__builtin_ctz", BIT_BUILTIN_CTZ, 0},
+    {"__builtin_ctzl", BIT_BUILTIN_CTZ, 1},
+    {"__builtin_ctzll", BIT_BUILTIN_CTZ, 2},
+    {"__builtin_popcount", BIT_BUILTIN_POPCOUNT, 0},
+    {"__builtin_popcountl", BIT_BUILTIN_POPCOUNT, 1},
+    {"__builtin_popcountll", BIT_BUILTIN_POPCOUNT, 2},
+    {"__builtin_ffs", BIT_BUILTIN_FFS, 0},
+    {"__builtin_ffsl", BIT_BUILTIN_FFS, 1},
+    {"__builtin_ffsll", BIT_BUILTIN_FFS, 2},
+  };
+
+  for (unsigned int i = 0;
+       i < sizeof (builtins) / sizeof (builtins[0]); i++)
+    if (!strcmp (name, builtins[i].name))
+      {
+        *width = 8 * (builtins[i].sizeKind == 0 ? INTSIZE :
+                      builtins[i].sizeKind == 1 ? LONGSIZE :
+                      LONGLONGSIZE);
+        return builtins[i].operation;
+      }
+
+  return BIT_BUILTIN_NONE;
+}
+
+/*------------------------------------------------------------------*/
+/* foldBitBuiltinCall - fold a GNU bit-count call with a constant   */
+/*------------------------------------------------------------------*/
+static bool
+foldBitBuiltinCall (ast *tree)
+{
+  if (!options.std_gnu ||
+      !(TARGET_IS_MCS51 || TARGET_IS_MCS251) ||
+      !IS_AST_SYM_VALUE (tree->left) || !tree->right)
+    return false;
+
+  unsigned int width;
+  bitBuiltinOperation operation =
+    bitBuiltinInfo (AST_SYMBOL (tree->left)->name, &width);
+
+  if (operation == BIT_BUILTIN_NONE || !constExprTree (tree->right) ||
+      hasSEFcalls (tree->right))
+    return false;
+
+  TYPE_TARGET_ULONGLONG bits =
+    ullFromVal (constExprValue (tree->right, true));
+  TYPE_TARGET_ULONGLONG mask =
+    width < sizeof (bits) * 8 ?
+    (((TYPE_TARGET_ULONGLONG) 1 << width) - 1) :
+    ~(TYPE_TARGET_ULONGLONG) 0;
+  unsigned int result = 0;
+
+  bits &= mask;
+  if (!bits &&
+      (operation == BIT_BUILTIN_CLZ || operation == BIT_BUILTIN_CTZ))
+    return false;
+
+  switch (operation)
+    {
+    case BIT_BUILTIN_CLZ:
+      for (TYPE_TARGET_ULONGLONG bit =
+             (TYPE_TARGET_ULONGLONG) 1 << (width - 1);
+           !(bits & bit); bit >>= 1)
+        result++;
+      break;
+    case BIT_BUILTIN_CTZ:
+      for (; !(bits & 1); bits >>= 1)
+        result++;
+      break;
+    case BIT_BUILTIN_POPCOUNT:
+      for (; bits; bits >>= 1)
+        result += bits & 1;
+      break;
+    case BIT_BUILTIN_FFS:
+      if (bits)
+        for (result = 1; !(bits & 1); bits >>= 1)
+          result++;
+      break;
+    default:
+      wassert (0);
+    }
+
+  rewriteAstNodeVal (
+    tree, valCastLiteral (newIntLink (), result, result));
+  return true;
+}
+
+/*------------------------------------------------------------------*/
+/* byteSwapBuiltinWidth - identify GNU byte-swap builtins           */
+/*------------------------------------------------------------------*/
+static unsigned int
+byteSwapBuiltinWidth (const char *name)
+{
+  static const struct
+  {
+    const char *name;
+    unsigned char width;
+  } builtins[] =
+  {
+    {"__builtin_bswap16", 16},
+    {"__builtin_bswap32", 32},
+    {"__builtin_bswap64", 64},
+  };
+
+  for (unsigned int i = 0;
+       i < sizeof (builtins) / sizeof (builtins[0]); i++)
+    if (!strcmp (name, builtins[i].name))
+      return builtins[i].width;
+
+  return 0;
+}
+
+/*------------------------------------------------------------------*/
+/* foldByteSwapBuiltinCall - fold a GNU byte-swap constant          */
+/*------------------------------------------------------------------*/
+static bool
+foldByteSwapBuiltinCall (ast *tree)
+{
+  if (!options.std_gnu ||
+      !(TARGET_IS_MCS51 || TARGET_IS_MCS251) ||
+      !IS_AST_SYM_VALUE (tree->left) || !tree->right ||
+      !constExprTree (tree->right) || hasSEFcalls (tree->right))
+    return false;
+
+  unsigned int width =
+    byteSwapBuiltinWidth (AST_SYMBOL (tree->left)->name);
+
+  if (!width)
+    return false;
+
+  TYPE_TARGET_ULONGLONG source =
+    ullFromVal (constExprValue (tree->right, true));
+  TYPE_TARGET_ULONGLONG result = 0;
+  sym_link *resultType;
+
+  for (unsigned int byte = 0; byte < width / 8; byte++)
+    {
+      result = (result << 8) | (source & 0xff);
+      source >>= 8;
+    }
+
+  if (width == 16)
+    {
+      resultType = newIntLink ();
+      SPEC_SHORT (getSpec (resultType)) = true;
+    }
+  else if (width == 32)
+    resultType = newLongLink ();
+  else
+    resultType = newLongLongLink ();
+  SPEC_USIGN (getSpec (resultType)) = true;
+  rewriteAstNodeVal (
+    tree, valCastLiteral (resultType, (double) result, result));
+  return true;
+}
+
+typedef enum
+{
+  /* These values are part of the __sdcc_overflow runtime protocol. */
+  OVERFLOW_BUILTIN_ADD = 1,
+  OVERFLOW_BUILTIN_SUB = 2,
+  OVERFLOW_BUILTIN_MUL = 3,
+} overflowBuiltinOperation;
+
+typedef enum
+{
+  OVERFLOW_REWRITE_NONE,
+  OVERFLOW_REWRITE_DONE,
+  OVERFLOW_REWRITE_ERROR,
+} overflowRewriteResult;
+
+typedef struct
+{
+  const char *name;
+  overflowBuiltinOperation operation;
+  bool typedArguments;
+} overflowBuiltinDescription;
+
+/*------------------------------------------------------------------*/
+/* overflowBuiltinInfo - identify a GNU overflow builtin           */
+/*------------------------------------------------------------------*/
+static const overflowBuiltinDescription *
+overflowBuiltinInfo (const char *name)
+{
+  static const overflowBuiltinDescription builtins[] =
+  {
+    {"__builtin_add_overflow", OVERFLOW_BUILTIN_ADD, false},
+    {"__builtin_sub_overflow", OVERFLOW_BUILTIN_SUB, false},
+    {"__builtin_mul_overflow", OVERFLOW_BUILTIN_MUL, false},
+    {"__builtin_sadd_overflow", OVERFLOW_BUILTIN_ADD, true},
+    {"__builtin_saddl_overflow", OVERFLOW_BUILTIN_ADD, true},
+    {"__builtin_saddll_overflow", OVERFLOW_BUILTIN_ADD, true},
+    {"__builtin_uadd_overflow", OVERFLOW_BUILTIN_ADD, true},
+    {"__builtin_uaddl_overflow", OVERFLOW_BUILTIN_ADD, true},
+    {"__builtin_uaddll_overflow", OVERFLOW_BUILTIN_ADD, true},
+    {"__builtin_ssub_overflow", OVERFLOW_BUILTIN_SUB, true},
+    {"__builtin_ssubl_overflow", OVERFLOW_BUILTIN_SUB, true},
+    {"__builtin_ssubll_overflow", OVERFLOW_BUILTIN_SUB, true},
+    {"__builtin_usub_overflow", OVERFLOW_BUILTIN_SUB, true},
+    {"__builtin_usubl_overflow", OVERFLOW_BUILTIN_SUB, true},
+    {"__builtin_usubll_overflow", OVERFLOW_BUILTIN_SUB, true},
+    {"__builtin_smul_overflow", OVERFLOW_BUILTIN_MUL, true},
+    {"__builtin_smull_overflow", OVERFLOW_BUILTIN_MUL, true},
+    {"__builtin_smulll_overflow", OVERFLOW_BUILTIN_MUL, true},
+    {"__builtin_umul_overflow", OVERFLOW_BUILTIN_MUL, true},
+    {"__builtin_umull_overflow", OVERFLOW_BUILTIN_MUL, true},
+    {"__builtin_umulll_overflow", OVERFLOW_BUILTIN_MUL, true},
+  };
+
+  for (unsigned int i = 0;
+       i < sizeof (builtins) / sizeof (builtins[0]); i++)
+    if (!strcmp (name, builtins[i].name))
+      return &builtins[i];
+
+  return NULL;
+}
+
+/*------------------------------------------------------------------*/
+/* overflowArgumentCount - count call arguments                    */
+/*------------------------------------------------------------------*/
+static unsigned int
+overflowArgumentCount (const ast *parameters)
+{
+  unsigned int count = 0;
+
+  while (IS_AST_PARAM (parameters))
+    {
+      count++;
+      parameters = parameters->right;
+    }
+  return count + !!parameters;
+}
+
+/*------------------------------------------------------------------*/
+/* overflowParameterList - build a right-heavy call parameter list */
+/*------------------------------------------------------------------*/
+static ast *
+overflowParameterList (ast **arguments, unsigned int count, ast *location)
+{
+  ast *parameters = arguments[count - 1];
+
+  while (--count)
+    {
+      parameters = newNode (PARAM, arguments[count - 1], parameters);
+      copyAstLoc (parameters, location);
+    }
+
+  return parameters;
+}
+
+/*------------------------------------------------------------------*/
+/* overflowTypedResultMatches - check a typed builtin result object */
+/*------------------------------------------------------------------*/
+static bool
+overflowTypedResultMatches (sym_link *expected, sym_link *actual)
+{
+  return IS_INTEGRAL (actual) &&
+         !IS_BOOLEAN (actual) && !SPEC_ENUM (actual) &&
+         !IS_BITINT (actual) && !isConst (actual) &&
+         !isAtomic (actual) &&
+         SPEC_NOUN (expected) == SPEC_NOUN (actual) &&
+         SPEC_USIGN (expected) == SPEC_USIGN (actual) &&
+         SPEC_SHORT (expected) == SPEC_SHORT (actual) &&
+         SPEC_LONG (expected) == SPEC_LONG (actual) &&
+         SPEC_LONGLONG (expected) == SPEC_LONGLONG (actual);
+}
+
+/*------------------------------------------------------------------*/
+/* overflowUnsignedArgument - convert a helper operand without a    */
+/*                            user-facing overflow warning          */
+/*------------------------------------------------------------------*/
+static ast *
+overflowUnsignedArgument (ast *operand)
+{
+  sym_link *type = newLongLongLink ();
+  ast *typeNode;
+  ast *cast;
+
+  SPEC_USIGN (getSpec (type)) = true;
+  typeNode = newAst_LINK (type);
+  cast = newNode (CAST, typeNode, operand);
+  copyAstLoc (typeNode, operand);
+  copyAstLoc (cast, operand);
+  return cast;
+}
+
+/*------------------------------------------------------------------*/
+/* rewriteOverflowBuiltinCall - lower a GNU overflow builtin       */
+/*------------------------------------------------------------------*/
+static overflowRewriteResult
+rewriteOverflowBuiltinCall (ast *tree, sym_link *functype,
+                            int *parmNumber)
+{
+  if (!options.std_gnu ||
+      !(TARGET_IS_MCS51 || TARGET_IS_MCS251) ||
+      !IS_AST_SYM_VALUE (tree->left))
+    return OVERFLOW_REWRITE_NONE;
+
+  const char *builtinName = AST_SYMBOL (tree->left)->name;
+  const overflowBuiltinDescription *builtin =
+    overflowBuiltinInfo (builtinName);
+
+  if (!builtin)
+    return OVERFLOW_REWRITE_NONE;
+
+  unsigned int argumentCount = overflowArgumentCount (tree->right);
+
+  if (argumentCount != 3)
+    {
+      werrorfl (tree->filename, tree->lineno,
+                argumentCount > 3 ? E_TOO_MANY_PARMS : E_TOO_FEW_PARMS);
+      return OVERFLOW_REWRITE_ERROR;
+    }
+
+  if (builtin->typedArguments)
+    {
+      ast *resultPointer = decorateType (
+        tree->right->right->right, RESULT_TYPE_OTHER, false);
+      value *expectedResult = FUNC_ARGS (functype)->next->next;
+
+      if (resultPointer->isError ||
+          !IS_PTR (resultPointer->ftype) ||
+          DCL_TYPE (resultPointer->ftype) == CPOINTER ||
+          !overflowTypedResultMatches (expectedResult->type->next,
+                                       resultPointer->ftype->next))
+        {
+          werrorfl (tree->filename, tree->lineno,
+                    E_BUILTIN_OVERFLOW_TYPES, builtinName);
+          return OVERFLOW_REWRITE_ERROR;
+        }
+
+      if (processParms (tree->left, FUNC_ARGS (functype),
+                        &tree->right, parmNumber, true))
+        return OVERFLOW_REWRITE_ERROR;
+    }
+
+  ast *leftOperand = decorateType (
+    tree->right->left, RESULT_TYPE_OTHER, false);
+  ast *rightOperand = decorateType (
+    tree->right->right->left, RESULT_TYPE_OTHER, false);
+  ast *resultPointer = decorateType (
+    tree->right->right->right, RESULT_TYPE_OTHER, false);
+
+  if (leftOperand->isError || rightOperand->isError ||
+      resultPointer->isError)
+    return OVERFLOW_REWRITE_ERROR;
+
+  sym_link *leftType = leftOperand->ftype;
+  sym_link *rightType = rightOperand->ftype;
+  sym_link *resultType = IS_PTR (resultPointer->ftype) ?
+    resultPointer->ftype->next : NULL;
+  unsigned int leftWidth = bitsForType (leftType);
+  unsigned int rightWidth = bitsForType (rightType);
+  unsigned int resultWidth = bitsForType (resultType);
+
+  if (!IS_INTEGRAL (leftType) || !IS_INTEGRAL (rightType) ||
+      !resultType || !IS_INTEGRAL (resultType) ||
+      IS_BOOLEAN (resultType) || SPEC_ENUM (resultType) ||
+      IS_BITINT (resultType) || isConst (resultType) ||
+      isAtomic (resultType) ||
+      DCL_TYPE (resultPointer->ftype) == CPOINTER ||
+      !leftWidth || leftWidth > LONGLONGSIZE * 8 ||
+      !rightWidth || rightWidth > LONGLONGSIZE * 8 ||
+      resultWidth < 8 || resultWidth > LONGLONGSIZE * 8 ||
+      resultWidth % 8)
+    {
+      werrorfl (tree->filename, tree->lineno,
+                E_BUILTIN_OVERFLOW_TYPES, builtinName);
+      return OVERFLOW_REWRITE_ERROR;
+    }
+
+  unsigned int leftSigned =
+    !IS_UNSIGNED (leftType) && !IS_BOOLEAN (leftType);
+  unsigned int rightSigned =
+    !IS_UNSIGNED (rightType) && !IS_BOOLEAN (rightType);
+  unsigned int resultSigned = !IS_UNSIGNED (resultType);
+  ast *arguments[] =
+  {
+    newAst_VALUE (valueFromLit (builtin->operation)),
+    overflowUnsignedArgument (leftOperand),
+    newAst_VALUE (valueFromLit (leftWidth)),
+    newAst_VALUE (valueFromLit (leftSigned)),
+    overflowUnsignedArgument (rightOperand),
+    newAst_VALUE (valueFromLit (rightWidth)),
+    newAst_VALUE (valueFromLit (rightSigned)),
+    resultPointer,
+    newAst_VALUE (valueFromLit (resultWidth)),
+    newAst_VALUE (valueFromLit (resultSigned)),
+  };
+  symbol *helper = findSym (SymbolTab, NULL, "__sdcc_overflow");
+
+  wassert (helper);
+  for (unsigned int i = 0; i < sizeof (arguments) / sizeof (arguments[0]);
+       i++)
+    if (i != 1 && i != 4 && i != 7)
+      copyAstLoc (arguments[i], tree);
+
+  tree->left = newAst_VALUE (symbolVal (helper));
+  tree->left->funcName = 1;
+  copyAstLoc (tree->left, tree);
+  tree->right = overflowParameterList (
+    arguments, sizeof (arguments) / sizeof (arguments[0]), tree);
+  tree->decorated = 0;
+  return OVERFLOW_REWRITE_DONE;
 }
 
 /*-----------------------------------------------------------*/
@@ -3660,6 +4153,22 @@ propagateConstExpr (ast **ptree, RESULT_TYPE resultType, bool reduceTypeAllowed)
       copyAstLoc (newAst, *ptree);
       *ptree = decorateType (newAst, resultType, reduceTypeAllowed);
     }
+}
+
+/*--------------------------------------------------------------------*/
+/* castBuiltinExpectArgument - apply __builtin_expect's long          */
+/*                             parameter conversion                   */
+/*--------------------------------------------------------------------*/
+static ast *
+castBuiltinExpectArgument (ast *argument)
+{
+  ast *type = newAst_LINK (newLongLink ());
+  ast *cast = newNode (CAST, type, argument);
+
+  copyAstLoc (cast, argument);
+  copyAstLoc (type, argument);
+  cast->implicitCast = 1;
+  return decorateType (cast, RESULT_TYPE_OTHER, false);
 }
 
 /*--------------------------------------------------------------------*/
@@ -3790,7 +4299,9 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
     else
       resultTypeProp = RESULT_TYPE_OTHER;
 
-    if (tree->opval.op == GENERIC) // Preserve type of controlling expression for _Generic (and don't allocate string argument)
+    if (tree->opval.op == BUILTIN_EXPECT)
+      dtl = decorateType (tree->left, RESULT_TYPE_OTHER, false);
+    else if (tree->opval.op == GENERIC) // Preserve type of controlling expression for _Generic (and don't allocate string argument)
       {
         ++noAlloc;
         dtl = decorateType (tree->left, resultTypeProp, false);
@@ -3842,6 +4353,9 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
            there is resultType available */
         dtr = tree->right;
         break;
+      case BUILTIN_EXPECT:
+        dtr = decorateType (tree->right, RESULT_TYPE_OTHER, false);
+        break;
       case SIZEOF:
       case COUNTOF:
       case TYPEOF:
@@ -3875,6 +4389,50 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
 
   switch (tree->opval.op)
     {
+    case BLOCK:
+      if (tree->isStmtExpr)
+        {
+          ast *result = statementExpressionResult (tree);
+
+          if (result && result->ftype)
+            {
+              COPYTYPE (TTYPE (tree), TETYPE (tree), result->ftype);
+              tree->rvalue = result->rvalue;
+              tree->lvalue = result->lvalue;
+            }
+          else
+            TETYPE (tree) = getSpec (TTYPE (tree) = newVoidLink ());
+        }
+      else
+        TTYPE (tree) = TETYPE (tree) = NULL;
+      return tree;
+
+    case BUILTIN_EXPECT:
+      if (!IS_INTEGRAL (LTYPE (tree)) || !IS_INTEGRAL (RTYPE (tree)))
+        {
+          werrorfl (tree->filename, tree->lineno,
+                    E_BUILTIN_EXPECT_INTEGRAL);
+          goto errorTreeReturn;
+        }
+
+      tree->left = castBuiltinExpectArgument (tree->left);
+      tree->right = castBuiltinExpectArgument (tree->right);
+
+      if (IS_LITERAL (LTYPE (tree)) && IS_LITERAL (RTYPE (tree)))
+        {
+          value *result = valFromType (LTYPE (tree));
+
+          rewriteAstNodeVal (
+            tree,
+            valCastLiteral (newLongLink (), floatFromVal (result),
+                            (TYPE_TARGET_ULONGLONG) ullFromVal (result)));
+          return decorateType (tree, resultType, reduceTypeAllowed);
+        }
+
+      TRVAL (tree) = LRVAL (tree) = RRVAL (tree) = 1;
+      TETYPE (tree) = getSpec (TTYPE (tree) = newLongLink ());
+      return tree;
+
       /*------------------------------------------------------------------*/
       /*----------------------------*/
       /*        array node          */
@@ -4171,8 +4729,22 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
         }
 
       p = newLink (DECLARATOR);
-      
-      if (!LETYPE (tree))
+
+      symbol *addressedSym = IS_AST_SYM_VALUE (tree->left) ?
+        AST_SYMBOL (tree->left) : NULL;
+      bool futureStackObject = addressedSym && addressedSym->level &&
+        !IS_STATIC (addressedSym->etype) &&
+        (options.stackAuto ||
+         (currFunc && IFFUNC_ISREENT (currFunc->type)));
+
+      if (futureStackObject)
+        {
+          memmap *stackMap = options.useXstack ? xstack : istack;
+
+          DCL_TYPE (p) = PTR_TYPE (stackMap);
+          DCL_TYPE_IMPLICITINTRINSIC (p) = true;
+        }
+      else if (!LETYPE (tree))
         {
           DCL_TYPE (p) = POINTER;
           DCL_TYPE_IMPLICITINTRINSIC (p) = true;
@@ -4230,7 +4802,7 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
           tree->left = NULL;
           tree->right = NULL;
           tree->type = EX_VALUE;
-          tree->values.cast.literalFromCast = 1;
+          tree->literalFromCast = 1;
         }
 #endif
 
@@ -4503,7 +5075,9 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
               werrorfl (tree->filename, tree->lineno, E_PTR_REQD);
               goto errorTreeReturn;
             }
-          else if (IS_STRUCT (tree->left->ftype->next) && !getSize (tree->left->ftype->next))
+          else if (IS_STRUCT (tree->left->ftype->next) &&
+                   !getSize (tree->left->ftype->next) &&
+                   !SPEC_STRUCT (tree->left->ftype->next)->b_empty_complete)
             {
               werrorfl (tree->filename, tree->lineno, E_INCOMPLETE_TYPE_LVALUE);
               goto errorTreeReturn;
@@ -5131,7 +5705,7 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
         {
           /* mark that the explicit cast has been removed,
            * for proper processing (no integer promotion) of explicitly typecasted variable arguments */
-          tree->right->values.cast.removedCast = 1;
+          tree->right->removedCast = 1;
           return tree->right;
         }
 
@@ -5150,7 +5724,7 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
               tree->left = NULL;
               tree->right = NULL;
               TTYPE (tree) = tree->opval.val->type;
-              tree->values.cast.literalFromCast = 1;
+              tree->literalFromCast = 1;
             }
           else if (IS_GENPTR (LTYPE (tree)) && !IS_PTR (RTYPE (tree)) && ((int) ulFromVal (valFromType (RETYPE (tree)))) != 0)  /* special case of NULL */
             {
@@ -5223,13 +5797,15 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
           TETYPE (tree) = getSpec (TTYPE (tree));
           tree->left = NULL;
           tree->right = NULL;
-          tree->values.cast.literalFromCast = 1;
+          tree->literalFromCast = 1;
           return tree;
         }
 #endif
 
       /* if the right is a literal replace the tree */
-      if (IS_LITERAL (RETYPE (tree)))
+      if (IS_LITERAL (RETYPE (tree)) &&
+          !(TARGET_IS_MCS251 && IS_GENPTR (LTYPE (tree)) &&
+            IS_PTR (RTYPE (tree)) && DCL_TYPE (RTYPE (tree)) == PPOINTER))
         {
 #if 0
           if (IS_PTR (LTYPE (tree)) && !IS_GENPTR (LTYPE (tree)))
@@ -5279,7 +5855,7 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
               TTYPE (tree) = tree->opval.val->type;
               tree->left = NULL;
               tree->right = NULL;
-              tree->values.cast.literalFromCast = 1;
+              tree->literalFromCast = 1;
               TETYPE (tree) = getSpec (TTYPE (tree));
               return tree;
             }
@@ -5291,7 +5867,8 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
               unsigned long long pVal = ullFromVal (valFromType (RTYPE (tree))) & mask;
 
               /* if casting literal specific pointer to generic pointer */
-              if (IS_GENPTR (LTYPE (tree)) && IS_PTR (RTYPE (tree)) && !IS_GENPTR (RTYPE (tree)))
+              if (!TARGET_IS_MCS251 && IS_GENPTR (LTYPE (tree)) &&
+                  IS_PTR (RTYPE (tree)) && !IS_GENPTR (RTYPE (tree)))
                 {
                   if (resultType != RESULT_TYPE_GPTR)
                     {
@@ -5304,19 +5881,19 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
                       gpVal &= mask;
                     }
                 }
-              checkPtrCast (LTYPE (tree), RTYPE (tree), tree->values.cast.implicitCast, !ullFromVal (valFromType (RTYPE (tree))));
+              checkPtrCast (LTYPE (tree), RTYPE (tree), tree->implicitCast, !ullFromVal (valFromType (RTYPE (tree))));
               TRVAL (tree) = LRVAL (tree) = 1;
               tree->type = EX_VALUE;
               tree->opval.val = valCastLiteral (LTYPE (tree), gpVal | pVal, gpVal | pVal);
               TTYPE (tree) = tree->opval.val->type;
               tree->left = NULL;
               tree->right = NULL;
-              tree->values.cast.literalFromCast = 1;
+              tree->literalFromCast = 1;
               TETYPE (tree) = getSpec (TTYPE (tree));
               return tree;
             }
         }
-      checkPtrCast (LTYPE (tree), RTYPE (tree), tree->values.cast.implicitCast, FALSE);
+      checkPtrCast (LTYPE (tree), RTYPE (tree), tree->implicitCast, FALSE);
       if (IS_GENPTR (LTYPE (tree)) && (resultType != RESULT_TYPE_GPTR))
         {
           if (IS_PTR (RTYPE (tree)) && !IS_GENPTR (RTYPE (tree)))
@@ -5637,7 +6214,9 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
 
         dbuf_init (&dbuf, 128);
         dbuf_printf (&dbuf, "%d", size);
-        if (!size && !IS_VOID (tree->right->ftype))
+        if (!size && !IS_VOID (tree->right->ftype) &&
+            !(IS_STRUCT (tree->right->ftype) &&
+              SPEC_STRUCT (tree->right->ftype)->b_empty_complete))
           werrorfl (tree->filename, tree->lineno, E_SIZEOF_INCOMPLETE_TYPE);
         tree->type = EX_VALUE;
         tree->opval.val = constVal (dbuf_c_str (&dbuf));
@@ -5702,11 +6281,22 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
             heir = tree->right->right;
             
           heir = decorateType (heir, resultTypeProp, reduceTypeAllowed);
-          if (IS_LITERAL (TETYPE (heir)))
-            TTYPE (heir) = valRecastLitVal (TTYPE (tree->right), valFromType (TETYPE (heir)))->type;
-          else
-            TTYPE (heir) = TTYPE (tree->right);
+          if (TTYPE (tree->right) != NULL)
+            {
+              /* Recast the selected branch to the colon result type.  When
+                 the colon type is not yet available (e.g. inside a compound
+                 literal initializer) keep the branch's own type. */
+              if (IS_LITERAL (TETYPE (heir)))
+                TTYPE (heir) = valRecastLitVal (TTYPE (tree->right), valFromType (TETYPE (heir)))->type;
+              else
+                TTYPE (heir) = TTYPE (tree->right);
+            }
           TETYPE (heir) = getSpec (TTYPE (heir));
+          /* The initializer list still references this '?' node; give it a
+             type as well so a later decoration pass does not see a NULL
+             type (compound literal members are decorated more than once). */
+          TTYPE (tree) = TTYPE (heir);
+          TETYPE (tree) = TETYPE (heir);
           return heir;
         }
 
@@ -6108,8 +6698,22 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
           if (tree->right && tree->right->reversed)
             reverseParms (tree->right, 0);
 
+          overflowRewriteResult overflowRewrite =
+            rewriteOverflowBuiltinCall (tree, functype, &parmNumber);
+
+          if (overflowRewrite == OVERFLOW_REWRITE_DONE)
+            return decorateType (tree, resultType, reduceTypeAllowed);
+          if (overflowRewrite == OVERFLOW_REWRITE_ERROR)
+            goto errorTreeReturn;
+
           if (processParms (tree->left, FUNC_ARGS (functype), &tree->right, &parmNumber, TRUE))
             goto errorTreeReturn;
+
+          if (foldByteSwapBuiltinCall (tree))
+            return decorateType (tree, resultType, reduceTypeAllowed);
+
+          if (foldBitBuiltinCall (tree))
+            return decorateType (tree, resultType, reduceTypeAllowed);
 
           if (!optimize.noStdLibCall)
             optStdLibCall (tree, resultType);
@@ -6151,7 +6755,7 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
               tree->right = newNode (CAST,
                                      newAst_LINK (copyLinkChain (currFunc->type->next)),
                                      tree->right);
-              tree->right->values.cast.implicitCast = 1;
+              tree->right->implicitCast = 1;
               tree->right->lineno = tree->right->left->lineno = tree->lineno;
               tree->right->filename = tree->right->left->filename = tree->filename;
               tree->right = decorateType (tree->right, IS_GENPTR (currFunc->type->next) ? RESULT_TYPE_GPTR : RESULT_TYPE_NONE, reduceTypeAllowed);
@@ -6286,7 +6890,8 @@ sizeofOp (sym_link *type)
   /* get the size and convert it to character  */
   dbuf_init (&dbuf, 128);
   dbuf_printf (&dbuf, "%d", size = getSize (type));
-  if (!size && !IS_VOID (type))
+  if (!size && !IS_VOID (type) &&
+      !(IS_STRUCT (type) && SPEC_STRUCT (type)->b_empty_complete))
     werror (E_SIZEOF_INCOMPLETE_TYPE);
 
   /* now convert into value  */
@@ -6349,8 +6954,33 @@ typeofOp (ast *tree)
   sym_link *type = copyLinkChain (tree->ftype);
   sym_link *spec_type;
   for (spec_type = type; !IS_SPEC (spec_type); spec_type = spec_type->next);
+
+  /* An address-of expression over an automatic local gets its pointer
+     space from the storage class that allocLocal will assign, which has
+     not happened yet while a GNU/C23 auto declaration infers its type
+     from the initializer.  Mirror allocLocal's choice so the inferred
+     pointer space matches the final expression type (bug: tst_auto in
+     the MCS-51 medium/large/huge models). */
+  if (IS_ADDRESS_OF_OP (tree) && IS_AST_SYM_VALUE (tree->left))
+    {
+      symbol *sym = AST_SYMBOL (tree->left);
+      if (sym->level && !IS_STATIC (sym->etype) &&
+          !SPEC_OCLS (sym->etype) &&
+          !(options.stackAuto ||
+            (currFunc && IFFUNC_ISREENT (currFunc->type))))
+        {
+          memmap *localMap =
+            options.model == MODEL_SMALL
+              ? (options.noOverlay ? port->mem.default_local_map : overlay)
+              : port->mem.default_local_map;
+          if (localMap && localMap->ptrType)
+            DCL_TYPE (type) = localMap->ptrType;
+        }
+    }
+
   SPEC_SCLS (spec_type) = 0;
   SPEC_STAT (spec_type) = 0;
+  SPEC_CONSTEXPR (spec_type) = 0;
   return type;
 }
 
@@ -6478,6 +7108,30 @@ createBlock (symbol * decl, ast * body)
   if (body)
     ex->block = body->block;
   return ex;
+}
+
+/*-----------------------------------------------------------------*/
+/* statementExpressionResult - find the final expression statement */
+/*-----------------------------------------------------------------*/
+ast *
+statementExpressionResult (ast *tree)
+{
+  if (!tree)
+    return NULL;
+
+  if (tree->isExprStmt &&
+      !(IS_AST_OP (tree) && tree->opval.op == BLOCK &&
+        tree->isStmtExpr))
+    return tree;
+
+  if (IS_AST_OP (tree) && tree->opval.op == NULLOP)
+    return statementExpressionResult (tree->right);
+
+  if (IS_AST_OP (tree) && tree->opval.op == BLOCK &&
+      (tree->isStmtExpr || tree->isImplicitBlock))
+    return statementExpressionResult (tree->right);
+
+  return NULL;
 }
 
 /*-----------------------------------------------------------------*/
@@ -7791,7 +8445,7 @@ createFunction (symbol * name, ast * body)
   inlineState.count = 0;
   expandInlineFuncs (body, NULL);
 
-  gatherImplicitVariables (body, NULL); /* move implicit variables into blocks */
+  gatherImplicitVariables (body, NULL, NULL); /* move implicit variables into blocks */
 
   if (FUNC_ISINLINE (name->type))
     name->funcTree = copyAst (body);
@@ -7830,16 +8484,12 @@ createFunction (symbol * name, ast * body)
   if (fatalError)
     goto skipall;
 
-  /* Do not generate code for inline functions unless extern also. */
-#if 0
-  if (FUNC_ISINLINE (name->type) && !IS_EXTERN (fetype))
+  /* Defer an unreferenced static inline definition until the end of the
+     translation unit. Calls parsed later can use funcTree immediately;
+     address-taking and non-inlined calls mark the symbol for emission. */
+  if (FUNC_ISINLINE (name->type) && !IS_EXTERN (fetype) &&
+      (!IS_STATIC (fetype) || !name->isref))
     goto skipall;
-#else
-  /* Temporary hack: always generate code for static inline functions. */
-  /* Ideally static inline functions should only be generated if needed. */
-  if (FUNC_ISINLINE (name->type) && !IS_EXTERN (fetype) && !IS_STATIC (fetype))
-    goto skipall;
-#endif
 
   /* create the node & generate intermediate code */
   GcurMemmap = code;
@@ -8356,6 +9006,14 @@ ast_print (ast * tree, FILE * outfile, int indent)
       ast_print (tree->right, outfile, indent + 2);
       return;
 
+    case BUILTIN_EXPECT:
+      fprintf (outfile, "BUILTIN_EXPECT (%p) type (", tree);
+      printTypeChain (tree->ftype, outfile);
+      fprintf (outfile, ")\n");
+      ast_print (tree->left, outfile, indent + 2);
+      ast_print (tree->right, outfile, indent + 2);
+      return;
+
     case AND_OP:
       fprintf (outfile, "ANDAND (%p) type (", tree);
       printTypeChain (tree->ftype, outfile);
@@ -8795,4 +9453,3 @@ offsetofOp (sym_link *type, ast *snd)
 
   return offsetofOp_rec (type, snd, &result_type);
 }
-

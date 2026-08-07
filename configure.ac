@@ -802,7 +802,9 @@ test $OPT_DISABLE_SDBINUTILS = 0 && AC_CONFIG_SUBDIRS(support/sdbinutils)
 AC_CONFIG_FILES([doc/Makefile])
 
 if test $OPT_DISABLE_MCS251 = 0; then
-  AC_CONFIG_FILES([sdas/as251/Makefile])
+  AC_CONFIG_FILES([src/mcs251/Makefile
+                   sdas/as251/Makefile])
+  test $OPT_DISABLE_DEVICE_LIB = 0 && AC_CONFIG_FILES([device/lib/mcs251/Makefile])
 fi
 
 if test $OPT_DISABLE_DS390 = 0 || test $OPT_DISABLE_DS400; then
@@ -1006,6 +1008,7 @@ sdcc ${VERSION} is now configured for
     hc08                ${enable_hc08_port}
     s08                 ${enable_s08_port}
     mcs51               ${enable_mcs51_port}
+    mcs251              ${enable_mcs251_port}
     pic14               ${enable_pic14_port}
     pic16               ${enable_pic16_port}
     z80                 ${enable_z80_port}

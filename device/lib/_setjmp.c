@@ -30,7 +30,165 @@
 #define __SDCC_HIDE_LONGJMP
 #include <setjmp.h>
 
-#if defined(__SDCC_ds390)
+#if defined(__SDCC_mcs251)
+
+/*
+ * MCS251 calls push a three-byte return address on the 16-bit hardware SPX
+ * stack.  Both routines that manipulate that frame must be naked: even a
+ * one-byte compiler-generated prologue would make the saved SPX ambiguous.
+ *
+ * Buffer layout:
+ *   0..1  SPX, high byte first
+ *   2..4  ECALL return address, high byte first
+ *   5..6  normalized longjmp return value, high byte first
+ *   7..14 r0-r7, in register order
+ */
+int
+__setjmp (jmp_buf buf) __naked
+{
+    (void)buf;
+    __asm
+        ; Atomically snapshot SPX and its ECALL frame.  Carry remembers EA.
+        setb    c
+        jbc     ea,mcs251_setjmp_irq_off$
+        clr     c
+mcs251_setjmp_irq_off$:
+        mov     dpxl,b
+        mov     dr20,dpx
+        mov     dr24,dpx
+        inc     dr24,#4
+        inc     dr24,#2
+        inc     dr24,#1
+        mov     @dr24,r0
+        inc     dr24
+        mov     @dr24,r1
+        inc     dr24
+        mov     @dr24,r2
+        inc     dr24
+        mov     @dr24,r3
+        inc     dr24
+        mov     @dr24,r4
+        inc     dr24
+        mov     @dr24,r5
+        inc     dr24
+        mov     @dr24,r6
+        inc     dr24
+        mov     @dr24,r7
+        mov     r0,sp
+        mov     r1,sph
+        mov     dr24,spx
+        mov     r2,@dr24
+        dec     dr24
+        mov     r3,@dr24
+        dec     dr24
+        mov     r4,@dr24
+
+        mov     @dr20,r1
+        inc     dr20
+        mov     @dr20,r0
+        inc     dr20
+        mov     @dr20,r4
+        inc     dr20
+        mov     @dr20,r3
+        inc     dr20
+        mov     @dr20,r2
+
+        dec     dr24,#4
+        dec     dr24,#2
+        dec     dr24,#1
+        mov     r0,@dr24
+        inc     dr24
+        mov     r1,@dr24
+        inc     dr24
+        mov     r2,@dr24
+        inc     dr24
+        mov     r3,@dr24
+        inc     dr24
+        mov     r4,@dr24
+        inc     dr24
+        mov     r5,@dr24
+        inc     dr24
+        mov     r6,@dr24
+        inc     dr24
+        mov     r7,@dr24
+        mov     ea,c
+        mov     dptr,#0
+        eret
+    __endasm;
+}
+
+static _Noreturn void
+__mcs251_longjmp_restore (jmp_buf buf) __naked
+{
+    (void)buf;
+    __asm
+        ; Carry remembers the interrupt-enable state while SPX is replaced.
+        setb    c
+        jbc     ea,mcs251_longjmp_irq_off$
+        clr     c
+mcs251_longjmp_irq_off$:
+        mov     dpxl,b
+        mov     dr20,dpx
+        mov     r8,@dr20
+        inc     dr20
+        mov     r9,@dr20
+        inc     dr20
+        mov     r10,@dr20
+        inc     dr20
+        mov     r11,@dr20
+        inc     dr20
+        mov     r12,@dr20
+        inc     dr20
+        mov     r13,@dr20
+        inc     dr20
+        mov     r14,@dr20
+        inc     dr20
+        mov     r0,@dr20
+        inc     dr20
+        mov     r1,@dr20
+        inc     dr20
+        mov     r2,@dr20
+        inc     dr20
+        mov     r3,@dr20
+        inc     dr20
+        mov     r4,@dr20
+        inc     dr20
+        mov     r5,@dr20
+        inc     dr20
+        mov     r6,@dr20
+        inc     dr20
+        mov     r7,@dr20
+
+        ; Re-create the saved ECALL frame without signed indexed addressing.
+        mov     dpx,#0
+        mov     dpl,r9
+        mov     dph,r8
+        mov     @dpx,r12
+        dec     dpx
+        mov     @dpx,r11
+        dec     dpx
+        mov     @dpx,r10
+        inc     dpx,#2
+        mov     spx,dpx
+
+        mov     dpl,r14
+        mov     dph,r13
+        mov     ea,c
+        eret
+    __endasm;
+}
+
+_Noreturn void
+longjmp (jmp_buf buf, int rv)
+{
+    if (!rv)
+        rv = 1;
+    buf[5] = (unsigned int)rv >> 8;
+    buf[6] = (unsigned char)rv;
+    __mcs251_longjmp_restore (buf);
+}
+
+#elif defined(__SDCC_ds390)
 
 #include <ds80c390.h>
 

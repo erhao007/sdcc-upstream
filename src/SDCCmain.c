@@ -107,6 +107,7 @@ char buffer[PATH_MAX * 2];
 #define OPTION_HELP                 "--help"
 #define OPTION_OUT_FMT_IHX          "--out-fmt-ihx"
 #define OPTION_OUT_FMT_S19          "--out-fmt-s19"
+#define OPTION_OUT_FMT_ELF          "--out-fmt-elf"
 #define OPTION_PEEP_FILE            "--peep-file"
 #define OPTION_LIB_PATH             "--lib-path"
 #define OPTION_CALLEE_SAVES         "--callee-saves"
@@ -197,7 +198,7 @@ static const OPTION optionsTable[] = {
   {0,   OPTION_WERROR, NULL, "Treat the warnings as errors"},
   {0,   OPTION_DEBUG, NULL, "Enable debugging symbol output"},
   {0,   "--cyclomatic", &options.cyclomatic, "Display complexity of compiled functions"},
-  {0,   OPTION_STD, NULL, "Determine the language standard (c90, c99, c11, c23, c2y, sdcc89 etc.)"},
+  {0,   OPTION_STD, NULL, "Determine the language standard (c90, c99, c11, c17, gnu11, gnu17, c23, c2y, sdcc89 etc.)"},
   {0,   OPTION_DOLLARS_IN_IDENT, &options.dollars_in_ident, "Permit '$' as an identifier character"},
   {0,   OPTION_SIGNED_CHAR, &options.signed_char, "Make \"char\" signed by default"},
   {0,   OPTION_CONST_STRINGLIT, &options.const_stringlit, "Make string literals const, like in C++"},
@@ -258,6 +259,7 @@ static const OPTION optionsTable[] = {
   {0,   OPTION_LIB_PATH, &libPathsSet, "<path> use this path to search for libraries", CLAT_ADD_SET},
   {0,   OPTION_OUT_FMT_IHX, NULL, "Output in Intel hex format"},
   {0,   OPTION_OUT_FMT_S19, NULL, "Output in S19 hex format"},
+  {0,   OPTION_OUT_FMT_ELF, NULL, "Output in ELF32 executable format"},
   {0,   OPTION_XRAM_LOC, NULL, "<nnnn> External Ram start location", CLAT_INTEGER},
   {0,   OPTION_XRAM_SIZE, NULL, "<nnnn> External Ram size"},
   {0,   OPTION_IRAM_SIZE, &options.iram_size, "<nnnn> Internal Ram size", CLAT_INTEGER},
@@ -311,6 +313,9 @@ PORT *port;
 static PORT *_ports[] = {
 #if !OPT_DISABLE_MCS51
   &mcs51_port,
+#endif
+#if !OPT_DISABLE_MCS251
+  &mcs251_port,
 #endif
 #if !OPT_DISABLE_Z80
   &z80_port,
@@ -670,8 +675,10 @@ setDefaultOptions (void)
   options.std_c95 = 1;
   options.std_c99 = 1;
   options.std_c11 = 1;          /* default to C11 (we want inline by default, so we need at least C99, and support for C11 is more complete than C99) */
+  options.std_c17 = 0;
   options.std_c23 = 0;
   options.std_c2y = 0;
+  options.std_gnu = 0;
   options.code_seg = CODE_NAME ? Safe_strdup (CODE_NAME) : NULL;        /* default to CSEG for generated code */
   options.const_seg = CONST_NAME ? Safe_strdup (CONST_NAME) : NULL;     /* default to CONST for generated code */
   options.data_seg = DATA_NAME ? Safe_strdup (DATA_NAME) : NULL;        /* default to DATA for non-initialized data */
@@ -1152,6 +1159,12 @@ parseCmdLine (int argc, char **argv)
               continue;
             }
 
+          if (strcmp (argv[i], OPTION_OUT_FMT_ELF) == 0)
+            {
+              options.out_fmt = 'E';
+              continue;
+            }
+
           if (strcmp (argv[i], OPTION_SMALL_MODEL) == 0)
             {
               _setModel (MODEL_SMALL, argv[i]);
@@ -1292,8 +1305,10 @@ parseCmdLine (int argc, char **argv)
                   options.std_c95 = 0;
                   options.std_c99 = 0;
                   options.std_c11 = 0;
+                  options.std_c17 = 0;
                   options.std_c23 = 0;
                   options.std_c2y = 0;
+                  options.std_gnu = 0;
                   options.std_sdcc = 0;
                   continue;
                 }
@@ -1303,8 +1318,10 @@ parseCmdLine (int argc, char **argv)
                   options.std_c95 = 1;
                   options.std_c99 = 0;
                   options.std_c11 = 0;
+                  options.std_c17 = 0;
                   options.std_c23 = 0;
                   options.std_c2y = 0;
+                  options.std_gnu = 0;
                   options.std_sdcc = 0;
                   continue;
                 }
@@ -1314,20 +1331,63 @@ parseCmdLine (int argc, char **argv)
                   options.std_c95 = 1;
                   options.std_c99 = 1;
                   options.std_c11 = 0;
+                  options.std_c17 = 0;
                   options.std_c23 = 0;
                   options.std_c2y = 0;
+                  options.std_gnu = 0;
                   options.std_sdcc = 0;
                   continue;
                 }
 
-              if (strcmp (langVer, "c11") == 0 || strcmp (langVer, "iso9899:2011") == 0 || strcmp (langVer, "c17") == 0 ||
-                  strcmp (langVer, "iso9899:2017") == 0 || strcmp (langVer, "c18") == 0 || strcmp (langVer, "iso9899:2018") == 0)
+              if (strcmp (langVer, "c11") == 0 || strcmp (langVer, "iso9899:2011") == 0)
                 {
                   options.std_c95 = 1;
                   options.std_c99 = 1;
                   options.std_c11 = 1;
+                  options.std_c17 = 0;
                   options.std_c23 = 0;
                   options.std_c2y = 0;
+                  options.std_gnu = 0;
+                  options.std_sdcc = 0;
+                  continue;
+                }
+
+              if (strcmp (langVer, "c17") == 0 || strcmp (langVer, "iso9899:2017") == 0 ||
+                  strcmp (langVer, "c18") == 0 || strcmp (langVer, "iso9899:2018") == 0)
+                {
+                  options.std_c95 = 1;
+                  options.std_c99 = 1;
+                  options.std_c11 = 1;
+                  options.std_c17 = 1;
+                  options.std_c23 = 0;
+                  options.std_c2y = 0;
+                  options.std_gnu = 0;
+                  options.std_sdcc = 0;
+                  continue;
+                }
+
+              if (strcmp (langVer, "gnu11") == 0)
+                {
+                  options.std_c95 = 1;
+                  options.std_c99 = 1;
+                  options.std_c11 = 1;
+                  options.std_c17 = 0;
+                  options.std_c23 = 0;
+                  options.std_c2y = 0;
+                  options.std_gnu = 1;
+                  options.std_sdcc = 0;
+                  continue;
+                }
+
+              if (strcmp (langVer, "gnu17") == 0 || strcmp (langVer, "gnu18") == 0)
+                {
+                  options.std_c95 = 1;
+                  options.std_c99 = 1;
+                  options.std_c11 = 1;
+                  options.std_c17 = 1;
+                  options.std_c23 = 0;
+                  options.std_c2y = 0;
+                  options.std_gnu = 1;
                   options.std_sdcc = 0;
                   continue;
                 }
@@ -1337,8 +1397,10 @@ parseCmdLine (int argc, char **argv)
                   options.std_c95 = 1;
                   options.std_c99 = 1;
                   options.std_c11 = 1;
+                  options.std_c17 = 1;
                   options.std_c23 = 1;
                   options.std_c2y = 0;
+                  options.std_gnu = 0;
                   options.std_sdcc = 0;
                   continue;
                 }
@@ -1348,8 +1410,10 @@ parseCmdLine (int argc, char **argv)
                   options.std_c95 = 1;
                   options.std_c99 = 1;
                   options.std_c11 = 1;
+                  options.std_c17 = 1;
                   options.std_c23 = 1;
                   options.std_c2y = 1;
+                  options.std_gnu = 0;
                   options.std_sdcc = 0;
                   continue;
                 }
@@ -1359,8 +1423,10 @@ parseCmdLine (int argc, char **argv)
                   options.std_c95 = 0;
                   options.std_c99 = 0;
                   options.std_c11 = 0;
+                  options.std_c17 = 0;
                   options.std_c23 = 0;
                   options.std_c2y = 0;
+                  options.std_gnu = 0;
                   options.std_sdcc = 1;
                   continue;
                 }
@@ -1370,19 +1436,36 @@ parseCmdLine (int argc, char **argv)
                   options.std_c95 = 1;
                   options.std_c99 = 1;
                   options.std_c11 = 0;
+                  options.std_c17 = 0;
                   options.std_c23 = 0;
                   options.std_c2y = 0;
+                  options.std_gnu = 0;
                   options.std_sdcc = 1;
                   continue;
                 }
 
-              if (strcmp (langVer, "sdcc11") == 0 || strcmp (langVer, "sdcc17") == 0 || strcmp (langVer, "sdcc18") == 0)
+              if (strcmp (langVer, "sdcc11") == 0)
                 {
                   options.std_c95 = 1;
                   options.std_c99 = 1;
                   options.std_c11 = 1;
+                  options.std_c17 = 0;
                   options.std_c23 = 0;
                   options.std_c2y = 0;
+                  options.std_gnu = 0;
+                  options.std_sdcc = 1;
+                  continue;
+                }
+
+              if (strcmp (langVer, "sdcc17") == 0 || strcmp (langVer, "sdcc18") == 0)
+                {
+                  options.std_c95 = 1;
+                  options.std_c99 = 1;
+                  options.std_c11 = 1;
+                  options.std_c17 = 1;
+                  options.std_c23 = 0;
+                  options.std_c2y = 0;
+                  options.std_gnu = 0;
                   options.std_sdcc = 1;
                   continue;
                 }
@@ -1392,8 +1475,10 @@ parseCmdLine (int argc, char **argv)
                   options.std_c95 = 1;
                   options.std_c99 = 1;
                   options.std_c11 = 1;
+                  options.std_c17 = 1;
                   options.std_c23 = 1;
                   options.std_c2y = 0;
+                  options.std_gnu = 0;
                   options.std_sdcc = 1;
                   continue;
                 }
@@ -1403,8 +1488,10 @@ parseCmdLine (int argc, char **argv)
                   options.std_c95 = 1;
                   options.std_c99 = 1;
                   options.std_c11 = 1;
+                  options.std_c17 = 1;
                   options.std_c23 = 1;
                   options.std_c2y = 1;
+                  options.std_gnu = 0;
                   options.std_sdcc = 1;
                   continue;
                 }
@@ -2218,6 +2305,137 @@ assemble (char **envp)
 }
 
 /*-----------------------------------------------------------------*/
+/* addPreprocessorUIntDefine - add an unsigned target definition   */
+/*-----------------------------------------------------------------*/
+static void
+addPreprocessorUIntDefine (const char *name, unsigned value)
+{
+  struct dbuf_s dbuf;
+
+  dbuf_init (&dbuf, 64);
+  dbuf_printf (&dbuf, "-D%s=%u", name, value);
+  addSet (&preArgvSet, dbuf_detach_c_str (&dbuf));
+}
+
+typedef struct
+{
+  const char *name;
+  const char *value;
+} preprocessor_define;
+
+static const preprocessor_define mcsPreprocessorDefines[] =
+{
+  { "__SCHAR_MAX__", "127" },
+  { "__SHRT_MAX__", "32767" },
+  { "__INT_MAX__", "32767" },
+  { "__LONG_MAX__", "2147483647L" },
+  { "__LONG_LONG_MAX__", "9223372036854775807LL" },
+  { "__INT8_TYPE__", "signed char" },
+  { "__UINT8_TYPE__", "unsigned char" },
+  { "__INT16_TYPE__", "short int" },
+  { "__UINT16_TYPE__", "unsigned short int" },
+  { "__INT32_TYPE__", "long int" },
+  { "__UINT32_TYPE__", "unsigned long int" },
+  { "__INT64_TYPE__", "long long int" },
+  { "__UINT64_TYPE__", "unsigned long long int" },
+  { "__INT8_C(c)", "c" },
+  { "__INT16_C(c)", "c" },
+  { "__INT32_C(c)", "c##L" },
+  { "__INT64_C(c)", "c##LL" },
+  { "__UINT8_C(c)", "c##U" },
+  { "__UINT16_C(c)", "c##U" },
+  { "__UINT32_C(c)", "c##UL" },
+  { "__UINT64_C(c)", "c##ULL" },
+  { "__INTMAX_C(c)", "c##LL" },
+  { "__UINTMAX_C(c)", "c##ULL" },
+  { "__INT8_MAX__", "__SCHAR_MAX__" },
+  { "__UINT8_MAX__", "255" },
+  { "__INT16_MAX__", "__SHRT_MAX__" },
+  { "__UINT16_MAX__", "65535U" },
+  { "__INT32_MAX__", "__LONG_MAX__" },
+  { "__UINT32_MAX__", "4294967295UL" },
+  { "__INT64_MAX__", "__LONG_LONG_MAX__" },
+  { "__UINT64_MAX__", "18446744073709551615ULL" },
+  { "__INT_FAST8_TYPE__", "__INT8_TYPE__" },
+  { "__UINT_FAST8_TYPE__", "__UINT8_TYPE__" },
+  { "__INT_FAST16_TYPE__", "int" },
+  { "__UINT_FAST16_TYPE__", "unsigned int" },
+  { "__INT_FAST32_TYPE__", "__INT32_TYPE__" },
+  { "__UINT_FAST32_TYPE__", "__UINT32_TYPE__" },
+  { "__INT_FAST64_TYPE__", "__INT64_TYPE__" },
+  { "__UINT_FAST64_TYPE__", "__UINT64_TYPE__" },
+  { "__INT_FAST8_MAX__", "__INT8_MAX__" },
+  { "__UINT_FAST8_MAX__", "__UINT8_MAX__" },
+  { "__INT_FAST16_MAX__", "__INT_MAX__" },
+  { "__UINT_FAST16_MAX__", "65535U" },
+  { "__INT_FAST32_MAX__", "__INT32_MAX__" },
+  { "__UINT_FAST32_MAX__", "__UINT32_MAX__" },
+  { "__INT_FAST64_MAX__", "__INT64_MAX__" },
+  { "__UINT_FAST64_MAX__", "__UINT64_MAX__" },
+  { "__INT_FAST8_WIDTH__", "__SCHAR_WIDTH__" },
+  { "__INT_FAST16_WIDTH__", "__INT_WIDTH__" },
+  { "__INT_FAST32_WIDTH__", "__LONG_WIDTH__" },
+  { "__INT_FAST64_WIDTH__", "__LLONG_WIDTH__" },
+  { "__INT_LEAST8_TYPE__", "__INT8_TYPE__" },
+  { "__UINT_LEAST8_TYPE__", "__UINT8_TYPE__" },
+  { "__INT_LEAST16_TYPE__", "__INT16_TYPE__" },
+  { "__UINT_LEAST16_TYPE__", "__UINT16_TYPE__" },
+  { "__INT_LEAST32_TYPE__", "__INT32_TYPE__" },
+  { "__UINT_LEAST32_TYPE__", "__UINT32_TYPE__" },
+  { "__INT_LEAST64_TYPE__", "__INT64_TYPE__" },
+  { "__UINT_LEAST64_TYPE__", "__UINT64_TYPE__" },
+  { "__INT_LEAST8_MAX__", "__INT8_MAX__" },
+  { "__UINT_LEAST8_MAX__", "__UINT8_MAX__" },
+  { "__INT_LEAST16_MAX__", "__INT16_MAX__" },
+  { "__UINT_LEAST16_MAX__", "__UINT16_MAX__" },
+  { "__INT_LEAST32_MAX__", "__INT32_MAX__" },
+  { "__UINT_LEAST32_MAX__", "__UINT32_MAX__" },
+  { "__INT_LEAST64_MAX__", "__INT64_MAX__" },
+  { "__UINT_LEAST64_MAX__", "__UINT64_MAX__" },
+  { "__INT_LEAST8_WIDTH__", "__SCHAR_WIDTH__" },
+  { "__INT_LEAST16_WIDTH__", "__SHRT_WIDTH__" },
+  { "__INT_LEAST32_WIDTH__", "__LONG_WIDTH__" },
+  { "__INT_LEAST64_WIDTH__", "__LLONG_WIDTH__" },
+  { "__INTMAX_TYPE__", "__INT64_TYPE__" },
+  { "__UINTMAX_TYPE__", "__UINT64_TYPE__" },
+  { "__INTMAX_MAX__", "__INT64_MAX__" },
+  { "__UINTMAX_MAX__", "__UINT64_MAX__" },
+  { "__INTMAX_WIDTH__", "__LLONG_WIDTH__" },
+  { "__UINTMAX_WIDTH__", "__LLONG_WIDTH__" },
+  { "__INTPTR_TYPE__", "__INT32_TYPE__" },
+  { "__UINTPTR_TYPE__", "__UINT32_TYPE__" },
+  { "__INTPTR_MAX__", "__INT32_MAX__" },
+  { "__UINTPTR_MAX__", "__UINT32_MAX__" },
+  { "__INTPTR_WIDTH__", "__LONG_WIDTH__" },
+  { "__PTRDIFF_TYPE__", "__INT32_TYPE__" },
+  { "__PTRDIFF_MAX__", "__INT32_MAX__" },
+  { "__PTRDIFF_WIDTH__", "__LONG_WIDTH__" },
+  { "__WCHAR_TYPE__", "__UINT32_TYPE__" },
+  { "__WCHAR_MAX__", "__UINT32_MAX__" },
+  { "__WCHAR_WIDTH__", "__LONG_WIDTH__" },
+  { "__WINT_TYPE__", "__UINT32_TYPE__" },
+  { "__WINT_MAX__", "__UINT32_MAX__" },
+  { "__WINT_WIDTH__", "__LONG_WIDTH__" },
+  { NULL, NULL }
+};
+
+/*-----------------------------------------------------------------*/
+/* addPreprocessorDefine - add a possibly multi-token definition   */
+/*-----------------------------------------------------------------*/
+static void
+addPreprocessorDefine (const char *name, const char *value)
+{
+  struct dbuf_s dbuf;
+  char *definition;
+
+  dbuf_init (&dbuf, 96);
+  dbuf_printf (&dbuf, "-D%s=%s", name, value);
+  definition = shell_escape (dbuf_c_str (&dbuf));
+  dbuf_destroy (&dbuf);
+  addSet (&preArgvSet, definition);
+}
+
+/*-----------------------------------------------------------------*/
 /* preProcess - spawns the preprocessor with arguments             */
 /*-----------------------------------------------------------------*/
 static int
@@ -2232,6 +2450,106 @@ preProcess (char **envp)
       const char *s;
       set *inclList = NULL;
       char *buf;
+
+      /* sdcpp is a host program. Do not expose its host ABI as target
+         predefined macros. */
+      addSet (&preArgvSet, Safe_strdup ("-undef"));
+      addSet (&preArgvSet,
+              Safe_strdup ("-Wno-builtin-macro-redefined"));
+      addSet (&preArgvSet,
+              Safe_strdup ("-U__GCC_HAVE_DWARF2_CFI_ASM"));
+
+      /* Report only builtins accepted by the selected frontend mode. */
+      addPreprocessorDefine ("__has_builtin(x)",
+                             "__SDCC_HAS_BUILTIN_ ## x");
+      addPreprocessorDefine (
+        "__SDCC_HAS_BUILTIN___builtin_offsetof", "1");
+      addPreprocessorDefine (
+        "__SDCC_HAS_BUILTIN___builtin_unreachable", "1");
+      if (options.std_gnu)
+        {
+          addPreprocessorDefine (
+            "__SDCC_HAS_BUILTIN___builtin_constant_p", "1");
+          addPreprocessorDefine (
+            "__SDCC_HAS_BUILTIN___builtin_expect", "1");
+          addPreprocessorDefine (
+            "__SDCC_HAS_BUILTIN___builtin_types_compatible_p", "1");
+          if (TARGET_IS_MCS51 || TARGET_IS_MCS251)
+            {
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_clz", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_clzl", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_clzll", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_ctz", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_ctzl", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_ctzll", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_popcount", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_popcountl", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_popcountll", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_ffs", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_ffsl", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_ffsll", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_bswap16", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_bswap32", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_bswap64", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_add_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_sub_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_mul_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_sadd_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_saddl_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_saddll_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_uadd_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_uaddl_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_uaddll_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_ssub_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_ssubl_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_ssubll_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_usub_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_usubl_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_usubll_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_smul_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_smull_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_smulll_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_umul_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_umull_overflow", "1");
+              addPreprocessorDefine (
+                "__SDCC_HAS_BUILTIN___builtin_umulll_overflow", "1");
+            }
+        }
 
       if (NULL != port->linker.rel_ext)
         {
@@ -2289,13 +2607,29 @@ preProcess (char **envp)
 
       /* set the macro for unsigned char  */
       if (options.signed_char)
-        addSet (&preArgvSet, Safe_strdup ("-D__SDCC_CHAR_SIGNED"));
+        {
+          addSet (&preArgvSet, Safe_strdup ("-D__SDCC_CHAR_SIGNED"));
+          addSet (&preArgvSet, Safe_strdup ("-U__CHAR_UNSIGNED__"));
+        }
       else
-        addSet (&preArgvSet, Safe_strdup ("-D__SDCC_CHAR_UNSIGNED"));
+        {
+          addSet (&preArgvSet, Safe_strdup ("-D__SDCC_CHAR_UNSIGNED"));
+          addSet (&preArgvSet, Safe_strdup ("-D__CHAR_UNSIGNED__=1"));
+        }
 
       /* set the macro for non-free  */
       if (options.use_non_free)
         addSet (&preArgvSet, Safe_strdup ("-D__SDCC_USE_NON_FREE"));
+
+      if (options.std_gnu)
+        addSet (&preArgvSet, Safe_strdup ("-D__SDCC_GNU_EXTENSIONS=1"));
+
+      /* Do not rely on the host preprocessor to identify SDCC's language
+         mode consistently. */
+      if (options.std_sdcc)
+        addSet (&preArgvSet, Safe_strdup ("-U__STRICT_ANSI__"));
+      else if (!options.std_gnu)
+        addSet (&preArgvSet, Safe_strdup ("-D__STRICT_ANSI__=1"));
 
       /* set the macro for large model  */
       switch (options.model)
@@ -2394,7 +2728,7 @@ preProcess (char **envp)
         It got removed a few times, but keeps coming back.
         This time it got added back for the 3.7.0 release
         to support the old SiLabs IDE */
-      if (TARGET_IS_MCS51 && options.std_sdcc)
+      if ((TARGET_IS_MCS51 || TARGET_IS_MCS251) && options.std_sdcc)
         {
           struct dbuf_s dbuf;
 
@@ -2427,9 +2761,72 @@ preProcess (char **envp)
       /* Character encoding  - these need to be set in device/lib/Makefile.in for $CPP, too */
       addSet (&preArgvSet, Safe_strdup ("-D__STDC_ISO_10646__=201409L")); // wchar_t is UTF-32
 
-      /* set __SIZEOF_x__ macros for internal use by the library */
-      addSet (&preArgvSet, Safe_strdup ("-D__SIZEOF_FLOAT__=4"));
-      addSet (&preArgvSet, Safe_strdup ("-D__SIZEOF_DOUBLE__=4"));
+      /* Target data model. Never inherit these values from the host cpp. */
+      addSet (&preArgvSet, Safe_strdup ("-D__STDC_HOSTED__=0"));
+      addPreprocessorUIntDefine ("__CHAR_BIT__", port->s.char_size * 8);
+      addPreprocessorUIntDefine ("__SIZEOF_CHAR__", port->s.char_size);
+      addPreprocessorUIntDefine ("__SIZEOF_SHORT__", port->s.short_size);
+      addPreprocessorUIntDefine ("__SIZEOF_INT__", port->s.int_size);
+      addPreprocessorUIntDefine ("__SIZEOF_LONG__", port->s.long_size);
+      addPreprocessorUIntDefine ("__SIZEOF_LONG_LONG__",
+                                 port->s.longlong_size);
+      addPreprocessorUIntDefine ("__SIZEOF_FLOAT__", port->s.float_size);
+      addPreprocessorUIntDefine ("__SIZEOF_DOUBLE__", port->s.float_size);
+      addPreprocessorUIntDefine ("__SIZEOF_LONG_DOUBLE__",
+                                 port->s.float_size);
+      addPreprocessorUIntDefine ("__SIZEOF_POINTER__", port->s.ptr_size);
+      addPreprocessorUIntDefine ("__SCHAR_WIDTH__",
+                                 port->s.char_size * 8);
+      addPreprocessorUIntDefine ("__SHRT_WIDTH__",
+                                 port->s.short_size * 8);
+      addPreprocessorUIntDefine ("__INT_WIDTH__", port->s.int_size * 8);
+      addPreprocessorUIntDefine ("__LONG_WIDTH__", port->s.long_size * 8);
+      addPreprocessorUIntDefine ("__LLONG_WIDTH__",
+                                 port->s.longlong_size * 8);
+      addPreprocessorUIntDefine ("__POINTER_WIDTH__",
+                                 port->s.ptr_size * 8);
+      if (TARGET_IS_MCS51 || TARGET_IS_MCS251)
+        {
+          const preprocessor_define *define;
+
+          addPreprocessorUIntDefine ("__SIZEOF_INTMAX__",
+                                     port->s.longlong_size);
+          addPreprocessorUIntDefine ("__SIZEOF_UINTMAX__",
+                                     port->s.longlong_size);
+          addPreprocessorUIntDefine ("__SIZEOF_PTRDIFF_T__",
+                                     port->s.long_size);
+          addPreprocessorUIntDefine ("__SIZEOF_SIZE_T__",
+                                     TARGET_IS_MCS251 ?
+                                     port->s.long_size : port->s.int_size);
+          addPreprocessorUIntDefine ("__SIZEOF_WCHAR_T__",
+                                     port->s.long_size);
+          addPreprocessorUIntDefine ("__SIZEOF_WINT_T__",
+                                     port->s.long_size);
+          for (define = mcsPreprocessorDefines; define->name; ++define)
+            addPreprocessorDefine (define->name, define->value);
+
+          if (TARGET_IS_MCS251)
+            {
+              addPreprocessorDefine ("__SIZE_TYPE__", "unsigned long");
+              addPreprocessorDefine ("__SIZE_MAX__", "4294967295UL");
+              addPreprocessorDefine ("__SIZE_WIDTH__", "__LONG_WIDTH__");
+            }
+          else
+            {
+              addPreprocessorDefine ("__SIZE_TYPE__", "unsigned int");
+              addPreprocessorDefine ("__SIZE_MAX__", "65535U");
+              addPreprocessorDefine ("__SIZE_WIDTH__", "__INT_WIDTH__");
+            }
+        }
+      addSet (&preArgvSet,
+              Safe_strdup ("-D__ORDER_LITTLE_ENDIAN__=1234"));
+      addSet (&preArgvSet,
+              Safe_strdup ("-D__ORDER_BIG_ENDIAN__=4321"));
+      addSet (&preArgvSet, Safe_strdup ("-D__ORDER_PDP_ENDIAN__=3412"));
+      addSet (&preArgvSet,
+              Safe_strdup (port->little_endian ?
+                           "-D__BYTE_ORDER__=__ORDER_LITTLE_ENDIAN__" :
+                           "-D__BYTE_ORDER__=__ORDER_BIG_ENDIAN__"));
 
       /* set macro for BITINT_MAXWIDTH  - an implementation detail, users should only use BITINT_MAXWIDTH from limits.h */
       {
@@ -2724,11 +3121,14 @@ initValues (void)
    * corresponding to the --std used to start sdcc
    */
   setMainValue ("cppstd",
-    options.std_c23 ? "-std=c23 " :
+    options.std_gnu && options.std_c17 ? "-std=gnu17 " :
+    (options.std_gnu ? "-std=gnu11 " :
+    (options.std_c23 ? "-std=c23 " :
+    (options.std_c17 ? "-std=c17 " :
     (options.std_c11 ? "-std=c11 " :
     (options.std_c99 ? "-std=c99 " :
     (options.std_c95 ? "-std=iso9899:199409 " :
-    "-std=c89 "))));
+    "-std=c89 ")))))));
 }
 
 static void
@@ -2789,6 +3189,39 @@ sig_handler (int signal)
  * main routine
  * initialises and calls the parser
  */
+
+/* Restore function-local names removed after the first pass over a deferred
+   inline definition.  Allocation and symbol resolution expect block
+   declarations and labels to be present in their respective tables. */
+static void
+restoreDeferredInlineSymbols (ast *tree)
+{
+  if (!tree)
+    return;
+
+  if (IS_AST_OP (tree) && tree->opval.op == BLOCK)
+    for (symbol *sym = tree->values.sym; sym; sym = sym->next)
+      addSym (SymbolTab, sym, sym->name, sym->level, sym->block, false);
+
+  if (IS_AST_OP (tree) && tree->opval.op == LABEL &&
+      IS_AST_VALUE (tree->left) && tree->left->opval.val->sym)
+    {
+      symbol *label = tree->left->opval.val->sym;
+
+      label->key = labelKey++;
+      addSym (LabelTab, label, label->name, label->level, 0, false);
+    }
+
+  if (IS_AST_OP (tree) && tree->opval.op == FOR)
+    {
+      restoreDeferredInlineSymbols (AST_FOR (tree, initExpr));
+      restoreDeferredInlineSymbols (AST_FOR (tree, condExpr));
+      restoreDeferredInlineSymbols (AST_FOR (tree, loopExpr));
+    }
+
+  restoreDeferredInlineSymbols (tree->left);
+  restoreDeferredInlineSymbols (tree->right);
+}
 
 int
 main (int argc, char **argv, char **envp)
@@ -2946,6 +3379,7 @@ main (int argc, char **argv, char **envp)
       if (fatalError)
         exit (EXIT_FAILURE);
 
+      set *deferredInlineFunctions = NULL;
       for (int i = 0; i < HASHTAB_SIZE; i++)
         {
           for (bucket *chain = SymbolTab[i]; chain; chain = chain->next)
@@ -2969,8 +3403,25 @@ main (int argc, char **argv, char **envp)
                   else
                     fprintf (stderr, "Internal issue for function %s: todo: implement emission of definition for inline function after extern declaration.\n", sym->name);
                 }
+              // Emit a static inline definition only if it was not expanded
+              // at every use in the translation unit.
+              if (IS_FUNC (sym->type) && IS_STATIC (sym->etype) &&
+                  FUNC_ISINLINE (sym->type) && sym->isref &&
+                  !sym->generated && sym->funcTree)
+                addSet (&deferredInlineFunctions, sym);
             }
         }
+      for (symbol *sym = setFirstItem (deferredInlineFunctions); sym;
+           sym = setNextItem (deferredInlineFunctions))
+        {
+          ast *body = copyAst (sym->funcTree);
+          restoreDeferredInlineSymbols (body);
+          for (value *arg = FUNC_ARGS (sym->type); arg; arg = arg->next)
+            if (arg->sym)
+              addSymChain (&arg->sym);
+          createFunction (sym, body);
+        }
+      deleteSet (&deferredInlineFunctions);
 
       if (port->general.do_glue != NULL)
         (*port->general.do_glue) ();
@@ -3011,4 +3462,3 @@ main (int argc, char **argv, char **envp)
 
   return 0;
 }
-

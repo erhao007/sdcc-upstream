@@ -126,15 +126,21 @@ initMem (void)
 
   /* internal stack segment ;
      SFRSPACE       -   NO
-     FAR-SPACE      -   NO
+     FAR-SPACE      -   MCS251 only
      PAGED          -   NO
      DIRECT-ACCESS  -   NO
      BIT-ACCESS     -   NO
      CODE-ACCESS    -   NO
      DEBUG-NAME     -   'B'
-     POINTER-TYPE   -   POINTER
+     POINTER-TYPE   -   FPOINTER on MCS251, POINTER otherwise
+
+     The MCS251 hardware stack is addressed by the complete 16-bit SPX in
+     region 00.  A stack object's address must therefore survive crossing a
+     256-byte boundary; represent it with the port's flat far pointer rather
+     than the MCS-51 page-zero near pointer.
    */
-  istack = allocMap (0, 0, 0, 0, 0, 0, options.stack_loc, ISTACK_NAME, 'B', POINTER);
+  istack = allocMap (0, TARGET_IS_MCS251, 0, 0, 0, 0, options.stack_loc,
+                     ISTACK_NAME, 'B', TARGET_IS_MCS251 ? FPOINTER : POINTER);
 
   /* code  segment ;
      SFRSPACE       -   NO
@@ -888,7 +894,9 @@ allocLocal (symbol *sym)
   sym->localof = currFunc;
 
   if (!IS_EXTERN (sym->type) && !IS_STATIC (sym->type) &&
-    (IS_ARRAY (sym->type) && !DCL_ELEM (sym->type) || IS_STRUCT (sym->type) && !SPEC_STRUCT (sym->type)->fields))
+    (IS_ARRAY (sym->type) && !DCL_ELEM (sym->type) ||
+     IS_STRUCT (sym->type) && !SPEC_STRUCT (sym->type)->fields &&
+       !SPEC_STRUCT (sym->type)->b_empty_complete))
     werrorfl (sym->fileDef, sym->lineDef, E_NO_LINKAGE_INCOMPLETE_TYPE, sym->name);
 
   /* if this is a static variable */

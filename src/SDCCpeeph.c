@@ -391,7 +391,8 @@ FBYNAME (flat24bitMode)
 /*-----------------------------------------------------------------*/
 FBYNAME (xramMovcOption)
 {
-  return (options.xram_movc && (strcmp(port->target,"mcs51") == 0));
+  return (options.xram_movc &&
+          (!strcmp (port->target, "mcs51") || !strcmp (port->target, "mcs251")));
 }
 
 /*-----------------------------------------------------------------*/
@@ -399,7 +400,8 @@ FBYNAME (xramMovcOption)
 /*-----------------------------------------------------------------*/
 FBYNAME (useAcallAjmp)
 {
-  return (options.acall_ajmp && (strcmp(port->target,"mcs51") == 0));
+  return (options.acall_ajmp &&
+          (!strcmp (port->target, "mcs51") || !strcmp (port->target, "mcs251")));
 }
 
 /*-----------------------------------------------------------------*/
@@ -1001,7 +1003,7 @@ notVolatileVariable(const char *var, lineNode *currPl, lineNode *endPl)
   /* Can't tell if indirect accesses are volatile or not, so
   ** assume they are (if there is a volatile access in the function at all), just to be safe.
   */
-  if (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_IS_DS400)
+  if (TARGET_MCS51_LIKE)
     {
       if (*var=='@')
         return global_not_volatile;
@@ -1309,7 +1311,7 @@ error:
 static const char *
 operandBaseName (const char *op)
 {
-  if (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_IS_DS400)
+  if (TARGET_MCS51_LIKE)
     {
       if (!strncmp (op, "ar", 2) && ISCHARDIGIT(*(op+2)) && !*(op+3))
         return op+1;
@@ -1830,7 +1832,7 @@ FBYNAME (operandsNotRelated)
               goto done;
             }
 
-          if (TARGET_IS_MCS51 || TARGET_IS_DS390 || TARGET_IS_DS400)
+          if (TARGET_MCS51_LIKE)
             {
               /* handle overlapping 'dptr' vs. { 'dpl', 'dph' }  */
               if (!strcmp (op1, "dptr") && (!strcmp (op2, "dpl") || !strcmp (op2, "dph")) ||
@@ -2602,6 +2604,34 @@ FBYNAME (notInJumpTable)
   return (currPl->ic && currPl->ic->op != JUMPTABLE);
 }
 
+/*-----------------------------------------------------------------*/
+/* lowDJNZReg - the operand is a byte register DJNZ can address.     */
+/* MCS-251 DJNZ only encodes R0-R7, so a rule that folds a decrement */
+/* into DJNZ must not fire for the fixed R8-R15 byte registers.      */
+/* MCS-51 never allocates those, so this condition is a no-op there. */
+/*-----------------------------------------------------------------*/
+FBYNAME (lowDJNZReg)
+{
+  char *var;
+  set *operands = setFromConditionArgs (cmdLine, vars);
+
+  if (!operands || !(var = setFirstItem (operands)))
+    {
+      fprintf (stderr,
+               "*** internal error: lowDJNZReg peephole restriction"
+               " requires an operand: %s\n", cmdLine);
+      return FALSE;
+    }
+  if (var[0] == 'r' && ISCHARDIGIT (var[1]))
+    {
+      if (var[1] == '1' && ISCHARDIGIT (var[2]))
+        return FALSE;             /* r10 ... r15 */
+      return var[1] < '8';        /* r0 ... r7 */
+    }
+  /* acc, b, bits etc. are addressable directly. */
+  return TRUE;
+}
+
 static const struct ftab
 {
   const char *fname;
@@ -2707,6 +2737,9 @@ ftab[] =                                            // sorted on the number of t
   },
   {
     "notInJumpTable", notInJumpTable
+  },
+  {
+    "lowDJNZReg", lowDJNZReg
   },
 };
 
@@ -4042,4 +4075,3 @@ const char * StrStr (const char * str1, const char * str2)
 
   return (NULL) ;
 }
-

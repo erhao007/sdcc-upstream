@@ -13,7 +13,7 @@
 # Added libc and DEBUG/NOOPTS/EXPERIMENTAL conditionals by
 #       Gonzalo Pérez de Olaguer Córdoba <salo@gpoc.es>
 #
-# $Id: configure.ac 14090 2023-05-29 13:06:08Z spth $
+# $Id$
 #
 
 # Process this file with autoconf to produce a configure script.

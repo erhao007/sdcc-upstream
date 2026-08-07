@@ -19,7 +19,7 @@
    Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 -------------------------------------------------------------------------*/
 
-/* $Id: graph.h 13889 2023-02-09 21:09:01Z spth $ */
+/* $Id$ */
 
 #ifndef __GRAPH_H__
 #define __GRAPH_H__

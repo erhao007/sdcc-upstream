@@ -472,6 +472,9 @@ PRINTFUNC (picIfx)
 {
   dbuf_append_char (dbuf, '\t');
   dbuf_append_str (dbuf, "if ");
+  if (ic->hasBranchHint)
+    dbuf_printf (dbuf, "[expect %s] ",
+                 ic->branchHint ? "true" : "false");
   dbuf_printOperand (IC_COND (ic), dbuf);
 
   if (!IC_TRUE (ic))
@@ -800,6 +803,8 @@ copyiCode (iCode * ic)
   nic->block = ic->block;
   nic->level = ic->level;
   nic->parmBytes = ic->parmBytes;
+  nic->hasBranchHint = ic->hasBranchHint;
+  nic->branchHint = ic->branchHint;
 
   /* deal with the special cases first */
   switch (ic->op)
@@ -2202,6 +2207,8 @@ geniCodeCast (sym_link *type, operand *op, bool implicit)
   sym_link *optype;
   sym_link *opetype = getSpec (optype = operandType (op));
   sym_link *restype;
+  bool mcs251PdataWidening = TARGET_IS_MCS251 && IS_GENPTR (type) &&
+    IS_PTR (optype) && DCL_TYPE (optype) == PPOINTER;
 
   /* one of them has size zero then error */
   if (IS_VOID (optype))
@@ -2216,7 +2223,7 @@ geniCodeCast (sym_link *type, operand *op, bool implicit)
     }
 
   /* if the operand is already the desired type then do nothing */
-  if (compareType (type, optype, false) == 1)
+  if (compareType (type, optype, false) == 1 && !mcs251PdataWidening)
   {
     if (IS_PTR (type))
       {
@@ -2549,7 +2556,9 @@ geniCodeAdd (operand *left, operand *right, RESULT_TYPE resultType, int lvl)
       nBytes = getSize (ltype->next);
       ptrSize = getArraySizePtr (left); // works for both arrays and pointers
 
-      if (nBytes == 0 && !IS_VOID (ltype->next))
+      if (nBytes == 0 && !IS_VOID (ltype->next) &&
+          !(IS_STRUCT (ltype->next) &&
+            SPEC_STRUCT (ltype->next)->b_empty_complete))
         werror (E_UNKNOWN_SIZE, IS_SYMOP (left) ? OP_SYMBOL (left)->name : "<no name>");
       // there is no need to multiply with 1
       if (nBytes != 1)
@@ -3496,7 +3505,9 @@ checkTypes (operand * left, operand * right)
       werror (W_LIT_OVERFLOW);
     }
 
-  if (always_cast || compareType (ltype, rtype, false) == -1)
+  if (always_cast || compareType (ltype, rtype, false) == -1 ||
+      TARGET_IS_MCS251 && IS_GENPTR (ltype) && IS_PTR (rtype) &&
+      DCL_TYPE (rtype) == PPOINTER)
     {
       if (IS_VOLATILE (ltype)) // Don't propagate volatile to right side - we don't want volatile iTemps.
         {
@@ -4063,12 +4074,62 @@ geniCodeReturn (operand *op)
 }
 
 /*-----------------------------------------------------------------*/
+/* astBranchExpectation - recover a boolean branch expectation     */
+/*-----------------------------------------------------------------*/
+static bool
+astBranchExpectation (const ast *tree, bool *expected)
+{
+  bool nested;
+
+  if (!IS_AST_OP (tree))
+    return false;
+
+  switch (tree->opval.op)
+    {
+    case BUILTIN_EXPECT:
+      if (!IS_AST_LIT_VALUE (tree->right))
+        return false;
+      *expected = floatFromVal (AST_VALUE (tree->right)) != 0.0;
+      return true;
+    case CAST:
+      return astBranchExpectation (tree->right, expected);
+    case '!':
+      if (!astBranchExpectation (tree->left, &nested))
+        return false;
+      *expected = !nested;
+      return true;
+    case EQ_OP:
+    case NE_OP:
+      if (IS_AST_LIT_VALUE (tree->left) &&
+          floatFromVal (AST_VALUE (tree->left)) == 0.0)
+        {
+          if (!astBranchExpectation (tree->right, &nested))
+            return false;
+        }
+      else if (IS_AST_LIT_VALUE (tree->right) &&
+               floatFromVal (AST_VALUE (tree->right)) == 0.0)
+        {
+          if (!astBranchExpectation (tree->left, &nested))
+            return false;
+        }
+      else
+        return false;
+      *expected = tree->opval.op == EQ_OP ? !nested : nested;
+      return true;
+    default:
+      return false;
+    }
+}
+
+/*-----------------------------------------------------------------*/
 /* geniCodeIfx - generates code for extended if statement          */
 /*-----------------------------------------------------------------*/
 void
 geniCodeIfx (ast * tree, int lvl)
 {
   iCode *ic;
+  bool branchHint = false;
+  bool hasBranchHint = astBranchExpectation (tree->left, &branchHint);
   operand *condition = ast2iCode (tree->left, lvl + 1);
   sym_link *cetype;
 
@@ -4100,6 +4161,8 @@ geniCodeIfx (ast * tree, int lvl)
   if (tree->trueLabel)
     {
       ic = newiCodeCondition (condition, tree->trueLabel, NULL);
+      ic->hasBranchHint = hasBranchHint;
+      ic->branchHint = branchHint;
       ADDTOCHAIN (ic);
 
       if (tree->falseLabel)
@@ -4108,6 +4171,8 @@ geniCodeIfx (ast * tree, int lvl)
   else
     {
       ic = newiCodeCondition (condition, NULL, tree->falseLabel);
+      ic->hasBranchHint = hasBranchHint;
+      ic->branchHint = branchHint;
       ADDTOCHAIN (ic);
     }
 
@@ -4551,6 +4616,46 @@ isLvaluereq (int lvl)
 /*-----------------------------------------------------------------*/
 /* ast2iCode - creates an icodeList from an ast                    */
 /*-----------------------------------------------------------------*/
+static operand *
+ast2iCodeStatementExpression (ast *tree, int lvl)
+{
+  operand *result;
+  int oldInlinedActive;
+
+  if (!tree)
+    return NULL;
+
+  if (tree->isExprStmt &&
+      !(IS_AST_OP (tree) && tree->opval.op == BLOCK &&
+        tree->isStmtExpr))
+    return ast2iCode (tree, lvl);
+
+  if (!IS_AST_OP (tree) ||
+      (tree->opval.op != NULLOP &&
+       !(tree->opval.op == BLOCK &&
+         (tree->isStmtExpr || tree->isImplicitBlock))))
+    {
+      if (tree->type == EX_VALUE)
+        geniCodeDummyRead (ast2iCode (tree, lvl));
+      else
+        ast2iCode (tree, lvl);
+      return NULL;
+    }
+
+  oldInlinedActive = inlinedActive;
+  if (tree->inlined)
+    inlinedActive = 1;
+
+  if (tree->left && tree->left->type == EX_VALUE)
+    geniCodeDummyRead (ast2iCode (tree->left, lvl + 1));
+  else
+    ast2iCode (tree->left, lvl + 1);
+  result = ast2iCodeStatementExpression (tree->right, lvl + 1);
+
+  inlinedActive = oldInlinedActive;
+  return result;
+}
+
 operand *
 ast2iCode (ast * tree, int lvl)
 {
@@ -4576,6 +4681,10 @@ ast2iCode (ast * tree, int lvl)
 
   if (tree->type == EX_LINK)
     return operandFromLink (tree->opval.lnk);
+
+  if (tree->type == EX_OP && tree->opval.op == BLOCK &&
+      tree->isStmtExpr)
+    return ast2iCodeStatementExpression (tree, lvl);
 
   /* if we find a nullop */
   if (tree->type == EX_OP && (tree->opval.op == NULLOP || tree->opval.op == BLOCK))
@@ -4747,7 +4856,7 @@ ast2iCode (ast * tree, int lvl)
 #else // bug #604575, is it a bug ????
       {
         operand *op = geniCodeCast (operandType (left), geniCodeRValue (right, false), false);
-        op->isSemDeref |= tree->values.cast.semDeref;
+        op->isSemDeref |= tree->semDeref;
         return op;
       }
 #endif
@@ -4907,6 +5016,21 @@ ast2iCode (ast * tree, int lvl)
                                          geniCodeRValue (right, FALSE), '|', operandType (left)), 0, 1);
     case ',':
       return geniCodeRValue (right, FALSE);
+
+    case BUILTIN_EXPECT:
+      {
+        operand *result = geniCodeRValue (left, FALSE);
+
+        geniCodeDummyRead (right);
+        if (IS_VOLATILE (operandType (result)))
+          {
+            operand *temporary = newiTempOperand (tree->ftype, 1);
+
+            geniCodeAssign (temporary, result, 0, 0);
+            return temporary;
+          }
+        return result;
+      }
 
     case CALL:
       return geniCodeCall (ast2iCode (tree->left, lvl + 1), tree->right, lvl);

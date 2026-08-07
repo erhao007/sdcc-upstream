@@ -97,7 +97,7 @@ typedef unsigned long long int  uint_fast64_t;
 #endif // __SPECIFIED_WIDTH_INTEGER_TYPES_DEFINED
 
 /* Types for `void *' pointers.  */
-#if defined (__SDCC_mcs51) || defined (__SDCC_ds390)
+#if defined (__SDCC_mcs51) || defined (__SDCC_mcs251) || defined (__SDCC_ds390)
   typedef long int              intptr_t;
   typedef unsigned long int     uintptr_t;
 #else
@@ -190,7 +190,7 @@ typedef unsigned long long int  uintmax_t;
 #endif
 
 /* Values to test for integral types holding `void *' pointer.  */
-#if defined (__SDCC_mcs51) || defined (__SDCC_ds390)
+#if defined (__SDCC_mcs51) || defined (__SDCC_mcs251) || defined (__SDCC_ds390)
 #define INTPTR_MIN             (-2147483647L-1)
 #define INTPTR_MAX             (2147483647L)
 #define UINTPTR_MAX            (4294967295UL)
@@ -224,7 +224,7 @@ typedef unsigned long long int  uintmax_t;
 /* Limits of other integer types.  */
 
 /* Limits of `ptrdiff_t' type.  */
-#if defined (__SDCC_mcs51) || defined (__SDCC_ds390)
+#if defined (__SDCC_mcs51) || defined (__SDCC_mcs251) || defined (__SDCC_ds390)
 #define PTRDIFF_MIN           (-2147483647L-1)
 #define PTRDIFF_MAX           (2147483647L)
 #else
@@ -237,7 +237,11 @@ typedef unsigned long long int  uintmax_t;
 #define SIG_ATOMIC_MAX        (255)
 
 /* Limit of `size_t' type.  */
+#if defined (__SDCC_mcs251)
+#define SIZE_MAX               (4294967295UL)
+#else
 #define SIZE_MAX               (65535u)
+#endif
 
 /* Signed.  */
 #define INT8_C(c)      c
@@ -276,4 +280,3 @@ typedef unsigned long long int  uintmax_t;
 #endif
 
 #endif /* stdint.h */
-

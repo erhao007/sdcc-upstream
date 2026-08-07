@@ -836,6 +836,7 @@ mergeSpec (sym_link * dest, sym_link * src, const char *name)
   SPEC_NORETURN (dest) |= SPEC_NORETURN(src);
   SPEC_CONST (dest) |= SPEC_CONST (src);
   SPEC_CONSTEXPR (dest) |= SPEC_CONSTEXPR (src);
+  SPEC_AUTO_TYPE (dest) |= SPEC_AUTO_TYPE (src);
   SPEC_ABSA (dest) |= SPEC_ABSA (src);
   SPEC_VOLATILE (dest) |= SPEC_VOLATILE (src);
   SPEC_RESTRICT (dest) |= SPEC_RESTRICT (src);
@@ -1276,8 +1277,11 @@ checkStructFlexArray (symbol * sym, sym_link * p)
           werror (W_INVALID_FLEXARRAY);
           return INCOMPLETE;
         }
-      /* or otherwise incomplete (nested) struct? */
-      if (IS_STRUCT (p) && ((SPEC_STRUCT (p)->size == 0) || !SPEC_STRUCT (p)->fields))
+      /* or otherwise incomplete (nested) struct?  A struct defined with an
+         empty body (GNU C extension, e.g. "struct x { };") is complete even
+         though it has no members and size zero. */
+      if (IS_STRUCT (p) && !SPEC_STRUCT (p)->b_empty_complete &&
+          ((SPEC_STRUCT (p)->size == 0) || !SPEC_STRUCT (p)->fields))
         {
           return INCOMPLETE;
         }
@@ -1599,6 +1603,21 @@ addSymChain (symbol **symHead)
       /* if already exists in the symbol table on the same level, ignoring sublevels */
       if ((csym = findSymWithLevel (SymbolTab, sym)) && csym->level / LEVEL_UNIT == sym->level / LEVEL_UNIT)
         {
+          /* A repeated block-scope `extern` of the same identifier is a
+             legal re-declaration of the same file-scope object.  Verify
+             the types are compatible and keep the original symbol: a
+             later re-declaration must not delete a symbol that earlier
+             expressions in the block still reference. */
+          if (sym->level > 0 && IS_EXTERN (sym->etype) && IS_EXTERN (csym->etype))
+            {
+              if (compareTypeExact (csym->type, sym->type, sym->level, true) != 1)
+                {
+                  werror (E_EXTERN_MISMATCH, sym->name);
+                  werrorfl (csym->fileDef, csym->lineDef, E_PREVIOUS_DEF);
+                }
+              continue;
+            }
+
           /* if not formal parameter and not in file scope
              then show symbol redefined error
              else check if symbols have compatible types */
@@ -1876,12 +1895,23 @@ compStructSize (int su, structdef * sdef)
               break;
             case V_INT:
               SPEC_NOUN (loop->etype) = V_BITFIELD;
-              if (loop->bitVar > port->s.int_size * 8)
-                werror (E_BITFLD_SIZE , port->s.int_size * 8);
+              {
+                /* Allow a bit-field as wide as its declared base type
+                   (16 bits for int, 32 for long, 64 for long long). */
+                unsigned bitfield_max;
+                if (SPEC_LONGLONG (loop->etype))
+                  bitfield_max = port->s.longlong_size * 8;
+                else if (SPEC_LONG (loop->etype))
+                  bitfield_max = port->s.long_size * 8;
+                else
+                  bitfield_max = port->s.int_size * 8;
+                if (loop->bitVar > (int) bitfield_max)
+                  werror (E_BITFLD_SIZE, bitfield_max);
+              }
               break;
             case V_BITINT:
               SPEC_NOUN (loop->etype) = V_BITINTBITFIELD;
-              if (loop->bitVar > SPEC_BITINTWIDTH (loop->etype))
+              if (loop->bitVar > (int) SPEC_BITINTWIDTH (loop->etype))
                 werror (E_BITFLD_SIZE , SPEC_BITINTWIDTH (loop->etype));
               break;
             default:
@@ -2196,7 +2226,7 @@ checkSClass (symbol *sym, bool isProto)
     if (IS_ABSOLUTE (sym->etype))
       SPEC_VOLATILE (sym->etype) = 1;
 
-  if (TARGET_IS_MCS51 && IS_ABSOLUTE (sym->etype) && SPEC_SCLS (sym->etype) == S_SFR)
+  if ((TARGET_IS_MCS51 || TARGET_IS_MCS251) && IS_ABSOLUTE (sym->etype) && SPEC_SCLS (sym->etype) == S_SFR)
     {
       int n, size;
       unsigned addr;
@@ -2215,12 +2245,12 @@ checkSClass (symbol *sym, bool isProto)
         if (((addr >> n) & 0xFF) < 0x80)
           werror (W_SFR_ABSRANGE, sym->name);
     }
-  else if (TARGET_IS_MCS51 && IS_ABSOLUTE (sym->etype) && SPEC_SCLS (sym->etype) == S_DATA)
+  else if ((TARGET_IS_MCS51 || TARGET_IS_MCS251) && IS_ABSOLUTE (sym->etype) && SPEC_SCLS (sym->etype) == S_DATA)
     {
       if (SPEC_ADDR (sym->etype) + getSize (sym->type) - 1 > 0x7f)
         werror (W_DATA_ABSRANGE, sym->name);
     }
-  else if (TARGET_IS_MCS51 && IS_ABSOLUTE (sym->etype) && SPEC_SCLS (sym->etype) == S_IDATA)
+  else if ((TARGET_IS_MCS51 || TARGET_IS_MCS251) && IS_ABSOLUTE (sym->etype) && SPEC_SCLS (sym->etype) == S_IDATA)
     {
       if (SPEC_ADDR (sym->etype) + getSize (sym->type) - 1 > 0xff)
         werror (W_IDATA_ABSRANGE, sym->name);
@@ -3379,7 +3409,8 @@ compareTypeExact (sym_link *dest, sym_link *src, long level, bool check_top_std_
         {
           if (DCL_TYPE (src) == DCL_TYPE (dest))
             {
-              if ((DCL_TYPE (src) == ARRAY) && (DCL_ELEM (src) != DCL_ELEM (dest)))
+              if ((DCL_TYPE (src) == ARRAY) && DCL_ELEM (src) && DCL_ELEM (dest) &&
+                  (DCL_ELEM (src) != DCL_ELEM (dest)))
                 return 0;
               if (check_top_std_qual)
                 {
@@ -3577,6 +3608,130 @@ compareTypeExact (sym_link *dest, sym_link *src, long level, bool check_top_std_
     }
 
   return 1;
+}
+
+/*--------------------------------------------------------------------*/
+/* compareTypeCompatible - compare C types for compatibility          */
+/*--------------------------------------------------------------------*/
+static int
+compareTypeCompatibleInternal (sym_link *dest, sym_link *src,
+                               bool check_top_std_qual)
+{
+  value *dest_arg;
+  value *src_arg;
+
+  if (!dest || !src)
+    return dest == src;
+
+  if (IS_ARRAY (dest) || IS_ARRAY (src))
+    {
+      if (!IS_ARRAY (dest) || !IS_ARRAY (src))
+        return 0;
+      if (DCL_ELEM (dest) && DCL_ELEM (src) &&
+          DCL_ELEM (dest) != DCL_ELEM (src))
+        return 0;
+
+      /* An array's qualifiers are the qualifiers of its element type.
+         Keep ignoring them while walking through the outermost array. */
+      return compareTypeCompatibleInternal (dest->next, src->next,
+                                            check_top_std_qual);
+    }
+
+  if (IS_PTR (dest) || IS_PTR (src))
+    {
+      if (!IS_PTR (dest) || !IS_PTR (src) ||
+          DCL_TYPE (dest) != DCL_TYPE (src))
+        return 0;
+      if (check_top_std_qual &&
+          (DCL_PTR_CONST (dest) != DCL_PTR_CONST (src) ||
+           DCL_PTR_RESTRICT (dest) != DCL_PTR_RESTRICT (src) ||
+           DCL_PTR_VOLATILE (dest) != DCL_PTR_VOLATILE (src) ||
+           DCL_PTR_ATOMIC (dest) != DCL_PTR_ATOMIC (src) ||
+           DCL_PTR_OPTIONAL (dest) != DCL_PTR_OPTIONAL (src)))
+        return 0;
+
+      return compareTypeCompatibleInternal (dest->next, src->next, true);
+    }
+
+  if (IS_FUNC (dest) || IS_FUNC (src))
+    {
+      bool dest_noprototype;
+      bool src_noprototype;
+
+      if (!IS_FUNC (dest) || !IS_FUNC (src))
+        return 0;
+      if (!compareTypeCompatibleInternal (dest->next, src->next, true))
+        return 0;
+      if (FUNC_ISISR (dest) != FUNC_ISISR (src) ||
+          FUNC_REGBANK (dest) != FUNC_REGBANK (src) ||
+          IFFUNC_ISNAKED (dest) != IFFUNC_ISNAKED (src) ||
+          IFFUNC_ISBANKEDCALL (dest) != IFFUNC_ISBANKEDCALL (src) ||
+          IFFUNC_ISZ88DK_FASTCALL (dest) !=
+            IFFUNC_ISZ88DK_FASTCALL (src) ||
+          IFFUNC_ISRAISONANCE (dest) != IFFUNC_ISRAISONANCE (src) ||
+          IFFUNC_ISCOSMIC (dest) != IFFUNC_ISCOSMIC (src) ||
+          IFFUNC_ISIAR (dest) != IFFUNC_ISIAR (src) ||
+          (FUNC_SDCCCALL (dest) >= 0 && FUNC_SDCCCALL (src) >= 0 &&
+           FUNC_SDCCCALL (dest) != FUNC_SDCCCALL (src)))
+        return 0;
+
+      dest_noprototype = FUNC_NOPROTOTYPE (dest);
+      src_noprototype = FUNC_NOPROTOTYPE (src);
+      if (dest_noprototype || src_noprototype)
+        {
+          if (dest_noprototype && src_noprototype)
+            return 1;
+          if (FUNC_HASVARARGS (dest) || FUNC_HASVARARGS (src))
+            return 0;
+
+          dest_arg = dest_noprototype ? FUNC_ARGS (src) : FUNC_ARGS (dest);
+          for (; dest_arg; dest_arg = dest_arg->next)
+            {
+              sym_link *type = dest_arg->type;
+
+              if (!IS_SPEC (type))
+                continue;
+              if (SPEC_ENUM (type))
+                {
+                  if (bitsForType (type) < INTSIZE * 8)
+                    return 0;
+                }
+              else if (IS_FLOAT (type) || IS_CHAR (type) || IS_BOOL (type) ||
+                       IS_BIT (type) || IS_BITFIELD (type) ||
+                       (IS_INT (type) && SPEC_SHORT (type)))
+                return 0;
+            }
+          return 1;
+        }
+
+      if (FUNC_HASVARARGS (dest) != FUNC_HASVARARGS (src))
+        return 0;
+
+      dest_arg = FUNC_ARGS (dest);
+      src_arg = FUNC_ARGS (src);
+      for (; dest_arg && src_arg;
+           dest_arg = dest_arg->next, src_arg = src_arg->next)
+        if (!compareTypeCompatibleInternal (dest_arg->type, src_arg->type,
+                                            false))
+          return 0;
+
+      return !dest_arg && !src_arg;
+    }
+
+  if (!IS_SPEC (dest) || !IS_SPEC (src))
+    return 0;
+
+  if (SPEC_ENUM (dest) && SPEC_ENUM (src) &&
+      SPEC_CVAL (dest).v_enum != SPEC_CVAL (src).v_enum)
+    return 0;
+
+  return compareTypeExact (dest, src, -1, check_top_std_qual) == 1;
+}
+
+int
+compareTypeCompatible (sym_link *dest, sym_link *src)
+{
+  return compareTypeCompatibleInternal (dest, src, false);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -4869,6 +5024,10 @@ typeFromStr (const char *s)
             SPEC_USIGN (r) = 1;
           break;
         case 's':
+          r->xclass = SPECIFIER;
+          SPEC_NOUN (r) = V_INT;
+          SPEC_SHORT (r) = 1;
+          break;
         case 'i':
           r->xclass = SPECIFIER;
           SPEC_NOUN (r) = V_INT;
@@ -5235,7 +5394,11 @@ initBuiltIns ()
 
   if (!nonbuiltin_memcpy)
     {
-      nonbuiltin_memcpy = funcOfTypeVarg ("__memcpy", "vg*", 3, (const char * []){"vg*", "Cvg*", "Ui"});
+      const char *size_type = TARGET_IS_MCS251 ? "Ul" : "Ui";
+
+      nonbuiltin_memcpy =
+        funcOfTypeVarg ("__memcpy", "vg*", 3,
+                        (const char * []){"vg*", "Cvg*", size_type});
       FUNC_ISBUILTIN (nonbuiltin_memcpy->type) = 0;
       FUNC_ISREENT (nonbuiltin_memcpy->type) = options.stackAuto;
     }
@@ -5244,6 +5407,127 @@ initBuiltIns ()
     builtin_memcpy = nonbuiltin_memcpy;
 
   builtin_unreachable = funcOfTypeVarg ("__builtin_unreachable", "v", 0, 0);
+
+  if (options.std_gnu && (TARGET_IS_MCS51 || TARGET_IS_MCS251))
+    {
+      static const char *overflowHelperArgumentTypes[] =
+      {
+        "Uc", "UL", "Uc", "Uc", "UL", "Uc", "Uc", "Vvg*", "Uc",
+        "Uc"
+      };
+      static const char *overflowBuiltins[] =
+      {
+        "__builtin_add_overflow",
+        "__builtin_sub_overflow",
+        "__builtin_mul_overflow",
+      };
+      static const struct
+      {
+        const char *name;
+        const char *argumentType;
+        const char *resultType;
+      } typedOverflowBuiltins[] =
+      {
+        {"__builtin_sadd_overflow", "i", "ig*"},
+        {"__builtin_saddl_overflow", "l", "lg*"},
+        {"__builtin_saddll_overflow", "L", "Lg*"},
+        {"__builtin_uadd_overflow", "Ui", "Uig*"},
+        {"__builtin_uaddl_overflow", "Ul", "Ulg*"},
+        {"__builtin_uaddll_overflow", "UL", "ULg*"},
+        {"__builtin_ssub_overflow", "i", "ig*"},
+        {"__builtin_ssubl_overflow", "l", "lg*"},
+        {"__builtin_ssubll_overflow", "L", "Lg*"},
+        {"__builtin_usub_overflow", "Ui", "Uig*"},
+        {"__builtin_usubl_overflow", "Ul", "Ulg*"},
+        {"__builtin_usubll_overflow", "UL", "ULg*"},
+        {"__builtin_smul_overflow", "i", "ig*"},
+        {"__builtin_smull_overflow", "l", "lg*"},
+        {"__builtin_smulll_overflow", "L", "Lg*"},
+        {"__builtin_umul_overflow", "Ui", "Uig*"},
+        {"__builtin_umull_overflow", "Ul", "Ulg*"},
+        {"__builtin_umulll_overflow", "UL", "ULg*"},
+      };
+      static const struct
+      {
+        const char *name;
+        const char *argumentType;
+      } bitBuiltins[] =
+      {
+        {"__builtin_clz", "Ui"},
+        {"__builtin_clzl", "Ul"},
+        {"__builtin_clzll", "UL"},
+        {"__builtin_ctz", "Ui"},
+        {"__builtin_ctzl", "Ul"},
+        {"__builtin_ctzll", "UL"},
+        {"__builtin_popcount", "Ui"},
+        {"__builtin_popcountl", "Ul"},
+        {"__builtin_popcountll", "UL"},
+        {"__builtin_ffs", "i"},
+        {"__builtin_ffsl", "l"},
+        {"__builtin_ffsll", "L"},
+      };
+      static const struct
+      {
+        const char *name;
+        const char *type;
+      } byteSwapBuiltins[] =
+      {
+        {"__builtin_bswap16", "Us"},
+        {"__builtin_bswap32", "Ul"},
+        {"__builtin_bswap64", "UL"},
+      };
+
+      for (unsigned int i = 0;
+           i < sizeof (bitBuiltins) / sizeof (bitBuiltins[0]); i++)
+        {
+          const char *argumentTypes[] = {bitBuiltins[i].argumentType};
+
+          funcOfTypeVarg (bitBuiltins[i].name, "i", 1,
+                          argumentTypes);
+        }
+
+      for (unsigned int i = 0;
+           i < sizeof (byteSwapBuiltins) /
+               sizeof (byteSwapBuiltins[0]); i++)
+        {
+          const char *argumentTypes[] = {byteSwapBuiltins[i].type};
+
+          funcOfTypeVarg (byteSwapBuiltins[i].name,
+                          byteSwapBuiltins[i].type, 1,
+                          argumentTypes);
+        }
+
+      for (unsigned int i = 0;
+           i < sizeof (overflowBuiltins) / sizeof (overflowBuiltins[0]);
+           i++)
+        {
+          static const char *builtinArgumentTypes[] =
+          {
+            "i", "i", "vg*"
+          };
+
+          funcOfTypeVarg (overflowBuiltins[i], "b", 3,
+                          builtinArgumentTypes);
+        }
+
+      for (unsigned int i = 0;
+           i < sizeof (typedOverflowBuiltins) /
+               sizeof (typedOverflowBuiltins[0]); i++)
+        {
+          const char *argumentTypes[] =
+          {
+            typedOverflowBuiltins[i].argumentType,
+            typedOverflowBuiltins[i].argumentType,
+            typedOverflowBuiltins[i].resultType,
+          };
+
+          funcOfTypeVarg (typedOverflowBuiltins[i].name, "b", 3,
+                          argumentTypes);
+        }
+
+      funcOfTypeVargReentrant ("__sdcc_overflow", "b", 10,
+                               overflowHelperArgumentTypes);
+    }
 }
 
 sym_link *
@@ -5342,6 +5626,7 @@ newEnumType (symbol *enumlist, sym_link *userRequestedType)
   symbol *sym;
   sym_link *type = newLink (SPECIFIER);
   SPEC_ENUM (type) = 1;
+  SPEC_CVAL (type).v_enum = enumlist;
 
   /* Catch user-requested types that make no sense for an enum; provide fallback if none specified */
   if (userRequestedType)
@@ -5623,7 +5908,17 @@ prepareDeclarationSymbol (attribute *attr, sym_link *declSpecs, symbol *initDecl
 {
   symbol *sym , *sym1;
 
-  bool autocandidate = options.std_c23 && IS_SPEC (declSpecs) && SPEC_SCLS (declSpecs) == S_AUTO;
+  bool gnuAutoType = IS_SPEC (declSpecs) &&
+    SPEC_AUTO_TYPE (declSpecs);
+  bool validGnuAutoType = initDeclList && !initDeclList->next &&
+    !initDeclList->type && initDeclList->ival &&
+    initDeclList->ival->type == INIT_NODE;
+  bool c23AutoType = options.std_c23 && IS_SPEC (declSpecs) &&
+    SPEC_SCLS (declSpecs) == S_AUTO && !SPEC_NOUN (declSpecs);
+  bool autocandidate = c23AutoType || gnuAutoType;
+
+  if (gnuAutoType && !validGnuAutoType)
+    werror (E_AUTO_TYPE_DECLARATION);
 
   for (sym1 = sym = reverseSyms (initDeclList); sym != NULL; sym = sym->next)
     {
@@ -5656,11 +5951,14 @@ prepareDeclarationSymbol (attribute *attr, sym_link *declSpecs, symbol *initDecl
           break;
       //if (l0 == NULL && l2 == NULL && l1 != NULL)
       //  werrorfl (sym->fileDef, sym->lineDef, E_TYPE_IS_FUNCTION, sym->name);
-      /* C23 auto type inference */
+      /* C23 and GNU auto type inference */
       if (autocandidate && !sym->type && sym->ival && sym->ival->type == INIT_NODE)
         {
-          sym->type = sym->etype = typeofOp (sym->ival->init.node);
-          SPEC_SCLS (lnk) = 0;
+          sym->type = typeofOp (sym->ival->init.node);
+          sym->etype = getSpec (sym->type);
+          if (c23AutoType)
+            SPEC_SCLS (lnk) = 0;
+          SPEC_AUTO_TYPE (lnk) = 0;
         }
       /* do the pointer stuff */
       pointerTypes (sym->type, lnk);
@@ -5669,4 +5967,3 @@ prepareDeclarationSymbol (attribute *attr, sym_link *declSpecs, symbol *initDecl
 
   return sym1;
 }
-
