@@ -24,6 +24,7 @@
 //#include "ddconfig.h"
 
 //#include <stdio.h>
+#include <cstring>
 
 #include "uc251cl.h"
 
@@ -40,30 +41,48 @@ cl_uc251::cl_uc251(struct cpu_entry *Itype, class cl_sim *asim):
 {
   psw1= 0;
   spx= 0;
+  memset(rfile, 0, sizeof(rfile));
 }
 
 
 /* MCS-251 register file helpers ---------------------------------------- */
 
-/* R11 is aliased with ACC in MCS-251 (as251 encodes A as register 11) */
+/* Register file addressing:
+ *   R0-R7   bank-selected -> IRAM[(bank*8) + n], bank = (PSW >> 3) & 3
+ *   R8-R31  CPU register file (rfile[n-8]); R11 is an alias of ACC.
+ * WR/DR tuples are big-endian and may span the bank/Rfile boundary.
+ */
 t_mem
 cl_uc251::get_r8(int n)
 {
-  if ((n & 0x0f) == 11)
+  n &= 0x1f;
+  if (n == 11)
     return(acc->read());
-  return(iram->get_cell(n & 0x0f)->read());
+  if (n < 8)
+    {
+      int bank= (sfr->read(PSW) >> 3) & 3;
+      return(iram->get_cell(bank * 8 + n)->read());
+    }
+  return(rfile[n - 8]);
 }
 
 
 void
 cl_uc251::set_r8(int n, t_mem v)
 {
-  if ((n & 0x0f) == 11)
+  n &= 0x1f;
+  if (n == 11)
     {
       acc->write(v);
       return;
     }
-  iram->get_cell(n & 0x0f)->write(v);
+  if (n < 8)
+    {
+      int bank= (sfr->read(PSW) >> 3) & 3;
+      iram->get_cell(bank * 8 + n)->write(v);
+      return;
+    }
+  rfile[n - 8]= v & 0xff;
 }
 
 
@@ -71,7 +90,7 @@ cl_uc251::set_r8(int n, t_mem v)
 t_mem
 cl_uc251::get_wr(int j)
 {
-  j &= 0x0e;
+  j &= 0x1e;
   return((get_r8(j) << 8) | get_r8(j + 1));
 }
 
@@ -79,22 +98,26 @@ cl_uc251::get_wr(int j)
 void
 cl_uc251::set_wr(int j, t_mem v)
 {
-  j &= 0x0e;
+  j &= 0x1e;
   set_r8(j, (v >> 8) & 0xff);
   set_r8(j + 1, v & 0xff);
 }
 
 
-/* DRk = {Rk(MSB) ... Rk+3(LSB)} big-endian, k in {0,4,8,12}              */
-/* Special aliases: DR56 = DPX, DR60 = SPX (register-file numbers 14/15). */
+/* DRk = {Rk(MSB) ... Rk+3(LSB)} big-endian, k multiple of 4.            */
+/* Special aliases: DR56 = DPX = {DPXL(0x84), DPH, DPL} (24-bit),         */
+/* DR60 = SPX (register-file number 15).  Per TSC80251/Intel 8XC251SB,    */
+/* DPXL (SFR 0x84) holds bits 16-23 of DPX.  SDCC/mcs251 programs the    */
+/* high byte via "mov dpxl,#hi", so DR56 must read/write DPXL, not the    */
+/* legacy SFR 0x93.                                                       */
 t_mem
 cl_uc251::get_dr(int k)
 {
-  if (k == 56) /* DPX */
-    return(((t_mem)sfr->read(0x93) << 16) | (sfr->read(DPH) << 8) | sfr->read(DPL));
+  k &= 0x3c;
+  if (k == 56) /* DPX = {DPXL, DPH, DPL} */
+    return(((t_mem)sfr->read(0x84) << 16) | (sfr->read(DPH) << 8) | sfr->read(DPL));
   if (k == 60) /* SPX */
     return(spx);
-  k &= 0x0c;
   return(((t_mem)get_r8(k) << 24) | ((t_mem)get_r8(k + 1) << 16) |
 	 ((t_mem)get_r8(k + 2) << 8) | get_r8(k + 3));
 }
@@ -103,11 +126,12 @@ cl_uc251::get_dr(int k)
 void
 cl_uc251::set_dr(int k, t_mem v)
 {
-  if (k == 56) /* DPX */
+  k &= 0x3c;
+  if (k == 56) /* DPX = {DPXL, DPH, DPL} */
     {
       sfr->write(DPL, v & 0xff);
       sfr->write(DPH, (v >> 8) & 0xff);
-      sfr->write(0x93, (v >> 16) & 0xff);
+      sfr->write(0x84, (v >> 16) & 0xff);
       return;
     }
   if (k == 60) /* SPX */
@@ -115,7 +139,6 @@ cl_uc251::set_dr(int k, t_mem v)
       spx= v & 0xffff;
       return;
     }
-  k &= 0x0c;
   set_r8(k, (v >> 24) & 0xff);
   set_r8(k + 1, (v >> 16) & 0xff);
   set_r8(k + 2, (v >> 8) & 0xff);
@@ -457,7 +480,7 @@ cl_uc251::exec_7e(t_mem sub)
 	if (reg == 15)
 	  v= read_edata(spx);
 	else if (reg == 14)
-	  v= read_edata(((sfr->read(0x93) << 16) | (sfr->read(DPH) << 8) | sfr->read(DPL)) & 0xffffff);
+	  v= read_edata(get_dr(56));        /* @DPX */
 	else
 	  v= read_edata(get_dr(reg * 4));
 	set_r8(dst >> 4, v);
@@ -568,12 +591,7 @@ exec_7a(cl_uc251 *cpu, t_mem sub)
       {
 	t_mem src= cpu->fetch();
 	t_mem v= cpu->get_r8(src >> 4);
-	if (reg == 15)
-	  cpu->write_edata(cpu->spx, v);
-	else if (reg == 14)
-	  cpu->write_edata(((cpu->sfr->read(0x93) << 16) | (cpu->sfr->read(DPH) << 8) | cpu->sfr->read(DPL)) & 0xffffff, v);
-	else
-	  cpu->write_edata(cpu->get_dr(reg * 4), v);
+	cpu->write_edata(cpu->get_dr(reg * 4), v);
 	return(0);
       }
     default:

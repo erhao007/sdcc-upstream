@@ -58,12 +58,17 @@ public:
 
   virtual int exec_inst(void);
 
-  // MCS-251 register file helpers (big-endian WR/DR tuples over IRAM 0x00-0x0F)
+  // MCS-251 register file helpers.
+  // Register file layout (Intel 8XC251SB User's Manual, Ch.3):
+  //   R0-R7   bank-selected, mapped to IRAM 0x00-0x1F (4 banks x 8 bytes)
+  //   R8-R31  CPU register file (not mapped to IRAM); R11 is an alias of ACC
+  //   R56-R63 DPX/SPX etc. (handled in get_dr/set_dr aliases)
+  // SDCC/mcs251 uses bank 0 only, so R0-R7 = IRAM[0..7].
   t_mem get_r8(int n);
   void  set_r8(int n, t_mem v);
   t_mem get_wr(int j);                    // j even: (R[j]<<8)|R[j+1]
   void  set_wr(int j, t_mem v);
-  t_mem get_dr(int k);                    // k in {0,4,8,12}: 32-bit big-endian
+  t_mem get_dr(int k);                    // k multiple of 4: 32-bit big-endian
   void  set_dr(int k, t_mem v);
 
   // memory access helpers
@@ -107,6 +112,7 @@ public:
 
 protected:
   t_mem psw1;                       // MCS-251 PSW1: bit7=N, bit6=Z (SFR 0xA0)
+  t_mem rfile[24];                  // CPU register file R8-R31 (R11 alias of ACC)
 };
 
 
