@@ -97,6 +97,41 @@ cl_uc251::set_dr(int k, t_mem v)
 }
 
 
+/* Memory access helpers ------------------------------------------------ */
+
+t_mem
+cl_uc251::read_dir8(t_mem addr)
+{
+  if (addr < 0x80)
+    return(iram->read(addr));
+  return(sfr->read(addr));
+}
+
+
+void
+cl_uc251::write_dir8(t_mem addr, t_mem v)
+{
+  if (addr < 0x80)
+    iram->write(addr, v);
+  else
+    sfr->write(addr, v);
+}
+
+
+t_mem
+cl_uc251::read_ri(int ri)
+{
+  return(iram->read(get_r8(ri)));
+}
+
+
+void
+cl_uc251::write_ri(int ri, t_mem v)
+{
+  iram->write(get_r8(ri), v);
+}
+
+
 /* CY/AC/OV per 8051 semantics (N/Z in PSW1: TODO) */
 void
 cl_uc251::set_flags_add8(t_mem a, t_mem b, t_mem r)
@@ -110,14 +145,48 @@ cl_uc251::set_flags_add8(t_mem a, t_mem b, t_mem r)
 }
 
 
-/* Stack helpers -------------------------------------------------------- */
-
-static void
-push_byte(class cl_51core *cpu, class cl_memory_cell *stck, t_mem v, int *sp)
+/* Shared 8-bit ALU: A op= b (op 0=add, 1=addc, 2=subb, 3=anl, 4=orl, 5=xrl) */
+int
+cl_uc251::inst_alu_a_op8(int op, t_mem b)
 {
-  stck->write(v);
+  t_mem a= acc->read();
+  t_mem r;
+  switch (op)
+    {
+    case 0: r= a + b;               acc->write(r); set_flags_add8(a, b, r); break;
+    case 1: {
+      t_mem c= (bits->read(0xd7)) ? 1 : 0;
+      r= a + b + c;
+      acc->write(r);
+      set_flags_add8(a, b + c, r);
+      break;
+    }
+    case 2: {
+      t_mem c= (bits->read(0xd7)) ? 1 : 0;
+      r= a - b - c;
+      acc->write(r);
+      bits->set(0xd7, (a < (b + c)) ? 0x80 : 0);
+      SFR_SET_BIT(((a ^ b ^ r) & 0x80) ? 1 : 0, PSW, bmOV);
+      SFR_SET_BIT(((a & 0x0f) < ((b + c) & 0x0f)) ? 1 : 0, PSW, bmAC);
+      break;
+    }
+    case 3: r= a & b;               acc->write(r); break;
+    case 4: r= a | b;               acc->write(r); break;
+    case 5: r= a ^ b;               acc->write(r); break;
+    default: return(inst_unknown(op));
+    }
+  return(resGO);
 }
 
+
+int
+cl_uc251::inst_alu_a_imm8(int op)
+{
+  return(inst_alu_a_op8(op, fetch()));
+}
+
+
+/* Stack helpers -------------------------------------------------------- */
 
 int
 cl_uc251::inst_ret251(void)
@@ -193,97 +262,54 @@ cl_uc251::inst_ecall24(t_mem addr)
 }
 
 
-/* 8-bit arithmetic/logic on A with 8-bit immediate ---------------------- */
-
-int
-cl_uc251::inst_add_a_imm8(void)
-{
-  t_mem data= fetch();
-  t_mem ac= acc->read();
-  t_mem r= ac + data;
-  acc->write(r);
-  set_flags_add8(ac, data, r);
-  return(resGO);
-}
-
-
-int
-cl_uc251::inst_addc_a_imm8(void)
-{
-  t_mem data= fetch();
-  t_mem c= (bits->read(0xd7)) ? 1 : 0;
-  t_mem ac= acc->read();
-  t_mem r= ac + data + c;
-  acc->write(r);
-  set_flags_add8(ac, data + c, r);
-  return(resGO);
-}
-
-
-int
-cl_uc251::inst_subb_a_imm8(void)
-{
-  t_mem data= fetch();
-  t_mem c= (bits->read(0xd7)) ? 1 : 0;
-  t_mem ac= acc->read();
-  t_mem r= ac - data - c;
-  acc->write(r);
-  /* borrow -> CY; OV/AC simplified (TODO verify) */
-  bits->set(0xd7, (ac < (data + c)) ? 0x80 : 0);
-  SFR_SET_BIT(((ac ^ data ^ r) & 0x80) ? 1 : 0, PSW, bmOV);
-  SFR_SET_BIT(((ac & 0x0f) < ((data + c) & 0x0f)) ? 1 : 0, PSW, bmAC);
-  return(resGO);
-}
-
-
-int
-cl_uc251::inst_anl_a_imm8(void)
-{
-  t_mem data= fetch();
-  acc->write(acc->read() & data);
-  return(resGO);
-}
-
-
-int
-cl_uc251::inst_orl_a_imm8(void)
-{
-  t_mem data= fetch();
-  acc->write(acc->read() | data);
-  return(resGO);
-}
-
-
-int
-cl_uc251::inst_xrl_a_imm8(void)
-{
-  t_mem data= fetch();
-  acc->write(acc->read() ^ data);
-  return(resGO);
-}
-
-
 /* A5-prefixed instructions (Source mode) -------------------------------- */
+/* second byte: high 5 bits = function, low 3 bits = Rn or Ri (0/1)      */
 
 int
 cl_uc251::exec_a5(t_mem fnrn)
 {
-  int rn= fnrn & 0x07;
+  int n= fnrn & 0x07;
+  int ri= fnrn & 0x01;
   switch (fnrn >> 3)
     {
-    case 0x05: /* ADD A,Rn */
-      {
-	t_mem ac= acc->read();
-	t_mem r= ac + get_r8(rn);
-	acc->write(r);
-	set_flags_add8(ac, get_r8(rn), r);
-	return(resGO);
-      }
+    case 0x01: /* INC @Ri */
+      write_ri(ri, read_ri(ri) + 1);
+      return(resGO);
+    case 0x02: /* DEC @Ri */
+      write_ri(ri, read_ri(ri) - 1);
+      return(resGO);
+    case 0x04: return(inst_alu_a_op8(0, read_ri(ri))); /* ADD A,@Ri */
+    case 0x05: return(inst_alu_a_op8(0, get_r8(n)));    /* ADD A,Rn */
+    case 0x06: return(inst_alu_a_op8(1, read_ri(ri))); /* ADDC A,@Ri */
+    case 0x07: return(inst_alu_a_op8(1, get_r8(n)));    /* ADDC A,Rn */
+    case 0x08: return(inst_alu_a_op8(4, read_ri(ri))); /* ORL A,@Ri */
+    case 0x09: return(inst_alu_a_op8(4, get_r8(n)));    /* ORL A,Rn */
+    case 0x0a: return(inst_alu_a_op8(3, read_ri(ri))); /* ANL A,@Ri */
+    case 0x0b: return(inst_alu_a_op8(3, get_r8(n)));    /* ANL A,Rn */
+    case 0x0c: return(inst_alu_a_op8(5, read_ri(ri))); /* XRL A,@Ri */
+    case 0x0d: return(inst_alu_a_op8(5, get_r8(n)));    /* XRL A,Rn */
+    case 0x0e: /* MOV @Ri,#data */
+      write_ri(ri, fetch());
+      return(resGO);
+    case 0x10: /* MOV dir8,@Ri */
+      write_dir8(fetch(), read_ri(ri));
+      return(resGO);
+    case 0x12: return(inst_alu_a_op8(2, read_ri(ri))); /* SUBB A,@Ri */
+    case 0x13: return(inst_alu_a_op8(2, get_r8(n)));    /* SUBB A,Rn */
+    case 0x14: /* MOV @Ri,dir8 */
+      write_ri(ri, read_dir8(fetch()));
+      return(resGO);
+    case 0x1c: /* MOV A,@Ri */
+      acc->write(read_ri(ri));
+      return(resGO);
     case 0x1d: /* MOV A,Rn */
-      acc->write(get_r8(rn));
+      acc->write(get_r8(n));
+      return(resGO);
+    case 0x1e: /* MOV @Ri,A */
+      write_ri(ri, acc->read());
       return(resGO);
     case 0x1f: /* MOV Rn,A */
-      set_r8(rn, acc->read());
+      set_r8(n, acc->read());
       return(resGO);
     default:
       return(inst_unknown(fnrn));
@@ -291,18 +317,84 @@ cl_uc251::exec_a5(t_mem fnrn)
 }
 
 
-/* 7E-prefixed: MOV Rm/Rn,#data (sub = (reg<<4)|0x00), etc. --------------- */
+/* 7E-prefixed MOV family.  Second byte: high nibble = register index    */
+/* (Rm: direct 0-15; WRj: j/2; DRk: k/4), low nibble = operand type:     */
+/*   0x0=#data8, 0x1=dir8, 0x4=#data16(WRj), 0x5=dir8(WRj)               */
+/* (0x3 dir16, 0x7/0x8/0xc/0xd/0xf DRk forms: TODO)                      */
 
 int
 cl_uc251::exec_7e(t_mem sub)
 {
-  if ((sub & 0x0f) == 0x00) /* MOV Rm,#data (Rn 0-7 is a subset of Rm) */
+  int reg= sub >> 4;
+  switch (sub & 0x0f)
     {
-      t_mem data= fetch();
-      set_r8(sub >> 4, data);
+    case 0x00: /* MOV Rm,#data (Rn 0-7 subset) */
+      set_r8(reg, fetch());
+      return(resGO);
+    case 0x01: /* MOV Rm,dir8 */
+      set_r8(reg, read_dir8(fetch()));
+      return(resGO);
+    case 0x04: /* MOV WRj,#data16 */
+      {
+	t_mem h= fetch(), l= fetch();
+	set_wr(reg * 2, (h << 8) | l);
+	return(resGO);
+      }
+    case 0x05: /* MOV WRj,dir8 */
+      set_wr(reg * 2, read_dir8(fetch()));
+      return(resGO);
+    case 0x08: /* MOV DRk,#0data16 (high 16 bits zero) */
+      {
+	t_mem h= fetch(), l= fetch();
+	set_dr(reg * 4, (h << 8) | l);
+	return(resGO);
+      }
+    case 0x0c: /* MOV DRk,#1data16 (high 16 bits ones) */
+      {
+	t_mem h= fetch(), l= fetch();
+	set_dr(reg * 4, 0xffff0000 | (h << 8) | l);
+	return(resGO);
+      }
+    case 0x0d: /* MOV DRk,dir8 */
+      set_dr(reg * 4, read_dir8(fetch()));
+      return(resGO);
+    default:
+      return(inst_unknown(sub));
+    }
+}
+
+
+/* 0B/1B-prefixed INC/DEC family: second byte high nibble = register,    */
+/* low nibble 0x0 = INC/DEC Rn (direct), 0x1/0x5/0xe = #short forms TODO */
+
+int
+cl_uc251::exec_0b(t_mem sub, int dec)
+{
+  if ((sub & 0x0f) == 0x00)
+    {
+      t_mem v= get_r8(sub >> 4);
+      set_r8(sub >> 4, dec ? v - 1 : v + 1);
       return(resGO);
     }
   return(inst_unknown(sub));
+}
+
+
+/* Register-to-register moves: 7C Rm,Rm / 7D WRj,WRj / 7F DRk,DRk ------- */
+/* second byte: high nibble = dest index, low nibble = source index      */
+
+static int
+exec_regmove(cl_uc251 *cpu, int code, t_mem sub)
+{
+  int d= sub >> 4, s= sub & 0x0f;
+  switch (code)
+    {
+    case 0x7c: cpu->set_r8(d, cpu->get_r8(s)); break;          /* Rm */
+    case 0x7d: cpu->set_wr(d * 2, cpu->get_wr(s * 2)); break;  /* WRj (j/2) */
+    case 0x7f: cpu->set_dr(d * 4, cpu->get_dr(s * 4)); break;  /* DRk (k/4) */
+    default: return(1);
+    }
+  return(0);
 }
 
 
@@ -336,12 +428,75 @@ cl_uc251::exec_inst(void)
     case 0xaa: /* ERET */
       return(inst_eret251());
 
-    case 0x24: return(inst_add_a_imm8());
-    case 0x34: return(inst_addc_a_imm8());
-    case 0x94: return(inst_subb_a_imm8());
-    case 0x54: return(inst_anl_a_imm8());
-    case 0x44: return(inst_orl_a_imm8());
-    case 0x64: return(inst_xrl_a_imm8());
+    case 0x24: return(inst_alu_a_imm8(0));  /* ADD A,#data */
+    case 0x34: return(inst_alu_a_imm8(1));  /* ADDC A,#data */
+    case 0x94: return(inst_alu_a_imm8(2));  /* SUBB A,#data */
+    case 0x54: return(inst_alu_a_imm8(3));  /* ANL A,#data */
+    case 0x44: return(inst_alu_a_imm8(4));  /* ORL A,#data */
+    case 0x64: return(inst_alu_a_imm8(5));  /* XRL A,#data */
+
+    case 0x25: return(inst_alu_a_op8(0, read_dir8(fetch()))); /* ADD A,dir8 */
+    case 0x35: return(inst_alu_a_op8(1, read_dir8(fetch()))); /* ADDC */
+    case 0x95: return(inst_alu_a_op8(2, read_dir8(fetch()))); /* SUBB */
+    case 0x55: return(inst_alu_a_op8(3, read_dir8(fetch()))); /* ANL */
+    case 0x45: return(inst_alu_a_op8(4, read_dir8(fetch()))); /* ORL */
+    case 0x65: return(inst_alu_a_op8(5, read_dir8(fetch()))); /* XRL */
+
+    case 0x52: /* ANL dir8,A */
+    case 0x42: /* ORL dir8,A */
+    case 0x62: /* XRL dir8,A */
+      {
+	t_mem addr= fetch();
+	t_mem d= read_dir8(addr);
+	t_mem a= acc->read();
+	write_dir8(addr, (code == 0x52) ? (d & a) : (code == 0x42) ? (d | a) : (d ^ a));
+	return(resGO);
+      }
+    case 0x53: /* ANL dir8,#data */
+    case 0x43: /* ORL dir8,#data */
+    case 0x63: /* XRL dir8,#data */
+      {
+	t_mem addr= fetch();
+	t_mem d= read_dir8(addr);
+	t_mem imm= fetch();
+	write_dir8(addr, (code == 0x53) ? (d & imm) : (code == 0x43) ? (d | imm) : (d ^ imm));
+	return(resGO);
+      }
+
+    case 0x04: /* INC A */
+      acc->write(acc->read() + 1);
+      return(resGO);
+    case 0x14: /* DEC A */
+      acc->write(acc->read() - 1);
+      return(resGO);
+    case 0x05: /* INC dir8 */
+    case 0x15: /* DEC dir8 */
+      {
+	t_mem addr= fetch();
+	t_mem d= read_dir8(addr);
+	write_dir8(addr, (code == 0x05) ? d + 1 : d - 1);
+	return(resGO);
+      }
+    case 0xa3: /* INC DPTR */
+      {
+	t_mem dptr= (sfr->read(DPH) << 8) + sfr->read(DPL) + 1;
+	sfr->write(DPL, dptr & 0xff);
+	sfr->write(DPH, (dptr >> 8) & 0xff);
+	return(resGO);
+      }
+
+    case 0xe4: /* CLR A */
+      acc->write(0);
+      return(resGO);
+    case 0xf4: /* CPL A */
+      acc->write(acc->read() ^ 0xff);
+      return(resGO);
+    case 0xc3: /* CLR CY */
+      bits->set(0xd7, 0);
+      return(resGO);
+    case 0xb3: /* CPL CY */
+      bits->set(0xd7, (bits->read(0xd7)) ? 0 : 0x80);
+      return(resGO);
 
     case 0x74: /* MOV A,#data */
       acc->write(fetch());
@@ -351,10 +506,19 @@ cl_uc251::exec_inst(void)
       {
 	t_mem addr= fetch();
 	t_mem data= fetch();
-	if (addr < 0x80)
-	  iram->write(addr, data);
-	else
-	  sfr->write(addr, data);
+	write_dir8(addr, data);
+	return(resGO);
+      }
+    case 0xe5: /* MOV A,dir8 */
+      acc->write(read_dir8(fetch()));
+      return(resGO);
+    case 0xf5: /* MOV dir8,A */
+      write_dir8(fetch(), acc->read());
+      return(resGO);
+    case 0x85: /* MOV dir8,dir8 */
+      {
+	t_mem src= fetch(), dst= fetch();
+	write_dir8(dst, read_dir8(src));
 	return(resGO);
       }
 
@@ -400,6 +564,17 @@ cl_uc251::exec_inst(void)
       return(exec_a5(fetch()));
     case 0x7e: /* 7E-prefixed */
       return(exec_7e(fetch()));
+    case 0x0b: /* INC family */
+      return(exec_0b(fetch(), 0));
+    case 0x1b: /* DEC family */
+      return(exec_0b(fetch(), 1));
+
+    case 0x7c: /* MOV Rm,Rm */
+    case 0x7d: /* MOV WRj,WRj */
+    case 0x7f: /* MOV DRk,DRk */
+      if (exec_regmove(this, code, fetch()) == 0)
+	return(resGO);
+      return(inst_unknown(code));
 
     default:
       return(inst_unknown(code));
