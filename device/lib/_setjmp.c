@@ -74,8 +74,6 @@ mcs251_setjmp_irq_off$:
         mov     @dr24,r6
         inc     dr24
         mov     @dr24,r7
-        mov     r0,sp
-        mov     r1,sph
         mov     dr24,spx
         mov     r2,@dr24
         dec     dr24
@@ -83,10 +81,11 @@ mcs251_setjmp_irq_off$:
         dec     dr24
         mov     r4,@dr24
 
-        mov     @dr20,r1
-        inc     dr20
-        mov     @dr20,r0
-        inc     dr20
+        ; buf[0..1] = SPX (16-bit, big-endian).  as251 cannot name R30/R31
+        ; directly, so snapshot SPX into DR28 and store WR30 (= R30:R31).
+        mov     dr28,spx
+        mov     @dr20,wr30
+        inc     dr20,#2
         mov     @dr20,r4
         inc     dr20
         mov     @dr20,r3

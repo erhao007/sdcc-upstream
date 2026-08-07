@@ -1011,6 +1011,27 @@ cl_uc251::exec_inst(void)
       bits->set(0xd7, (bits->read(0xd7)) ? 0 : 1);
       return(resGO);
 
+    case 0xb4: /* CJNE A,#data,rel */
+      {
+	t_mem imm= fetch();
+	t_mem rel= fetch();
+	t_mem a= acc->read();
+	bits->set(0xd7, (a < imm) ? 0x80 : 0);    /* CY = A < #data */
+	if (a != imm)
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
+    case 0xb5: /* CJNE A,dir8,rel */
+      {
+	t_mem d= read_dir8(fetch());
+	t_mem rel= fetch();
+	t_mem a= acc->read();
+	bits->set(0xd7, (a < d) ? 0x80 : 0);      /* CY = A < dir8 */
+	if (a != d)
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
+
     /* Bit operations on bit51 operands (classic 8051 bit addressing,      */
     /* shared opcode mapping with mcs51).  bit address 0x00-0x7F -> IRAM    */
     /* 0x20-0x2F, 0x80-0xFF -> bit-addressable SFRs; decoded by the         */
