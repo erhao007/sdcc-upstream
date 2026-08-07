@@ -747,6 +747,7 @@ AC_DO_PORT(pdk15,    pdk,    PDK15,    [Excludes the PDK15 port])
 AC_DO_PORT_ENABLER(pdk16,    pdk,    PDK16,    [Includes the PDK16 port])
 AC_DO_PORT(mos6502,  mos6502,MOS6502,  [Excludes the MOS6502 port])
 AC_DO_PORT(mos65c02, mos6502,MOS65C02, [Excludes the MOS65C02 port])
+AC_DO_PORT_ENABLER(mcs251, mcs251, MCS251, [Includes the Intel MCS-251 port (experimental)])
 AC_DO_PORT(f8,       f8,     F8,       [Excludes the f8 port])
 AC_DO_PORT(f8l,      f8,     F8L,      [Excludes the f8l port])
 
@@ -799,6 +800,10 @@ test $OPT_DISABLE_UCSIM   = 0 && AC_CONFIG_SUBDIRS(sim/ucsim)
 test $OPT_DISABLE_SDCDB   = 0 && AC_CONFIG_SUBDIRS(debugger/mcs51)
 test $OPT_DISABLE_SDBINUTILS = 0 && AC_CONFIG_SUBDIRS(support/sdbinutils)
 AC_CONFIG_FILES([doc/Makefile])
+
+if test $OPT_DISABLE_MCS251 = 0; then
+  AC_CONFIG_FILES([sdas/as251/Makefile])
+fi
 
 if test $OPT_DISABLE_DS390 = 0 || test $OPT_DISABLE_DS400; then
   AC_CONFIG_FILES([src/ds390/Makefile
