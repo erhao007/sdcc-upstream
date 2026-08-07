@@ -141,18 +141,24 @@ cl_uc251::write_ri(int ri, t_mem v)
 }
 
 
-/* EDATA (stack/SPX space) modelled on xram for now */
+/* EDATA: 00:0000-00:00FF aliases IRAM (internal RAM); 00:0100-00:FFFF  */
+/* mapped onto xram for now.  Stack/SPX space lives in EDATA.            */
 t_mem
 cl_uc251::read_edata(t_addr addr)
 {
-  return(xram->read(addr & 0xffff));
+  if (addr < 0x100)
+    return(iram->read(addr));
+  return(xram->read((addr - 0x100) & 0xffff));
 }
 
 
 void
 cl_uc251::write_edata(t_addr addr, t_mem v)
 {
-  xram->write(addr & 0xffff, v);
+  if (addr < 0x100)
+    iram->write(addr, v);
+  else
+    xram->write((addr - 0x100) & 0xffff, v);
 }
 
 
@@ -229,11 +235,10 @@ cl_uc251::inst_alu_a_imm8(int op)
 int
 cl_uc251::inst_ret251(void)
 {
-  t_mem sp= sfr->read(SP);
-  t_mem h= iram->get_cell(sp)->read();      // stack top = high byte
-  sp= sfr->write(SP, sp - 1);
-  t_mem l= iram->get_cell(sp)->read();
-  sp= sfr->write(SP, sp - 1);
+  t_mem h= read_edata(spx);                  // stack top = high byte (edata)
+  spx= (spx - 1) & 0xffff;
+  t_mem l= read_edata(spx);
+  spx= (spx - 1) & 0xffff;
   PC= h * 256 + l;
   vc.rd+= 2;
   return(resGO);
@@ -251,13 +256,12 @@ cl_uc251::inst_reti251(void)
 int
 cl_uc251::inst_eret251(void)
 {
-  t_mem sp= sfr->read(SP);
-  t_mem h= iram->get_cell(sp)->read();
-  sp= sfr->write(SP, sp - 1);
-  t_mem m= iram->get_cell(sp)->read();
-  sp= sfr->write(SP, sp - 1);
-  t_mem l= iram->get_cell(sp)->read();
-  sp= sfr->write(SP, sp - 1);
+  t_mem h= read_edata(spx);
+  spx= (spx - 1) & 0xffff;
+  t_mem m= read_edata(spx);
+  spx= (spx - 1) & 0xffff;
+  t_mem l= read_edata(spx);
+  spx= (spx - 1) & 0xffff;
   PC= (h << 16) | (m << 8) | l;
   vc.rd+= 3;
   return(resGO);
@@ -267,15 +271,11 @@ cl_uc251::inst_eret251(void)
 int
 cl_uc251::inst_lcall16(t_mem addr)
 {
-  t_mem sp_before= sfr->get(SP);
-  t_mem sp= sfr->write(SP, sfr->read(SP) + 1);
-  iram->get_cell(sp)->write(PC & 0xff);         // push low byte
-  sp= sfr->write(SP, sfr->read(SP) + 1);
-  iram->get_cell(sp)->write((PC >> 8) & 0xff);  // push high byte
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, PC & 0xff);              // push low byte
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, (PC >> 8) & 0xff);       // push high byte
   PC= addr;
-  class cl_stack_op *so= new cl_stack_call(instPC, PC, PC, sp_before, sp);
-  so->init();
-  stack_write(so);
   vc.wr+= 2;
   return(resGO);
 }
@@ -284,17 +284,13 @@ cl_uc251::inst_lcall16(t_mem addr)
 int
 cl_uc251::inst_ecall24(t_mem addr)
 {
-  t_mem sp_before= sfr->get(SP);
-  t_mem sp= sfr->write(SP, sfr->read(SP) + 1);
-  iram->get_cell(sp)->write(PC & 0xff);
-  sp= sfr->write(SP, sfr->read(SP) + 1);
-  iram->get_cell(sp)->write((PC >> 8) & 0xff);
-  sp= sfr->write(SP, sfr->read(SP) + 1);
-  iram->get_cell(sp)->write((PC >> 16) & 0xff);
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, PC & 0xff);
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, (PC >> 8) & 0xff);
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, (PC >> 16) & 0xff);
   PC= addr;
-  class cl_stack_op *so= new cl_stack_call(instPC, PC, PC, sp_before, sp);
-  so->init();
-  stack_write(so);
   vc.wr+= 3;
   return(resGO);
 }
@@ -387,11 +383,17 @@ cl_uc251::exec_7e(t_mem sub)
 	set_r8(dst >> 4, read_edata(get_wr(reg * 2)));
 	return(resGO);
       }
-    case 0x0b: /* MOV Rm,@DRk (high nibble k/4 or 15=SPX; third byte dst<<4) */
+    case 0x0b: /* MOV Rm,@DRk (high nibble k/4, 14=DPX, 15=SPX; third byte dst<<4) */
       {
 	t_mem dst= fetch();
-	t_addr a= (reg == 15) ? spx : get_dr(reg * 4);
-	set_r8(dst >> 4, read_edata(a));
+	t_mem v;
+	if (reg == 15)
+	  v= read_edata(spx);
+	else if (reg == 14)
+	  v= xram->read(((sfr->read(0x93) << 16) | (sfr->read(DPH) << 8) | sfr->read(DPL)) & 0xffff);
+	else
+	  v= read_edata(get_dr(reg * 4));
+	set_r8(dst >> 4, v);
 	return(resGO);
       }
     case 0x08: /* MOV DRk,#0data16 (high 16 bits zero); SPX if reg==15 */
@@ -480,11 +482,16 @@ exec_7a(cl_uc251 *cpu, t_mem sub)
     case 0x01: /* MOV dir8,Rm */
       cpu->write_dir8(cpu->fetch(), cpu->get_r8(reg));
       return(0);
-    case 0x0b: /* MOV @DRk/@SPX,Rm (third byte src<<4) */
+    case 0x0b: /* MOV @DRk/@DPX/@SPX,Rm (third byte src<<4) */
       {
 	t_mem src= cpu->fetch();
-	t_addr a= (reg == 15) ? cpu->spx : cpu->get_dr(reg * 4);
-	cpu->write_edata(a, cpu->get_r8(src >> 4));
+	t_mem v= cpu->get_r8(src >> 4);
+	if (reg == 15)
+	  cpu->write_edata(cpu->spx, v);
+	else if (reg == 14)
+	  cpu->xram->write(((cpu->sfr->read(0x93) << 16) | (cpu->sfr->read(DPH) << 8) | cpu->sfr->read(DPL)) & 0xffff, v);
+	else
+	  cpu->write_edata(cpu->get_dr(reg * 4), v);
 	return(0);
       }
     default:
@@ -501,7 +508,7 @@ exec_idx16(cl_uc251 *cpu, int code, t_mem sub)
 {
   int reg= sub >> 4;
   int idx= sub & 0x0f;
-  t_addr dis= cpu->fetch() | (cpu->fetch() << 8);
+  t_addr dis= (cpu->fetch() << 8) | cpu->fetch();  /* big-endian displacement */
   t_addr base= (idx == 15) ? cpu->spx : cpu->get_dr(idx * 4);
   t_addr a= (base + dis) & 0xffff;
   switch (code)
@@ -785,14 +792,13 @@ cl_uc251::exec_inst(void)
 	t_mem addr= fetch();
 	if (code == 0xc0)
 	  {
-	    t_mem sp= sfr->write(SP, sfr->read(SP) + 1);
-	    iram->get_cell(sp)->write(read_dir8(addr));
+	    spx= (spx + 1) & 0xffff;
+	    write_edata(spx, read_dir8(addr));
 	  }
 	else
 	  {
-	    t_mem sp= sfr->read(SP);
-	    write_dir8(addr, iram->get_cell(sp)->read());
-	    sfr->write(SP, sp - 1);
+	    write_dir8(addr, read_edata(spx));
+	    spx= (spx - 1) & 0xffff;
 	  }
 	return(resGO);
       }
