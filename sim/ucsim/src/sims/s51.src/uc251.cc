@@ -24,6 +24,8 @@
 //#include "ddconfig.h"
 
 //#include <stdio.h>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "uc251cl.h"
@@ -907,6 +909,33 @@ exec_reg_alu(cl_uc251 *cpu, int code, t_mem sub)
 int
 cl_uc251::exec_inst(void)
 {
+  /* Diagnostic: detect runaway into empty ROM (all 0xFF).  When the   */
+  /* program jumps outside loaded code it executes 0xFF bytes, which    */
+  /* look like valid instructions (MOV R7,A) and loop endlessly.  This  */
+  /* checks a sliding window and stops early so the caller can see the  */
+  /* jump target.  Enabled by UC251_STOP_ON_RUNAWAY.                    */
+  if (getenv("UC251_STOP_ON_RUNAWAY"))
+    {
+      static t_addr last_good_pc= 0;
+      static int runaway_state= 0;   /* 0=tracking, 1=runaway confirmed */
+      t_addr p= PC;
+      if (p <= 0x2000)
+        last_good_pc= p;             /* still in code region */
+      else if (p < rom->get_size() && !runaway_state)
+        {
+          int i, empty= 1;
+          for (i= 0; i < 8; i++)
+            if (rom->read(p + i) != 0xff) { empty= 0; break; }
+          if (empty)
+            {
+              runaway_state= 1;
+              fprintf(stderr, "RUNAWAY: PC=0x%05x (last code PC=0x%05x)\n",
+                      (unsigned)p, (unsigned)last_good_pc);
+              return(resSTOP);
+            }
+        }
+    }
+
   t_mem code= fetch();
 
   switch (code)
@@ -1026,6 +1055,16 @@ cl_uc251::exec_inst(void)
     case 0xd3: /* SETB CY */
       bits->set(0xd7, 1);
       return(resGO);
+    case 0xd5: /* DJNZ dir8,rel */
+      {
+	t_mem addr= fetch();
+	t_mem rel= fetch();
+	t_mem v= read_dir8(addr) - 1;
+	write_dir8(addr, v);
+	if (v != 0)
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
     case 0xb3: /* CPL CY */
       bits->set(0xd7, (bits->read(0xd7)) ? 0 : 1);
       return(resGO);
