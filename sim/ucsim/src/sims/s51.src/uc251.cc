@@ -973,9 +973,28 @@ cl_uc251::exec_inst(void)
     case 0x14: /* DEC A */
       acc->write(acc->read() - 1);
       return(resGO);
+    case 0x03: /* RR A (rotate right, CY unchanged) */
+      acc->write(((acc->read() >> 1) | (acc->read() << 7)) & 0xff);
+      return(resGO);
+    case 0x13: /* RRC A (rotate right through carry) */
+      {
+	t_mem a= acc->read();
+	t_mem newCY= a & 1;
+	acc->write((a >> 1) | ((bits->read(0xd7)) ? 0x80 : 0));
+	bits->set(0xd7, newCY);
+	return(resGO);
+      }
     case 0x23: /* RL A (rotate left, CY unchanged) */
       acc->write(((acc->read() << 1) | (acc->read() >> 7)) & 0xff);
       return(resGO);
+    case 0x33: /* RLC A (rotate left through carry) */
+      {
+	t_mem a= acc->read();
+	t_mem newCY= (a >> 7) & 1;
+	acc->write((a << 1) | ((bits->read(0xd7)) ? 1 : 0));
+	bits->set(0xd7, newCY);
+	return(resGO);
+      }
     case 0xc4: /* SWAP A */
       acc->write(((acc->read() << 4) | (acc->read() >> 4)) & 0xff);
       return(resGO);
