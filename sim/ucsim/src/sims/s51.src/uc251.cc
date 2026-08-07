@@ -541,6 +541,33 @@ cl_uc251::exec_0b(t_mem sub, int dec)
   int lo= sub & 0x0f;
   t_mem step;
   int kind;
+
+  /* 0x0B/0x1B prefix also encodes 16-bit WRj memory moves when the low  */
+  /* nibble is 8 (@WRj) or 0xA (@DRk): 0x0B = load WRj from memory,       */
+  /* 0x1B = store WRj to memory.  Third byte = source/dest WRj index<<4. */
+  if (lo == 0x08 || lo == 0x0a)
+    {
+      int wj= fetch() >> 4;                  /* WRj index (j = wj*2) */
+      t_addr base;
+      if (lo == 0x0a)
+	base= get_dr(reg * 4);               /* @DRk */
+      else
+	base= get_wr(reg * 2);               /* @WRj */
+      if (dec)                               /* 0x1B: store WRj (big-endian) */
+	{
+	  t_mem v= get_wr(wj * 2);
+	  write_edata(base, (v >> 8) & 0xff);
+	  write_edata(base + 1, v & 0xff);
+	}
+      else                                   /* 0x0B: load WRj (big-endian) */
+	{
+	  t_mem h= read_edata(base);
+	  t_mem l= read_edata(base + 1);
+	  set_wr(wj * 2, (h << 8) | l);
+	}
+      return(resGO);
+    }
+
   if (lo < 3) { kind= 0; step= 1 << lo; }        /* Rm */
   else if (lo < 7) { kind= 1; step= 1 << (lo - 4); } /* WRj */
   else if (lo >= 0x0c && lo <= 0x0e) { kind= 2; step= 1 << (lo - 0x0c); } /* DRk */
