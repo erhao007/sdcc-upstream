@@ -71,6 +71,13 @@ public:
   void  write_dir8(t_mem addr, t_mem v);
   t_mem read_ri(int ri);                  // @Ri indirect (Ri in {R0,R1})
   void  write_ri(int ri, t_mem v);
+  t_mem read_edata(t_addr addr);          // EDATA (stack/SPX space) via xram
+  void  write_edata(t_addr addr, t_mem v);
+  t_mem read_spx_dis16(t_addr dis);       // edata[SPX+dis16]
+  void  write_spx_dis16(t_addr dis, t_mem v);
+
+  // SPX (16-bit stack pointer extension); edata base for @SPX addressing
+  t_mem spx;
 
   // PSW flag helpers (8051-compatible CY/AC/OV; N/Z in PSW1, TODO)
   void set_flags_add8(t_mem a, t_mem b, t_mem r);

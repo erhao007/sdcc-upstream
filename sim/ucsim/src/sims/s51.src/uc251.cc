@@ -39,14 +39,18 @@ cl_uc251::cl_uc251(struct cpu_entry *Itype, class cl_sim *asim):
   cl_uc89c51r(Itype, asim)
 {
   psw1= NULL;
+  spx= 0;
 }
 
 
 /* MCS-251 register file helpers ---------------------------------------- */
 
+/* R11 is aliased with ACC in MCS-251 (as251 encodes A as register 11) */
 t_mem
 cl_uc251::get_r8(int n)
 {
+  if ((n & 0x0f) == 11)
+    return(acc->read());
   return(iram->get_cell(n & 0x0f)->read());
 }
 
@@ -54,6 +58,11 @@ cl_uc251::get_r8(int n)
 void
 cl_uc251::set_r8(int n, t_mem v)
 {
+  if ((n & 0x0f) == 11)
+    {
+      acc->write(v);
+      return;
+    }
   iram->get_cell(n & 0x0f)->write(v);
 }
 
@@ -129,6 +138,35 @@ void
 cl_uc251::write_ri(int ri, t_mem v)
 {
   iram->write(get_r8(ri), v);
+}
+
+
+/* EDATA (stack/SPX space) modelled on xram for now */
+t_mem
+cl_uc251::read_edata(t_addr addr)
+{
+  return(xram->read(addr & 0xffff));
+}
+
+
+void
+cl_uc251::write_edata(t_addr addr, t_mem v)
+{
+  xram->write(addr & 0xffff, v);
+}
+
+
+t_mem
+cl_uc251::read_spx_dis16(t_addr dis)
+{
+  return(read_edata((spx + dis) & 0xffff));
+}
+
+
+void
+cl_uc251::write_spx_dis16(t_addr dis, t_mem v)
+{
+  write_edata((spx + dis) & 0xffff, v);
 }
 
 
@@ -343,20 +381,42 @@ cl_uc251::exec_7e(t_mem sub)
     case 0x05: /* MOV WRj,dir8 */
       set_wr(reg * 2, read_dir8(fetch()));
       return(resGO);
-    case 0x08: /* MOV DRk,#0data16 (high 16 bits zero) */
+    case 0x09: /* MOV Rm,@WRj (third byte: dst<<4) */
       {
-	t_mem h= fetch(), l= fetch();
-	set_dr(reg * 4, (h << 8) | l);
+	t_mem dst= fetch();
+	set_r8(dst >> 4, read_edata(get_wr(reg * 2)));
 	return(resGO);
       }
-    case 0x0c: /* MOV DRk,#1data16 (high 16 bits ones) */
+    case 0x0b: /* MOV Rm,@DRk (high nibble k/4 or 15=SPX; third byte dst<<4) */
       {
-	t_mem h= fetch(), l= fetch();
-	set_dr(reg * 4, 0xffff0000 | (h << 8) | l);
+	t_mem dst= fetch();
+	t_addr a= (reg == 15) ? spx : get_dr(reg * 4);
+	set_r8(dst >> 4, read_edata(a));
 	return(resGO);
       }
-    case 0x0d: /* MOV DRk,dir8 */
-      set_dr(reg * 4, read_dir8(fetch()));
+    case 0x08: /* MOV DRk,#0data16 (high 16 bits zero); SPX if reg==15 */
+      {
+	t_mem h= fetch(), l= fetch();
+	if (reg == 15)
+	  spx= (h << 8) | l;
+	else
+	  set_dr(reg * 4, (h << 8) | l);
+	return(resGO);
+      }
+    case 0x0c: /* MOV DRk,#1data16 (high 16 bits ones); SPX if reg==15 */
+      {
+	t_mem h= fetch(), l= fetch();
+	if (reg == 15)
+	  spx= (h << 8) | l;
+	else
+	  set_dr(reg * 4, 0xffff0000 | (h << 8) | l);
+	return(resGO);
+      }
+    case 0x0d: /* MOV DRk,dir8; SPX if reg==15 */
+      if (reg == 15)
+	spx= read_dir8(fetch());
+      else
+	set_dr(reg * 4, read_dir8(fetch()));
       return(resGO);
     default:
       return(inst_unknown(sub));
@@ -364,19 +424,30 @@ cl_uc251::exec_7e(t_mem sub)
 }
 
 
-/* 0B/1B-prefixed INC/DEC family: second byte high nibble = register,    */
-/* low nibble 0x0 = INC/DEC Rn (direct), 0x1/0x5/0xe = #short forms TODO */
+/* 0B/1B-prefixed INC/DEC: second byte high nibble = register, low nibble =  */
+/* family+step: Rm 0x0/0x1/0x2, WRj 0x4/0x5/0x6, DRk 0xc/0xd/0xe (15=SPX); */
+/* step = 1<<v1 (#1/#2/#4)                                                  */
 
 int
 cl_uc251::exec_0b(t_mem sub, int dec)
 {
-  if ((sub & 0x0f) == 0x00)
-    {
-      t_mem v= get_r8(sub >> 4);
-      set_r8(sub >> 4, dec ? v - 1 : v + 1);
-      return(resGO);
-    }
-  return(inst_unknown(sub));
+  int reg= sub >> 4;
+  int lo= sub & 0x0f;
+  t_mem step;
+  int kind;
+  if (lo < 3) { kind= 0; step= 1 << lo; }        /* Rm */
+  else if (lo < 7) { kind= 1; step= 1 << (lo - 4); } /* WRj */
+  else if (lo >= 0x0c && lo <= 0x0e) { kind= 2; step= 1 << (lo - 0x0c); } /* DRk */
+  else return(inst_unknown(sub));
+  if (kind == 2 && reg == 15)
+    spx= dec ? spx - step : spx + step;            /* SPX */
+  else if (kind == 2)
+    set_dr(reg * 4, dec ? get_dr(reg * 4) - step : get_dr(reg * 4) + step);
+  else if (kind == 1)
+    set_wr(reg * 2, dec ? get_wr(reg * 2) - step : get_wr(reg * 2) + step);
+  else
+    set_r8(reg, dec ? get_r8(reg) - step : get_r8(reg) + step);
+  return(resGO);
 }
 
 
@@ -393,6 +464,123 @@ exec_regmove(cl_uc251 *cpu, int code, t_mem sub)
     case 0x7d: cpu->set_wr(d * 2, cpu->get_wr(s * 2)); break;  /* WRj (j/2) */
     case 0x7f: cpu->set_dr(d * 4, cpu->get_dr(s * 4)); break;  /* DRk (k/4) */
     default: return(1);
+    }
+  return(0);
+}
+
+
+/* 7A-prefixed store forms: MOV dir8,Rm (low nibble 1) and               */
+/* MOV @DRk/@SPX,Rm (low nibble 0x0b).  high nibble = dest register idx. */
+static int
+exec_7a(cl_uc251 *cpu, t_mem sub)
+{
+  int reg= sub >> 4;
+  switch (sub & 0x0f)
+    {
+    case 0x01: /* MOV dir8,Rm */
+      cpu->write_dir8(cpu->fetch(), cpu->get_r8(reg));
+      return(0);
+    case 0x0b: /* MOV @DRk/@SPX,Rm (third byte src<<4) */
+      {
+	t_mem src= cpu->fetch();
+	t_addr a= (reg == 15) ? cpu->spx : cpu->get_dr(reg * 4);
+	cpu->write_edata(a, cpu->get_r8(src >> 4));
+	return(0);
+      }
+    default:
+      return(1);
+    }
+}
+
+
+/* Indexed MOV with 16-bit displacement (little-endian), SPX/DRk base:   */
+/* 0x29 = 8-bit load, 0x69 = 16-bit load, 0x39 = 8-bit store,            */
+/* 0x59 = 16-bit store.  second byte: (reg<<4)|indexed-reg (0x0f=SPX).   */
+static int
+exec_idx16(cl_uc251 *cpu, int code, t_mem sub)
+{
+  int reg= sub >> 4;
+  int idx= sub & 0x0f;
+  t_addr dis= cpu->fetch() | (cpu->fetch() << 8);
+  t_addr base= (idx == 15) ? cpu->spx : cpu->get_dr(idx * 4);
+  t_addr a= (base + dis) & 0xffff;
+  switch (code)
+    {
+    case 0x29: /* 8-bit load into Rm (reg<<4) */
+      cpu->set_r8(reg, cpu->read_edata(a));
+      return(0);
+    case 0x69: /* 16-bit load into WRj (reg<<4, j=reg*2) */
+      cpu->set_wr(reg * 2, (cpu->read_edata(a) << 8) | cpu->read_edata(a + 1));
+      return(0);
+    case 0x39: /* 8-bit store from Rm (reg<<4) */
+      cpu->write_edata(a, cpu->get_r8(reg));
+      return(0);
+    case 0x59: /* 16-bit store from WRj */
+      cpu->write_edata(a, cpu->get_wr(reg * 2) >> 8);
+      cpu->write_edata(a + 1, cpu->get_wr(reg * 2) & 0xff);
+      return(0);
+    default:
+      return(1);
+    }
+}
+
+
+/* 16/32-bit register ALU: second byte (d<<4)|(s<<4), reg encoding       */
+/* WRj = nibble*2, DRk = nibble*4.  op codes (first byte):               */
+/* add 0x2d/0x2f, sub 0x9d/0x9f, anl 0x5d/0x5f, orl 0x4d/0x4f,           */
+/* xrl 0x6d/0x6f (WRj/DRk respectively).                                 */
+static int
+exec_reg_alu(cl_uc251 *cpu, int code, t_mem sub)
+{
+  int d= sub >> 4, s= sub & 0x0f;
+  int dr= (code & 0x02) != 0;   /* 0x2f/0x9f/0x5f/0x4f/0x6f -> DRk */
+  int op;
+  switch (code & 0xfd)
+    {
+    case 0x2d: op= 0; break;    /* add */
+    case 0x9d: op= 1; break;    /* sub */
+    case 0x5d: op= 2; break;    /* anl */
+    case 0x4d: op= 3; break;    /* orl */
+    case 0x6d: op= 4; break;    /* xrl */
+    default: return(1);
+    }
+  if (dr)
+    {
+      t_mem a= cpu->get_dr(d * 4), b= cpu->get_dr(s * 4), r;
+      switch (op)
+	{
+	case 0: r= a + b; break;
+	case 1: r= a - b; break;
+	case 2: r= a & b; break;
+	case 3: r= a | b; break;
+	default: r= a ^ b; break;
+	}
+      cpu->set_dr(d * 4, r);
+      if (op < 2)
+	{
+	  cpu->bits->set(0xd7, (op == 0) ? ((a + b) > 0xffffffff) : (a < b));
+	  cpu->sfr->set(PSW, cpu->sfr->get(PSW) & ~bmOV);
+	}
+    }
+  else
+    {
+      t_mem a= cpu->get_wr(d * 2), b= cpu->get_wr(s * 2), r;
+      switch (op)
+	{
+	case 0: r= a + b; break;
+	case 1: r= a - b; break;
+	case 2: r= a & b; break;
+	case 3: r= a | b; break;
+	default: r= a ^ b; break;
+	}
+      cpu->set_wr(d * 2, r);
+      if (op < 2)
+	{
+	  t_mem cy= (op == 0) ? ((a + b) > 0xffff) : (a < b);
+	  cpu->bits->set(0xd7, cy ? 0x80 : 0);
+	  cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~(bmOV|bmAC)) |
+			(((a ^ b ^ r) & 0x8000) ? bmOV : 0));
+	}
     }
   return(0);
 }
@@ -564,10 +752,64 @@ cl_uc251::exec_inst(void)
       return(exec_a5(fetch()));
     case 0x7e: /* 7E-prefixed */
       return(exec_7e(fetch()));
+    case 0x7a: /* 7A-prefixed store forms */
+      if (exec_7a(this, fetch()) == 0)
+	return(resGO);
+      return(inst_unknown(0x7a));
+    case 0x29: /* MOV Rm,@idx+dis16 (8-bit load) */
+    case 0x69: /* MOV WRj,@idx+dis16 (16-bit load) */
+    case 0x39: /* MOV @idx+dis16,Rm (8-bit store) */
+    case 0x59: /* MOV @idx+dis16,WRj (16-bit store) */
+      if (exec_idx16(this, code, fetch()) == 0)
+	return(resGO);
+      return(inst_unknown(code));
     case 0x0b: /* INC family */
       return(exec_0b(fetch(), 0));
     case 0x1b: /* DEC family */
       return(exec_0b(fetch(), 1));
+
+    case 0xa4: /* MUL AB: A*B -> B:A */
+      {
+	t_mem a= acc->read(), b= sfr->read(0xf0);       /* B at 0xF0 */
+	t_mem p= a * b;
+	acc->write(p & 0xff);
+	sfr->write(0xf0, (p >> 8) & 0xff);
+	bits->set(0xd7, 0);                       /* CY=0 */
+	SFR_SET_BIT(p > 255, PSW, bmOV);
+	return(resGO);
+      }
+
+    case 0xc0: /* PUSH dir8 */
+    case 0xd0: /* POP dir8 */
+      {
+	t_mem addr= fetch();
+	if (code == 0xc0)
+	  {
+	    t_mem sp= sfr->write(SP, sfr->read(SP) + 1);
+	    iram->get_cell(sp)->write(read_dir8(addr));
+	  }
+	else
+	  {
+	    t_mem sp= sfr->read(SP);
+	    write_dir8(addr, iram->get_cell(sp)->read());
+	    sfr->write(SP, sp - 1);
+	  }
+	return(resGO);
+      }
+
+    case 0x2d: /* ADD WRj,WRj */
+    case 0x9d: /* SUB WRj,WRj */
+    case 0x5d: /* ANL WRj,WRj */
+    case 0x4d: /* ORL WRj,WRj */
+    case 0x6d: /* XRL WRj,WRj */
+    case 0x2f: /* ADD DRk,DRk */
+    case 0x9f: /* SUB DRk,DRk */
+    case 0x5f: /* ANL DRk,DRk */
+    case 0x4f: /* ORL DRk,DRk */
+    case 0x6f: /* XRL DRk,DRk */
+      if (exec_reg_alu(this, code, fetch()) == 0)
+	return(resGO);
+      return(inst_unknown(code));
 
     case 0x7c: /* MOV Rm,Rm */
     case 0x7d: /* MOV WRj,WRj */
