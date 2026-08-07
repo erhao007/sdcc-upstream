@@ -183,11 +183,25 @@ cl_uc251::write_ri(int ri, t_mem v)
 
 /* EDATA: 00:0000-00:00FF aliases IRAM; 00:0100-00:FFFF maps onto    */
 /* xram[addr].  XDATA (0x010000+) maps onto xram[addr & 0xffff].     */
+/* Region 00 also mirrors CODE/CONST in ROM: SDCC/mcs251 places code  */
+/* in the low 64 KiB (region 00), overlapping the EDATA window.  Real  */
+/* MCS-251 parts place code in region FF, but until the simulator's    */
+/* ROM is extended to 24 bits we follow the 8051 von-Neumann convention*/
+/* here: when a flat "@dpx" load hits a low address that holds code,   */
+/* return the ROM byte so __gptrget can read CODE/CONST data.          */
 t_mem
 cl_uc251::read_edata(t_addr addr)
 {
+  addr &= 0xffffff;
   if (addr < 0x100)
     return(iram->read(addr));
+  if (addr < 0x10000)
+    {
+      t_mem code= rom->read(addr);
+      if (code != 0xff)                      /* ROM holds code/const here */
+	return(code);
+      return(xram->read(addr));
+    }
   return(xram->read(addr & 0xffff));
 }
 
