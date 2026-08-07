@@ -47,6 +47,43 @@ cl_uc251::cl_uc251(struct cpu_entry *Itype, class cl_sim *asim):
 }
 
 
+/* MCS-251 has 256 bytes of IRAM (edata region 00:0000-00:00FF), not the  */
+/* mcs51 default of 128.  Override make_address_spaces to widen the IRAM  */
+/* address space to 0x100 so the SPX stack can use the full low 256 bytes */
+/* without falling off the end of the (128-entry) default IRAM view.      */
+void
+cl_uc251::make_address_spaces(void)
+{
+  rom= new cl_address_space("rom", 0, 0x10000, 8);
+  rom->init();
+  address_spaces->add(rom);
+
+  iram= new cl_address_space("iram", 0, 0x100, 8);
+  iram->init();
+  address_spaces->add(iram);
+
+  sfr= new cl_address_space("sfr", 0x80, 0x80, 8);
+  sfr->init();
+  address_spaces->add(sfr);
+
+  xram= new cl_address_space("xram", 0, 0x10000, 8);
+  xram->init();
+  address_spaces->add(xram);
+
+  regs= new cl_address_space("regs", 0, 8, 8);
+  regs->init();
+  address_spaces->add(regs);
+
+  bits= new cl_address_space("bits", 0, 0x100, 1);
+  bits->init();
+  address_spaces->add(bits);
+
+  dptr= new cl_address_space("dptr", 0, 4, 8);
+  dptr->init();
+  address_spaces->add(dptr);
+}
+
+
 /* MCS-251 register file helpers ---------------------------------------- */
 
 /* Register file addressing:
@@ -919,9 +956,9 @@ cl_uc251::exec_inst(void)
       static t_addr last_good_pc= 0;
       static int runaway_state= 0;   /* 0=tracking, 1=runaway confirmed */
       t_addr p= PC;
-      if (p <= 0x2000)
+      if (p <= 0x1000)
         last_good_pc= p;             /* still in code region */
-      else if (p < rom->get_size() && !runaway_state)
+      else if (p > 0x1000 && p < rom->get_size() && !runaway_state)
         {
           int i, empty= 1;
           for (i= 0; i < 8; i++)

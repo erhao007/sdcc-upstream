@@ -57,6 +57,7 @@ public:
   cl_uc251(struct cpu_entry *Itype, class cl_sim *asim);
 
   virtual int exec_inst(void);
+  virtual void make_address_spaces(void);
 
   // MCS-251 register file helpers.
   // Register file layout (Intel 8XC251SB User's Manual, Ch.3):
