@@ -1027,6 +1027,14 @@ cl_uc251::exec_inst(void)
     case 0xc4: /* SWAP A */
       acc->write(((acc->read() << 4) | (acc->read() >> 4)) & 0xff);
       return(resGO);
+    case 0xc5: /* XCH A,dir8 */
+      {
+	t_mem addr= fetch();
+	t_mem d= read_dir8(addr);
+	write_dir8(addr, acc->read());
+	acc->write(d);
+	return(resGO);
+      }
     case 0x05: /* INC dir8 */
     case 0x15: /* DEC dir8 */
       {
