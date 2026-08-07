@@ -85,10 +85,15 @@ cl_uc251::set_wr(int j, t_mem v)
 }
 
 
-/* DRk = {Rk(MSB) ... Rk+3(LSB)} big-endian, k in {0,4,8,12} */
+/* DRk = {Rk(MSB) ... Rk+3(LSB)} big-endian, k in {0,4,8,12}              */
+/* Special aliases: DR56 = DPX, DR60 = SPX (register-file numbers 14/15). */
 t_mem
 cl_uc251::get_dr(int k)
 {
+  if (k == 56) /* DPX */
+    return(((t_mem)sfr->read(0x93) << 16) | (sfr->read(DPH) << 8) | sfr->read(DPL));
+  if (k == 60) /* SPX */
+    return(spx);
   k &= 0x0c;
   return(((t_mem)get_r8(k) << 24) | ((t_mem)get_r8(k + 1) << 16) |
 	 ((t_mem)get_r8(k + 2) << 8) | get_r8(k + 3));
@@ -98,6 +103,18 @@ cl_uc251::get_dr(int k)
 void
 cl_uc251::set_dr(int k, t_mem v)
 {
+  if (k == 56) /* DPX */
+    {
+      sfr->write(DPL, v & 0xff);
+      sfr->write(DPH, (v >> 8) & 0xff);
+      sfr->write(0x93, (v >> 16) & 0xff);
+      return;
+    }
+  if (k == 60) /* SPX */
+    {
+      spx= v & 0xffff;
+      return;
+    }
   k &= 0x0c;
   set_r8(k, (v >> 24) & 0xff);
   set_r8(k + 1, (v >> 16) & 0xff);
@@ -325,6 +342,16 @@ cl_uc251::exec_a5(t_mem fnrn)
     case 0x0e: /* MOV @Ri,#data */
       write_ri(ri, fetch());
       return(resGO);
+    case 0x17: /* CJNE Rn,#data,rel */
+      {
+	t_mem imm= fetch();
+	t_mem rel= fetch();
+	t_mem rv= get_r8(n);
+	bits->set(0xd7, (rv < imm) ? 0x80 : 0);   /* CY = Rn < #data */
+	if (rv != imm)
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
     case 0x10: /* MOV dir8,@Ri */
       write_dir8(fetch(), read_ri(ri));
       return(resGO);
@@ -345,6 +372,13 @@ cl_uc251::exec_a5(t_mem fnrn)
     case 0x1f: /* MOV Rn,A */
       set_r8(n, acc->read());
       return(resGO);
+    case 0x19: /* XCH A,Rn */
+      {
+	t_mem t= acc->read();
+	acc->write(get_r8(n));
+	set_r8(n, t);
+	return(resGO);
+      }
     default:
       return(inst_unknown(fnrn));
     }
@@ -526,6 +560,10 @@ exec_idx16(cl_uc251 *cpu, int code, t_mem sub)
       cpu->write_edata(a, cpu->get_wr(reg * 2) >> 8);
       cpu->write_edata(a + 1, cpu->get_wr(reg * 2) & 0xff);
       return(0);
+    case 0x79: /* 16-bit store from WRj (high nibble = src WRj) */
+      cpu->write_edata(a, cpu->get_wr(reg * 2) >> 8);
+      cpu->write_edata(a + 1, cpu->get_wr(reg * 2) & 0xff);
+      return(0);
     default:
       return(1);
     }
@@ -536,6 +574,68 @@ exec_idx16(cl_uc251 *cpu, int code, t_mem sub)
 /* WRj = nibble*2, DRk = nibble*4.  op codes (first byte):               */
 /* add 0x2d/0x2f, sub 0x9d/0x9f, anl 0x5d/0x5f, orl 0x4d/0x4f,           */
 /* xrl 0x6d/0x6f (WRj/DRk respectively).                                 */
+
+/* Register-family ALU: prefixes 0x2e/0x4e/0x5e/0x6e/0x9e/0xbe           */
+/* (ADD/ORL/ANL/XRL/SUB/CMP on Rm/WRj/DRk).  second byte like 7E:        */
+/* high nibble = register, low nibble = operand type.  CMP sets flags.   */
+static int
+exec_alu_rm(cl_uc251 *cpu, int op, t_mem sub)
+{
+  int reg= sub >> 4;
+  int width;                    /* 0=Rm(8), 1=WRj(16), 2=DRk(32) */
+  t_mem src;
+  switch (sub & 0x0f)
+    {
+    case 0x00: width= 0; src= cpu->fetch(); break;                 /* #data8 */
+    case 0x01: width= 0; src= cpu->read_dir8(cpu->fetch()); break; /* dir8 */
+    case 0x04: width= 1; src= (cpu->fetch() << 8) | cpu->fetch(); break; /* #data16 */
+    case 0x05: width= 1; src= cpu->read_dir8(cpu->fetch()); break; /* dir8 */
+    case 0x08: width= 2; src= (cpu->fetch() << 8) | cpu->fetch(); break; /* #0data16 */
+    case 0x0c: width= 2; src= 0xffff0000u | (cpu->fetch() << 8) | cpu->fetch(); break; /* #1data16 */
+    case 0x0d: width= 2; src= cpu->read_dir8(cpu->fetch()); break; /* dir8 */
+    case 0x09: width= 0; src= cpu->read_edata(cpu->get_wr(reg * 2)); break; /* @WRj */
+    case 0x0b: width= 0; src= cpu->read_edata(cpu->get_dr(reg * 4)); break; /* @DRk */
+    default: return(1);
+    }
+  t_mem dst, r;
+  if (width == 0)
+    dst= cpu->get_r8(reg);
+  else if (width == 1)
+    dst= cpu->get_wr(reg * 2);
+  else
+    dst= cpu->get_dr(reg * 4);
+  switch (op)
+    {
+    case 0: r= dst + src; break;       /* ADD */
+    case 1: r= dst | src; break;       /* ORL */
+    case 2: r= dst & src; break;       /* ANL */
+    case 3: r= dst ^ src; break;       /* XRL */
+    case 4: r= dst - src; break;       /* SUB */
+    default: r= dst; break;            /* CMP: no write */
+    }
+  if (op != 5)
+    {
+      if (width == 0)
+	cpu->set_r8(reg, r);
+      else if (width == 1)
+	cpu->set_wr(reg * 2, r);
+      else
+	cpu->set_dr(reg * 4, r);
+    }
+  /* flags: CY/OV/AC for add/sub/cmp (simplified for 16/32-bit) */
+  if (op == 0 || op == 4 || op == 5)
+    {
+      t_mem mask= (width == 0) ? 0xff : (width == 1) ? 0xffff : 0xffffffffu;
+      t_mem cy= (op == 4) ? (dst < src) : ((dst + src) > mask);
+      if (op == 5)
+	cy= (dst < src) || (dst == src) ? 0 : (dst > src) ? 0 : 0; /* CMP: CY=dst<src */
+      cpu->bits->set(0xd7, cy ? 0x80 : 0);
+      cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~bmOV) |
+		    ((((dst ^ src ^ r) & (mask >> 1) ^ 0) && (op != 2 && op != 3)) ? bmOV : 0));
+    }
+  return(0);
+}
+
 static int
 exec_reg_alu(cl_uc251 *cpu, int code, t_mem sub)
 {
@@ -664,6 +764,12 @@ cl_uc251::exec_inst(void)
     case 0x14: /* DEC A */
       acc->write(acc->read() - 1);
       return(resGO);
+    case 0x23: /* RL A (rotate left, CY unchanged) */
+      acc->write(((acc->read() << 1) | (acc->read() >> 7)) & 0xff);
+      return(resGO);
+    case 0xc4: /* SWAP A */
+      acc->write(((acc->read() << 4) | (acc->read() >> 4)) & 0xff);
+      return(resGO);
     case 0x05: /* INC dir8 */
     case 0x15: /* DEC dir8 */
       {
@@ -733,6 +839,14 @@ cl_uc251::exec_inst(void)
 	  PC= rom->validate_address(PC + (signed char)rel);
 	return(resGO);
       }
+    case 0x40: /* JC rel */
+    case 0x50: /* JNC rel */
+      {
+	t_mem rel= fetch();
+	if ((code == 0x40) == ((bits->read(0xd7)) != 0))
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
     case 0x80: /* SJMP rel */
       {
 	t_mem rel= fetch();
@@ -742,6 +856,24 @@ cl_uc251::exec_inst(void)
     case 0x73: /* JMP @A+DPTR */
       PC= (acc->read() + (sfr->read(DPH) << 8) + sfr->read(DPL));
       return(resGO);
+
+    case 0x83: /* MOVC A,@A+PC */
+      acc->write(rom->read((PC + acc->read()) & 0xffffff));
+      return(resGO);
+    case 0x93: /* MOVC A,@A+DPTR */
+      acc->write(rom->read(((sfr->read(DPH) << 8) + sfr->read(DPL) + acc->read()) & 0xffffff));
+      return(resGO);
+
+    case 0x99: /* LCALL @WRj (low nibble 4) / ECALL @DRk (low nibble 8) */
+      {
+	t_mem sub= fetch();
+	int reg= sub >> 4;
+	if ((sub & 0x0f) == 4)      /* LCALL @WRj */
+	  return(inst_lcall16(get_wr(reg * 2)));
+	if ((sub & 0x0f) == 8)      /* ECALL @DRk */
+	  return(inst_ecall24(get_dr(reg * 4) & 0xffffff));
+	return(inst_unknown(0x99));
+      }
 
     case 0x8a: /* EJMP addr24 */
       {
@@ -767,6 +899,7 @@ cl_uc251::exec_inst(void)
     case 0x69: /* MOV WRj,@idx+dis16 (16-bit load) */
     case 0x39: /* MOV @idx+dis16,Rm (8-bit store) */
     case 0x59: /* MOV @idx+dis16,WRj (16-bit store) */
+    case 0x79: /* MOV @idx+dis16,WRj (16-bit store, alt form) */
       if (exec_idx16(this, code, fetch()) == 0)
 	return(resGO);
       return(inst_unknown(code));
@@ -814,6 +947,18 @@ cl_uc251::exec_inst(void)
     case 0x4f: /* ORL DRk,DRk */
     case 0x6f: /* XRL DRk,DRk */
       if (exec_reg_alu(this, code, fetch()) == 0)
+	return(resGO);
+      return(inst_unknown(code));
+
+    case 0x2e: /* ADD Rm/WRj/DRk,op */
+    case 0x4e: /* ORL Rm/WRj/DRk,op */
+    case 0x5e: /* ANL Rm/WRj/DRk,op */
+    case 0x6e: /* XRL Rm/WRj/DRk,op */
+    case 0x9e: /* SUB Rm/WRj/DRk,op */
+    case 0xbe: /* CMP Rm/WRj/DRk,op */
+      if (exec_alu_rm(this, (code == 0x2e) ? 0 : (code == 0x4e) ? 1 :
+		      (code == 0x5e) ? 2 : (code == 0x6e) ? 3 :
+		      (code == 0x9e) ? 4 : 5, fetch()) == 0)
 	return(resGO);
       return(inst_unknown(code));
 
