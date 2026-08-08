@@ -1445,6 +1445,17 @@ cl_uc251::exec_inst(void)
 	SFR_SET_BIT(p > 255, PSW, bmOV);
 	return(resGO);
       }
+    case 0xad: /* MUL WRj,WRms: 16x16 -> 32-bit in DRk (WRj:WRj+2, big-endian) */
+      {
+	t_mem sub= fetch();
+	int d= sub >> 4, s= sub & 0x0f;
+	unsigned int a= get_wr(d * 2), b= get_wr(s * 2);
+	unsigned long p= (unsigned long)a * (unsigned long)b;
+	set_dr(d * 2, p);                        /* DRk: j=d → DR(d/2), byte index d*2 */
+	bits->set(0xd7, 0);                       /* CY=0 */
+	set_nz(p, 4);
+	return(resGO);
+      }
     case 0x84: /* DIV AB: A/B -> A=quotient, B=remainder */
       {
 	t_mem a= acc->read(), b= sfr->read(0xf0);
@@ -1461,6 +1472,23 @@ cl_uc251::exec_inst(void)
 	sfr->set(PSW, psw);
 	return(resGO);
       }
+    case 0x8d: /* DIV WRj,WRms: 16/16 -> quotient in WRj, remainder in WRj+2 */
+      {
+	t_mem sub= fetch();
+	int d= sub >> 4, s= sub & 0x0f;
+	unsigned int a= get_wr(d * 2), b= get_wr(s * 2);
+	bits->set(0xd7, 0);                       /* CY=0 */
+	if (b == 0)
+	  sfr->set(PSW, sfr->get(PSW) | bmOV);   /* OV=1 divide-by-zero */
+	else
+	  {
+	    sfr->set(PSW, sfr->get(PSW) & ~bmOV);
+	    set_wr(d * 2, a / b);                 /* quotient in WRj */
+	    set_wr(d * 2 + 2, a % b);             /* remainder in WRj+2 */
+	  }
+	return(resGO);
+      }
+
 
     case 0xca: /* PUSH family */
       if (exec_ca(this, fetch()) == 0)
