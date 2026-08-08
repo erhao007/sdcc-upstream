@@ -423,9 +423,15 @@ cl_uc251::exec_a5(t_mem fnrn)
   int ri= fnrn & 0x01;
   switch (fnrn >> 3)
     {
-    case 0x01: /* INC @Ri */
-      write_ri(ri, read_ri(ri) + 1);
-      return(resGO);
+    case 0x01: /* fnrn 0x08-0x0F: mixed group */
+      if (fnrn <= 0x09)
+	{
+	  /* INC @Ri */
+	  write_ri(ri, read_ri(ri) + 1);
+	  return(resGO);
+	}
+      /* 0x0A-0x0F: TODO other A5 sub-instructions */
+      return(inst_unknown(fnrn));
     case 0x02: /* DEC @Ri */
       write_ri(ri, read_ri(ri) - 1);
       return(resGO);
@@ -1270,6 +1276,23 @@ cl_uc251::exec_inst(void)
 	t_mem rel= fetch();
 	if ((code == 0x40) == ((bits->read(0xd7)) != 0))
 	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
+    case 0x0a: /* MOVZ WRj,Rm (zero-extend; second byte (dst<<4)|src) */
+      {
+	t_mem b= fetch();
+	int dst= b >> 4, src= b & 0x0f;
+	set_wr(dst * 2, get_r8(src));
+	return(resGO);
+      }
+    case 0x1a: /* MOVS WRj,Rm (sign-extend; second byte (dst<<4)|src) */
+      {
+	t_mem b= fetch();
+	int dst= b >> 4, src= b & 0x0f;
+	t_mem v= get_r8(src);
+	if (v & 0x80)
+	  v|= 0xff00;
+	set_wr(dst * 2, v);
 	return(resGO);
       }
     case 0x08: /* JSLE rel (signed <=: N^V || Z) */
