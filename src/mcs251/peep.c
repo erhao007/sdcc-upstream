@@ -893,10 +893,23 @@ mcs251DeadMove (const char *reg, lineNode *currPl, lineNode *head)
   unvisitLines (_G.head);
   cleanLabelRef();
 
+  /* The pop/push and push/pop dead-move removal (Peephole 300/301,
+     inherited from mcs51) mis-pairs a pop at the end of one callee-save
+     sequence with a push at the start of the next one when no
+     intervening code uses the register (area 1 empty => condition
+     passes).  On the register-rich mcs251 this corrupts the SPX stack
+     across calls (e.g. arith-rand: a moduint "pop ar6/ar7" pairs with a
+     mulint "push ar7/ar6", both get deleted, leaving the stack
+     unbalanced and subsequent pops landing in the wrong registers).
+     mcs51 is unaffected because its locals live in direct RAM and
+     callee-save sequences are rare/empty.  Disable the pop/push and
+     push/pop branches here until removeDeadPopPush/removeDeadPushPop
+     learn to stop the scan at a region boundary (call save/restore
+     fence); the mov branch is left intact. */
   if (strncmp (currPl->line, "pop", 3) == 0)
-    return removeDeadPopPush (pReg, currPl, head);
+    return FALSE;  /* was: removeDeadPopPush (pReg, currPl, head); */
   else if (strncmp (currPl->line, "push", 4) == 0)
-    return removeDeadPushPop (pReg, currPl, head);
+    return FALSE;  /* was: removeDeadPushPop (pReg, currPl, head); */
   else
     {
       fprintf (stderr, "Error: "

@@ -891,7 +891,7 @@ exec_alu_rm(cl_uc251 *cpu, int op, t_mem sub)
     case 2: r= dst & src; break;       /* ANL */
     case 3: r= dst ^ src; break;       /* XRL */
     case 4: r= dst - src; break;       /* SUB */
-    default: r= dst; break;            /* CMP: no write */
+    default: r= dst - src; break;      /* CMP: flags only, no write */
     }
   if (op != 5)
     {
@@ -907,9 +907,7 @@ exec_alu_rm(cl_uc251 *cpu, int op, t_mem sub)
   if (op == 0 || op == 4 || op == 5)
     {
       t_mem mask= (width == 0) ? 0xff : (width == 1) ? 0xffff : 0xffffffffu;
-      t_mem cy= (op == 4) ? (dst < src) : ((dst + src) > mask);
-      if (op == 5)
-	cy= (dst < src) || (dst == src) ? 0 : (dst > src) ? 0 : 0; /* CMP: CY=dst<src */
+      t_mem cy= (op == 5) ? (dst < src) : (op == 4) ? (dst < src) : ((dst + src) > mask);
       cpu->bits->set(0xd7, cy ? 0x80 : 0);
       cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~bmOV) |
 		    ((((dst ^ src ^ r) & (mask >> 1) ^ 0) && (op != 2 && op != 3)) ? bmOV : 0));
@@ -1512,6 +1510,21 @@ cl_uc251::exec_inst(void)
 		      (code == 0x9e) ? 4 : 5, fetch()) == 0)
 	return(resGO);
       return(inst_unknown(code));
+
+    case 0xbc: /* CMP Rm,Rm (byte; A is the usual destination).  SDCC
+		  emits this for 16/32-bit equality compares (cmp a,Rn),
+		  encoding the pair as 0xBC (dst << 4 | src). */
+      {
+	t_mem sub= fetch();
+	t_mem dst= get_r8(sub >> 4);
+	t_mem src= get_r8(sub & 0x0f);
+	t_mem r= dst - src;                 /* compare: flags only, no write */
+	set_nz(r, 1);
+	bits->set(0xd7, (dst < src) ? 0x80 : 0);   /* CY = dst < src */
+	sfr->set(PSW, (sfr->get(PSW) & ~bmOV) |
+		      ((((dst ^ src ^ r) & 0x7f)) ? bmOV : 0));
+	return(resGO);
+      }
 
     case 0x7c: /* MOV Rm,Rm */
     case 0x7d: /* MOV WRj,WRj */
