@@ -517,9 +517,14 @@ cl_uc251::exec_7e(t_mem sub)
 	set_wr(reg * 2, (h << 8) | l);
 	return(resGO);
       }
-    case 0x05: /* MOV WRj,dir8 */
-      set_wr(reg * 2, read_dir8(fetch()));
-      return(resGO);
+    case 0x05: /* MOV WRj,dir8 (read 2 bytes: dir8, dir8+1, big-endian) */
+      {
+	t_mem addr= fetch();
+	t_mem h= read_dir8(addr);
+	t_mem l= read_dir8(addr + 1);
+	set_wr(reg * 2, (h << 8) | l);
+	return(resGO);
+      }
     case 0x09: /* MOV Rm,@WRj (third byte: dst<<4) */
       {
 	t_mem dst= fetch();
