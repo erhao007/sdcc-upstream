@@ -686,6 +686,14 @@ exec_7a(cl_uc251 *cpu, t_mem sub)
     case 0x01: /* MOV dir8,Rm */
       cpu->write_dir8(cpu->fetch(), cpu->get_r8(reg));
       return(0);
+    case 0x05: /* MOV dir8,WRj (write 2 bytes big-endian) */
+      {
+	t_mem addr= cpu->fetch();
+	t_mem v= cpu->get_wr(reg * 2);
+	cpu->write_dir8(addr, (v >> 8) & 0xff);
+	cpu->write_dir8(addr + 1, v & 0xff);
+	return(0);
+      }
     case 0x0b: /* MOV @DRk/@DPX/@SPX,Rm (third byte src<<4) */
       {
 	t_mem src= cpu->fetch();
