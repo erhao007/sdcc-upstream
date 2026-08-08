@@ -562,12 +562,26 @@ cl_uc251::exec_7e(t_mem sub)
 	  set_dr(reg * 4, 0xffff0000 | (h << 8) | l);
 	return(resGO);
       }
-    case 0x0d: /* MOV DRk,dir8; SPX if reg==15 */
-      if (reg == 15)
-	spx= read_dir8(fetch());
-      else
-	set_dr(reg * 4, read_dir8(fetch()));
-      return(resGO);
+    case 0x0d: /* MOV DRk,dir8 (read 4 bytes big-endian; SPX reads 2) */
+      {
+	t_mem addr= fetch();
+	if (reg == 15)
+	  {
+	    t_mem h= read_dir8(addr);
+	    t_mem l= read_dir8(addr + 1);
+	    spx= (h << 8) | l;
+	  }
+	else
+	  {
+	    t_mem b0= read_dir8(addr);
+	    t_mem b1= read_dir8(addr + 1);
+	    t_mem b2= read_dir8(addr + 2);
+	    t_mem b3= read_dir8(addr + 3);
+	    set_dr(reg * 4, ((t_mem)b0 << 24) | ((t_mem)b1 << 16) |
+			  ((t_mem)b2 << 8) | b3);
+	  }
+	return(resGO);
+      }
     default:
       return(inst_unknown(sub));
     }
