@@ -1394,6 +1394,22 @@ cl_uc251::exec_inst(void)
 	SFR_SET_BIT(p > 255, PSW, bmOV);
 	return(resGO);
       }
+    case 0x84: /* DIV AB: A/B -> A=quotient, B=remainder */
+      {
+	t_mem a= acc->read(), b= sfr->read(0xf0);
+	t_mem psw= sfr->get(PSW);
+	bits->set(0xd7, 0);                       /* CY=0 */
+	if (b == 0)
+	  psw|= bmOV;                             /* OV=1 divide-by-zero */
+	else
+	  {
+	    psw&= ~bmOV;
+	    acc->write(a / b);
+	    sfr->write(0xf0, a % b);
+	  }
+	sfr->set(PSW, psw);
+	return(resGO);
+      }
 
     case 0xca: /* PUSH family */
       if (exec_ca(this, fetch()) == 0)
