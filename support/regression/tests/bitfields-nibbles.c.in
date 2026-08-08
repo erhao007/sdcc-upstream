@@ -55,7 +55,7 @@ typedef struct
     // TODO: Make test suitable for pdk
     // mcs51 creates invalid assembler. Don't know if that is a bug or just a bad choice for ABS_ADDR1 and ABS_ADDR2 below.
     // Disable for ds390: bug #3211
-    #if !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) && !defined(__SDCC_ds390)
+    #if !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) && !defined(__SDCC_ds390) && !defined(__SDCC_mcs251)
         #if !defined(PORT_HOST) // Never do absolute address test with host
             #define ABS_ADDR1 0xCA00
             #define ABS_ADDR2 0xCA04

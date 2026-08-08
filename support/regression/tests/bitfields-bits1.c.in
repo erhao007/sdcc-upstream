@@ -77,8 +77,15 @@ typedef struct
 #else
     #if !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) // TODO: Make test suitable for pdk
         #if !defined(PORT_HOST) // Never do absolute address test with host
-            #define ABS_ADDR1 0xCA00
-            #define ABS_ADDR2 0xCA04
+            // mcs251 inherits the mcs51 limitation that __at() without an
+            // explicit __xdata/__data storage class selects near (@r0)
+            // addressing, which truncates addresses >=0x100; the abs-addr
+            // bitfield variants (varType 1/2/5/6) therefore miscompile, so
+            // disable them (IRAM variants 0/3/4 still run).
+            #if !defined(__SDCC_mcs251)
+                #define ABS_ADDR1 0xCA00
+                #define ABS_ADDR2 0xCA04
+            #endif
         #endif
     #endif
 #endif
