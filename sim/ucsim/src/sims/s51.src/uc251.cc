@@ -1516,6 +1516,25 @@ cl_uc251::exec_inst(void)
 	return(resGO);
       }
 
+    case 0xe0: /* MOVX A,@DPTR */
+      acc->write(xram->read((sfr->read(DPH) << 8) | sfr->read(DPL)));
+      return(resGO);
+    case 0xe2: /* MOVX A,@R0 */
+      acc->write(xram->read(get_r8(0)));
+      return(resGO);
+    case 0xe3: /* MOVX A,@R1 */
+      acc->write(xram->read(get_r8(1)));
+      return(resGO);
+    case 0xf0: /* MOVX @DPTR,A */
+      xram->write((sfr->read(DPH) << 8) | sfr->read(DPL), acc->read());
+      return(resGO);
+    case 0xf2: /* MOVX @R0,A */
+      xram->write(get_r8(0), acc->read());
+      return(resGO);
+    case 0xf3: /* MOVX @R1,A */
+      xram->write(get_r8(1), acc->read());
+      return(resGO);
+
     case 0x2c: /* ADD Rmd,Rms */
     case 0x9c: /* SUB Rmd,Rms */
     case 0x5c: /* ANL Rmd,Rms */
