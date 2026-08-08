@@ -44,6 +44,8 @@ cl_uc251::cl_uc251(struct cpu_entry *Itype, class cl_sim *asim):
   psw1= 0;
   spx= 0;
   memset(rfile, 0, sizeof(rfile));
+  /* MCS-251 has a 24-bit program counter (16 MiB linear code space).  */
+  PCmask= 0xffffff;
 }
 
 
@@ -54,7 +56,7 @@ cl_uc251::cl_uc251(struct cpu_entry *Itype, class cl_sim *asim):
 void
 cl_uc251::make_address_spaces(void)
 {
-  rom= new cl_address_space("rom", 0, 0x10000, 8);
+  rom= new cl_address_space("rom", 0, 0x20000, 8);
   rom->init();
   address_spaces->add(rom);
 
@@ -223,23 +225,23 @@ cl_uc251::write_ri(int ri, t_mem v)
 /* EDATA: 00:0000-00:00FF aliases IRAM; 00:0100-00:FFFF maps onto    */
 /* xram[addr].  XDATA (0x010000+) maps onto xram[addr & 0xffff].     */
 /* Region 00 also mirrors CODE/CONST in ROM: SDCC/mcs251 places code  */
-/* in the low 64 KiB (region 00), overlapping the EDATA window.  Real  */
+/* in the low ROM (region 00), overlapping the EDATA window.  Real     */
 /* MCS-251 parts place code in region FF, but until the simulator's    */
-/* ROM is extended to 24 bits we follow the 8051 von-Neumann convention*/
-/* here: when a flat "@dpx" load hits a low address that holds code,   */
-/* return the ROM byte so __gptrget can read CODE/CONST data.          */
+/* address-space model is switched over we follow the 8051 von-Neumann */
+/* convention here: when a flat "@dpx" load hits a low address that    */
+/* holds code, return the ROM byte so __gptrget can read CODE/CONST.   */
 t_mem
 cl_uc251::read_edata(t_addr addr)
 {
   addr &= 0xffffff;
   if (addr < 0x100)
     return(iram->read(addr));
-  if (addr < 0x10000)
+  if (addr < rom->get_size())
     {
       t_mem code= rom->read(addr);
       if (code != 0xff)                      /* ROM holds code/const here */
 	return(code);
-      return(xram->read(addr));
+      return(xram->read(addr & 0xffff));
     }
   return(xram->read(addr & 0xffff));
 }
@@ -974,6 +976,45 @@ exec_reg_alu(cl_uc251 *cpu, int code, t_mem sub)
 }
 
 
+/* 0x2C/0x9C/0x5C/0x4C/0x6C: byte-wise register-register ALU ops        */
+/* (ADD/SUB/ANL/ORL/XRL Rmd,Rms).  sub byte = (d<<4)|s where d,s are    */
+/* Rm indices (R8-R31).  R11 is ACC.  Without these, SDCC codegen for   */
+/* "__divulong" (which uses "add a,r15" to shift reste) silently fails. */
+static int
+exec_alu_rm_rm(cl_uc251 *cpu, int code, t_mem sub)
+{
+  int d= sub >> 4, s= sub & 0x0f;
+  int op;
+  switch (code)
+    {
+    case 0x2c: op= 0; break;    /* add */
+    case 0x9c: op= 1; break;    /* sub */
+    case 0x5c: op= 2; break;    /* anl */
+    case 0x4c: op= 3; break;    /* orl */
+    default: op= 4; break;      /* xrl */
+    }
+  t_mem a= cpu->get_r8(d), b= cpu->get_r8(s), r;
+  switch (op)
+    {
+    case 0: r= a + b; break;
+    case 1: r= a - b; break;
+    case 2: r= a & b; break;
+    case 3: r= a | b; break;
+    default: r= a ^ b; break;
+    }
+  cpu->set_r8(d, r);
+  cpu->set_nz(r, 1);
+  if (op < 2)
+    {
+      t_mem cy= (op == 0) ? ((a + b) > 0xff) : (a < b);
+      cpu->bits->set(0xd7, cy ? 0x80 : 0);
+      cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~(bmOV|bmAC)) |
+		    (((a ^ b ^ r) & 0x80) ? bmOV : 0));
+    }
+  return(0);
+}
+
+
 /* Main decode/execute --------------------------------------------------- */
 
 int
@@ -1436,6 +1477,15 @@ cl_uc251::exec_inst(void)
 	  }
 	return(resGO);
       }
+
+    case 0x2c: /* ADD Rmd,Rms */
+    case 0x9c: /* SUB Rmd,Rms */
+    case 0x5c: /* ANL Rmd,Rms */
+    case 0x4c: /* ORL Rmd,Rms */
+    case 0x6c: /* XRL Rmd,Rms */
+      if (exec_alu_rm_rm(this, code, fetch()) == 0)
+	return(resGO);
+      return(inst_unknown(code));
 
     case 0x2d: /* ADD WRj,WRj */
     case 0x9d: /* SUB WRj,WRj */
