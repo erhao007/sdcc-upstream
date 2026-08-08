@@ -236,7 +236,7 @@ cl_uc251::read_edata(t_addr addr)
   addr &= 0xffffff;
   if (addr < 0x100)
     return(iram->read(addr));
-  if (addr < rom->get_size())
+  if (addr < 0x10000)
     {
       t_mem code= rom->read(addr);
       if (code != 0xff)                      /* ROM holds code/const here */
