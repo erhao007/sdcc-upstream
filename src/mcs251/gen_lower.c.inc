@@ -258,6 +258,28 @@ decrementFarPointer (void)
   emitcode ("dec", "dpx");
 }
 
+/* Apply the constant byte offset carried by a GET_VALUE_AT_ADDRESS iCode
+   (IC_RIGHT) to the address register holding the base pointer.  SDCC's
+   middle end folds '*p & 0xFF' (and similar partial scalar fetches) into
+   a single pointer access whose right operand is the literal byte offset
+   within the pointed-to object.  On native big-endian MCS-251 that offset
+   is non-zero for low-byte fetches, and must be added before the read. */
+static void
+mcs251ApplyPointerOffset (iCode * ic, const char *rname, bool farPtr)
+{
+  if (IC_RIGHT (ic) && IS_OP_LITERAL (IC_RIGHT (ic)))
+    {
+      int off = byteOfVal (OP_VALUE (IC_RIGHT (ic)), 0);
+      while (off-- > 0)
+        {
+          if (farPtr)
+            incrementFarPointer ();
+          else
+            emitcode ("inc", rname);
+        }
+    }
+}
+
 static void
 loadFarPointerByte (bool code)
 {

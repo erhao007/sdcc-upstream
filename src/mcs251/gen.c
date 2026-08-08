@@ -9105,6 +9105,8 @@ genNearPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCo
   else
     rname = opGet (left, 0, FALSE, FALSE);
 
+  mcs251ApplyPointerOffset (ic, rname, FALSE);
+
   /* if bitfield then unpack the bits */
   if (IS_BITFIELD (retype))
     ifxCond = genUnpackBits (result, rname, POINTER, ifx);
@@ -9486,6 +9488,8 @@ genGenPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCod
   emitcode ("mov", "dr28,dpx");
 
   /* so dptr-b now contains the address */
+  mcs251ApplyPointerOffset (ic, NULL, TRUE);
+
   aopOp (result, ic, FALSE);
   mcs251FarResult = AOP_TYPE (result) == AOP_DPTR;
   if (mcs251FarResult)
