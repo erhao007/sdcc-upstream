@@ -1378,6 +1378,18 @@ cl_uc251::exec_inst(void)
       acc->write(rom->read(((sfr->read(DPH) << 8) + sfr->read(DPL) + acc->read()) & 0xffffff));
       return(resGO);
 
+    case 0x89: /* EJMP @DRk (low nibble 8) — indirect jump through a DRk */
+      {
+	t_mem sub= fetch();
+	if ((sub & 0x0f) == 8)
+	  {
+	    int reg= sub >> 4;
+	    PC= get_dr(reg * 4) & 0xffffff;
+	    return(resGO);
+	  }
+	return(inst_unknown(0x89));
+      }
+
     case 0x99: /* LCALL @WRj (low nibble 4) / ECALL @DRk (low nibble 8) */
       {
 	t_mem sub= fetch();
