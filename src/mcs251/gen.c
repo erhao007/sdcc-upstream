@@ -3417,19 +3417,21 @@ genPlus (iCode * ic)
     {
       if (offset >= skip_bytes)
         {
+          bool preserveB = FALSE;
+          int i;
+
+          /* A MCS251 call result can occupy A:B.  Using B as the
+             accumulator-access scratch register (emitRestrictedAccumulatorOp
+             routes R8-R15 operands through "mov b,rN") must not destroy a
+             high byte that a later iteration still needs.  Check this for
+             ALL branches below, not just the both-use-ACC case. */
+          for (i = offset + 1; i <= offset + size; i++)
+            preserveB |= aopInReg (leftOp->aop, i, B_IDX) ||
+              aopInReg (rightOp->aop, i, B_IDX);
+
           if (aopGetUsesAcc (leftOp->aop, offset) && aopGetUsesAcc (rightOp->aop, offset))
             {
               bool pushedB;
-              bool preserveB = FALSE;
-              int i;
-
-              /* A MCS251 call result can occupy A:B.  Using B as the
-                 accumulator-access scratch register for the low byte must
-                 not destroy a high byte that a later iteration still
-                 needs. */
-              for (i = offset + 1; i <= offset + size; i++)
-                preserveB |= aopInReg (leftOp->aop, i, B_IDX) ||
-                  aopInReg (rightOp->aop, i, B_IDX);
 
               MOVA (opGet (leftOp, offset, FALSE, FALSE));
               if (preserveB)
@@ -3450,16 +3452,24 @@ genPlus (iCode * ic)
           else if (aopGetUsesAcc (leftOp->aop, offset))
             {
               MOVA (opGet (leftOp, offset, FALSE, FALSE));
+              if (preserveB)
+                emitpush ("b");
               emitRestrictedAccumulatorOp (
                 add, aopGet (rightOp->aop, offset, false,
                              !aopInRn (rightOp->aop, offset)));
+              if (preserveB)
+                emitpop ("b");
             }
           else
             {
               MOVA (opGet (rightOp, offset, FALSE, FALSE));
+              if (preserveB)
+                emitpush ("b");
               emitRestrictedAccumulatorOp (
                 add, aopGet (leftOp->aop, offset, false,
                              !aopInRn (leftOp->aop, offset)));
+              if (preserveB)
+                emitpop ("b");
             }
           if (!size && maskedtopbyte)
             emitcode ("anl", "a,#!constbyte", topbytemask);
