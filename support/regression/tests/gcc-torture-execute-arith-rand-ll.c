@@ -50,7 +50,7 @@ void
 testTortureExecute (void)
 {
 #if !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15)  // Lack of memory
-#ifndef __SDCC_mcs51 // Not enough internal RAM for area OSEG.
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) // Not enough internal RAM for area OSEG.
   long long int i;
 
   for (i = 0; i < 10 /* GCC original was 10000 - take too much time */; i++)

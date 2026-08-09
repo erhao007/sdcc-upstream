@@ -25,7 +25,7 @@ testRotateLeft(void)
 #if __STDC_VERSION__ > 202311L || defined(__SDCC)
   i = 0xa5;
   ASSERT(stdc_rotate_left(i, 1) == rol(i, 1));
-#if !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !(defined(__SDCC_mcs51) && defined(__SDCC_MODEL_SMALL)) // Lack of memory
+#if !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !((defined(__SDCC_mcs51) || defined(__SDCC_mcs251)) && defined(__SDCC_MODEL_SMALL)) // Lack of memory
   ASSERT(stdc_rotate_left(i, 4) == rol(i, 4));
   ASSERT(stdc_rotate_left(i, 7) == rol(i, 7));
   ASSERT(stdc_rotate_left(i, 8) == rol(i, 8));

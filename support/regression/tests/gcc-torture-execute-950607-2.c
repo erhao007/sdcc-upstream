@@ -12,7 +12,7 @@ typedef struct {
   long int p_x, p_y;
 } Point;
 
-#if !(defined(__SDCC_mcs51) && defined(__SDCC_MODEL_SMALL)) && !defined(__SDCC_pdk14) &&!defined(__SDCC_pdk15) // Lack of memory
+#if !((defined(__SDCC_mcs51) || defined(__SDCC_mcs251)) && defined(__SDCC_MODEL_SMALL)) && !defined(__SDCC_pdk14) &&!defined(__SDCC_pdk15) // Lack of memory
 int
 f (Point basePt, Point pt1, Point pt2)
 {
@@ -34,7 +34,7 @@ f (Point basePt, Point pt1, Point pt2)
 void
 testTortureExecute (void)
 {
-#if !(defined(__SDCC_mcs51) && defined(__SDCC_MODEL_SMALL)) && !defined(__SDCC_pdk14) &&!defined(__SDCC_pdk15) // Lack of memory
+#if !((defined(__SDCC_mcs51) || defined(__SDCC_mcs251)) && defined(__SDCC_MODEL_SMALL)) && !defined(__SDCC_pdk14) &&!defined(__SDCC_pdk15) // Lack of memory
   Point b, p1, p2;
   int answer;
 

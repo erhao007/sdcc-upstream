@@ -8854,6 +8854,21 @@ emitPtrByteGet (const char *rname, int p_type, bool preserveAinB)
 /* emitPtrByteSet - emits code to set a byte from src through a    */
 /*                  pointer register (R0, R1, or DPTR).            */
 /*-----------------------------------------------------------------*/
+static bool
+mcs251IsByteRegOtherThanR11 (const char *s)
+{
+  /* Returns true if s names a byte register that is a legal MOV @Rn source
+     only via A (i.e. R0-R10, R12-R15).  R11 (= ACC alias) and A are the two
+     encodable @Rn sources, so they return false.  Non-register operands
+     (direct addresses, immediates, @...) also return false. */
+  if (s[0] != 'r' || !s[1])
+    return false;
+  /* "r" followed by 1-2 digits: r0-r9, r10-r15.  Only "r11" is allowed. */
+  if (isdigit ((unsigned char) s[1]) && (s[2] == '\0' || (isdigit ((unsigned char) s[2]) && s[3] == '\0')))
+    return !EQ (s, "r11");
+  return false;
+}
+
 static void
 emitPtrByteSet (const char *rname, int p_type, const char *src)
 {
@@ -8863,6 +8878,13 @@ emitPtrByteSet (const char *rname, int p_type, const char *src)
     case POINTER:
       if (*src == '@')
         {
+          MOVA (src);
+          emitcode ("mov", "@%s,a", rname);
+        }
+      else if (mcs251IsByteRegOtherThanR11 (src))
+        {
+          /* MCS-251 encodes MOV @Rn,src with src = A or R11 only; any other
+             byte register must be routed through A. */
           MOVA (src);
           emitcode ("mov", "@%s,a", rname);
         }
@@ -9979,6 +10001,15 @@ genNearPointerSet (operand * right, operand * result, iCode * ic, iCode * pi)
           const char *l = opGet (right, logicalOffset, FALSE, TRUE);
           if ((*l == '@') || (EQ (l, "acc")))
             {
+              MOVA (l);
+              emitcode ("mov", "@%s,a", rname);
+            }
+          else if (mcs251IsByteRegOtherThanR11 (l))
+            {
+              /* MCS-251 encodes MOV @Rn,src with src = A or R11 only; any
+                 other byte register must be routed through A.  Direct
+                 addresses, immediates and string operands are still emitted
+                 inline (mov @r0,dir8 / #imm are legal). */
               MOVA (l);
               emitcode ("mov", "@%s,a", rname);
             }

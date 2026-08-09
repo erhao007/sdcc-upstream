@@ -7,7 +7,7 @@
 
 #pragma disable_warning 85
 
-#if !defined(__SDCC_pdk14) && !(defined(__SDCC_mcs51) && defined(__SDCC_MODEL_SMALL)) // Lack of memory
+#if !defined(__SDCC_pdk14) && !((defined(__SDCC_mcs51) || defined(__SDCC_mcs251)) && defined(__SDCC_MODEL_SMALL)) // Lack of memory
 
 #define LINE_SIZE 32
 #define POINT_AMOUNT 14

@@ -48,6 +48,13 @@ SDCCFLAGS += -mmcs251 --model-$(MCS251_MODEL) --less-pedantic
 ifeq ($(MCS251_STACK_AUTO),1)
   SDCCFLAGS += --stack-auto
 endif
+# Cap the gcc-torture STACK_SIZE-bounded tests (e.g. gte/memcpy-1, which
+# otherwise allocates two 128 KiB arrays) so they fit in the STC32G12K128's
+# on-chip xRAM instead of overflowing every model.  Same approach as the
+# uc6502-stack-auto lane (-DSTACK_SIZE=256); we use a larger value because
+# STC32G12K128 has ~12 KiB of xRAM.  Each test divides this by ~3 for its
+# working arrays, so 3072 keeps a single test under ~2 KiB.
+SDCCFLAGS += -DSTACK_SIZE=3072
 # MCS251 has a complete stack-based variadic ABI.  The regression harness
 # disables variadic tests by default for historical targets; exercise them
 # for this port instead.

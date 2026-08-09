@@ -425,13 +425,19 @@ cl_uc251::exec_a5(t_mem fnrn)
   int ri= fnrn & 0x01;
   switch (fnrn >> 3)
     {
+    case 0x00: /* fnrn 0x00-0x07 */
+      /* INC @Ri is encoded A5 0x06/0x07 (fnrn >> 3 == 0).  The earlier code
+         misfiled these under case 0x01 (which covers fnrn 0x08-0x0F), so the
+         simulator silently dropped every 'inc @r0'/'inc @r1'. */
+      if (fnrn >= 0x06)
+        {
+          /* INC @Ri */
+          write_ri(ri, read_ri(ri) + 1);
+          return(resGO);
+        }
+      /* 0x00-0x05: TODO other A5 sub-instructions */
+      return(inst_unknown(fnrn));
     case 0x01: /* fnrn 0x08-0x0F: mixed group */
-      if (fnrn <= 0x09)
-	{
-	  /* INC @Ri */
-	  write_ri(ri, read_ri(ri) + 1);
-	  return(resGO);
-	}
       /* 0x0A-0x0F: TODO other A5 sub-instructions */
       return(inst_unknown(fnrn));
     case 0x02: /* DEC @Ri */

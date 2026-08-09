@@ -13,7 +13,7 @@
 
 // This implementation needs lots of code memory and quite some data memory.
 #if defined(__SDCC_pdk13) || defined(__SDCC_pdk14) || defined(__SDCC_pdk15) || \
-  defined(__SDCC_mcs51) || \
+  defined(__SDCC_mcs51) || defined(__SDCC_mcs251) || \
   defined(__SDCC_hc08) || defined(__SDCC_s08) || \
   defined(__SDCC_mos6502) || defined(__SDCC_mos65c02) || \
   defined(__SDCC_z80) || defined(__SDCC_z80n) || defined(__SDCC_z180) || defined(__SDCC_sm83) || defined(__SDCC_tlcs90) || defined(__SDCC_r800) || \

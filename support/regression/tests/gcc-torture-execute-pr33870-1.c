@@ -10,7 +10,7 @@
 
 #include <string.h>
 
-#if !defined(__SDCC_mcs51) && !defined(__SDCC_pdk14) && !defined (__SDCC_pdk15) // Lack of memory
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) && !defined(__SDCC_pdk14) && !defined (__SDCC_pdk15) // Lack of memory
 #if !defined(SDCC_SMALL_STACK)
 typedef struct PgHdr PgHdr;
 typedef unsigned char u8;
@@ -92,7 +92,7 @@ PgHdr *sort_pagelist(PgHdr *pIn)
 void
 testTortureExecute (void)
 {
-#if !defined(__SDCC_mcs51) && !defined(__SDCC_pdk14) && !defined (__SDCC_pdk15) // Lack of memory
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) && !defined(__SDCC_pdk14) && !defined (__SDCC_pdk15) // Lack of memory
 #if !defined(SDCC_SMALL_STACK)
  PgHdr a[5];
  PgHdr *p;

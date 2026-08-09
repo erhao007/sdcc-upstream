@@ -54,7 +54,7 @@ uint8_t i;
 uint8_t j;
 uint8_t k;
 
-#if !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) // Lack of memory
+#if !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) // Lack of memory
 static uint8_t playGrid[32U][32U]; // We need the array sizes of 32 to trigger the bug.
 #endif
 
@@ -95,7 +95,7 @@ static void func_1(void)
 
 static void func_2(void)
 {
-#if !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) // Lack of memory
+#if !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) // Lack of memory
     int16_t x = player.xSpr + player.xVel;
     int16_t y = player.ySpr + player.yVel;
 

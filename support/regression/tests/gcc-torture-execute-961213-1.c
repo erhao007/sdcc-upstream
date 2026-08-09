@@ -23,7 +23,7 @@ g (unsigned long long int *v, int n, unsigned int a[], int b)
 void
 testTortureExecute (void)
 {
-#if !defined(__SDCC_mcs51) && !defined(__SDCC_pic14) && !defined(__SDCC_pic16) && !defined(__SDCC_pdk14) // Lack of memory
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) && !defined(__SDCC_pic14) && !defined(__SDCC_pic16) && !defined(__SDCC_pdk14) // Lack of memory
   int res;
   unsigned int ar[] = { 10, 11, 12, 13, 14 };
   unsigned long long int v;

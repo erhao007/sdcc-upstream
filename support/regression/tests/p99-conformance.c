@@ -69,7 +69,7 @@
 #define SKIP_UNIVERSAL
 #endif
 
-#if defined(__SDCC_mcs51) && defined(__SDCC_MODEL_SMALL) // Lack of memory
+#if (defined(__SDCC_mcs51) || defined(__SDCC_mcs251)) && defined(__SDCC_MODEL_SMALL) // Lack of memory
 #define SKIP_UNIVERSAL
 #endif
 

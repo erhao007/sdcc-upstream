@@ -83,7 +83,7 @@ struct blockvector *blockvector_for_pc_sect(register CORE_ADDR pc,
 
 void testTortureExecute(void)
 {
-#if !(defined (__SDCC_mcs51) && defined (__SDCC_MODEL_SMALL)) && !defined(__SDCC_pdk14) // Not enough memory
+#if !((defined (__SDCC_mcs51) || defined (__SDCC_mcs251)) && defined (__SDCC_MODEL_SMALL)) && !defined(__SDCC_pdk14) // Not enough memory
 #if !(defined (__SDCC_pdk15) && defined(__SDCC_STACK_AUTO)) // Lack of code memory
 #if !defined(__SDCC_pic14) && !defined(__SDCC_pic16) // No long long
   struct block a = { 0, 0x10000, 0, 0, 1, 20 };

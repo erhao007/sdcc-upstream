@@ -23,7 +23,7 @@ struct PgHdr {
   unsigned int notUsed;
 };
 
-#if !defined(__SDCC_mcs51) && !defined(__SDCC_pdk14) && !defined (__SDCC_pdk15) // Lack of memory
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) && !defined(__SDCC_pdk14) && !defined (__SDCC_pdk15) // Lack of memory
 #if !defined(SDCC_SMALL_STACK)
 static inline PgHdr *merge_pagelist(PgHdr *pA, PgHdr *pB)
 {
@@ -85,7 +85,7 @@ PgHdr *sort_pagelist(PgHdr *pIn)
 void
 testTortureExecute (void)
 {
-#if !defined(__SDCC_mcs51) && !defined(__SDCC_pdk14) && !defined (__SDCC_pdk15) // Lack of memory
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) && !defined(__SDCC_pdk14) && !defined (__SDCC_pdk15) // Lack of memory
 #if !defined(SDCC_SMALL_STACK)
   PgHdr a[5];
   PgHdr *p;

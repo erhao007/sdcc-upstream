@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#if !defined( __SDCC_mcs51) && !defined( __SDCC_pdk15) // Use shorter array for devices with low memory.
+#if !defined( __SDCC_mcs51) && !defined(__SDCC_mcs251) && !defined( __SDCC_pdk15) // Use shorter array for devices with low memory.
 #define SROWLENGTH 36
 #else
 #define SROWLENGTH 6

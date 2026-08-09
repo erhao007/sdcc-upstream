@@ -32,7 +32,7 @@
 
 #include <testfwk.h>
 
-#if !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) // Lack of memory
+#if !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) // Lack of memory
 
 #ifndef _RABBIT_H
 #define _RABBIT_H
@@ -308,7 +308,7 @@ rabbit_instance instance;
 
 void testRabbit(void)
 {
-#if !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) // Lack of memory
+#if !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) // Lack of memory
    // Test without IV
    ASSERT(!rabbit_key_setup(&instance, zero, 128/8));
    ASSERT(!rabbit_cipher(&instance, zero, buffer, 384/8));

@@ -29,7 +29,7 @@ bar (signed char *w, signed char *x, int i, int *result)
 void
 testTortureExecute (void)
 {
-#if !defined(__SDCC_mcs51) && !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined (SDCC_SMALL_STACK) // Lack of memory
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) && !defined(__SDCC_pdk13) && !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) && !defined (SDCC_SMALL_STACK) // Lack of memory
   signed char m[256];
   signed char n[256];
   int sum, i;

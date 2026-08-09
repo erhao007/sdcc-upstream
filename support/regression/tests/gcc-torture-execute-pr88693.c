@@ -27,7 +27,7 @@ quux (char *p)
 void
 qux (void)
 {
-#if !(defined(__SDCC_pdk14) || defined(__SDCC_pdk15) && !defined(__SDCC_STACK_AUTO) || defined(__SDCC_mcs51)) // Lack of memory
+#if !(defined(__SDCC_pdk14) || defined(__SDCC_pdk15) && !defined(__SDCC_STACK_AUTO) || (defined(__SDCC_mcs51) || defined(__SDCC_mcs251))) // Lack of memory
   char b[100];
   memset (b, 'x', sizeof (b));
   quux (b);
@@ -37,7 +37,7 @@ qux (void)
 void
 bar (void)
 {
-#if !(defined(__SDCC_pdk14) || defined(__SDCC_pdk15) && !defined(__SDCC_STACK_AUTO) || defined(__SDCC_mcs51)) // Lack of memory
+#if !(defined(__SDCC_pdk14) || defined(__SDCC_pdk15) && !defined(__SDCC_STACK_AUTO) || (defined(__SDCC_mcs51) || defined(__SDCC_mcs251))) // Lack of memory
   static unsigned char u[9] = "abcdefghi";
   char b[100];
   memcpy (b, u, sizeof (u));
@@ -49,7 +49,7 @@ bar (void)
 void
 baz (void)
 {
-#if !(defined(__SDCC_pdk14) || defined(__SDCC_pdk15) && !defined(__SDCC_STACK_AUTO) || defined(__SDCC_mcs51)) // Lack of memory
+#if !(defined(__SDCC_pdk14) || defined(__SDCC_pdk15) && !defined(__SDCC_STACK_AUTO) || (defined(__SDCC_mcs51) || defined(__SDCC_mcs251))) // Lack of memory
   static unsigned char u[] = { 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r' };
   char b[100];
   memcpy (b, u, sizeof (u));
