@@ -2159,7 +2159,23 @@ aopPut (asmop *aop, const char *s, int offset)
               EQ (s, "r0") || EQ (s, "r1") || EQ (s, "r2") || EQ (s, "r3") ||
               EQ (s, "r4") || EQ (s, "r5") || EQ (s, "r6") || EQ (s, "r7"))
             {
-              emitcode ("mov", "%s,%s", aop->aopu.aop_reg[offset]->dname, s);
+              /* MCS-251 encodes MOV Rn,@Ri (and MOV Rn,Rm for mcs51-style
+                 R0-R7 sources used via dname) with the destination in A or
+                 R11 only.  R0-R7 have a valid "arN" dname (IRAM direct
+                 address), so "mov arN,@rM" is legal.  R8-R15 have no IRAM
+                 alias (dname == "rN"), so "mov rN,@rM" is illegal; route
+                 those through A. */
+              const char *dn = aop->aopu.aop_reg[offset]->dname;
+              if (*s == '@' && dn[0] == 'r' && dn[1] != '\0' &&
+                  (dn[1] == '8' || dn[1] == '9' ||
+                   (dn[1] == '1' && dn[2] != '\0')))
+                {
+                  /* destination is R8-R15 (dname "r8".."r15"), source is @Ri */
+                  emitcode ("mov", "a,%s", s);
+                  emitcode ("mov", "%s,a", dn);
+                }
+              else
+                emitcode ("mov", "%s,%s", dn, s);
             }
           else
             {
