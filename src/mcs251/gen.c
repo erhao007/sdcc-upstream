@@ -3773,6 +3773,16 @@ genMinus (iCode * ic)
 
       while (size--)
         {
+          bool preserveB = FALSE;
+          int i;
+
+          /* Same B-preservation logic as genPlus: emitRestrictedAccumulatorOp
+             routes R8-R15 operands through "mov b,rN", which must not clobber
+             a live B byte from the other operand. */
+          for (i = offset + 1; i <= offset + size; i++)
+            preserveB |= aopInReg (leftOp->aop, i, B_IDX) ||
+              aopInReg (rightOp->aop, i, B_IDX);
+
           if (aopGetUsesAcc (rightOp->aop, offset))
             {
               if (aopGetUsesAcc (leftOp->aop, offset))
@@ -3797,8 +3807,12 @@ genMinus (iCode * ic)
                     emitcode ("cpl", "c");
                   wassertl (!aopGetUsesAcc (leftOp->aop, offset), "accumulator clash");
                   MOVA (opGet (rightOp, offset, FALSE, FALSE));
+                  if (preserveB)
+                    emitpush ("b");
                   emitRestrictedAccumulatorOp (
                     "subb", opGet (leftOp, offset, FALSE, FALSE));
+                  if (preserveB)
+                    emitpop ("b");
                   emitcode ("cpl", "a");
                   if (size)     /* skip if last byte */
                     emitcode ("cpl", "c");
@@ -3809,8 +3823,12 @@ genMinus (iCode * ic)
               MOVA (opGet (leftOp, offset, FALSE, FALSE));
               if (offset == 0)
                 CLRC;
+              if (preserveB)
+                emitpush ("b");
               emitRestrictedAccumulatorOp (
                 "subb", opGet (rightOp, offset, FALSE, FALSE));
+              if (preserveB)
+                emitpop ("b");
             }
 
           if (!size && maskedtopbyte)
