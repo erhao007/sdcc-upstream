@@ -260,9 +260,12 @@ float __fsmul (float a1, float a2) __SDCC_FLOAT_NONBANKED
   fl2.l = MANT (fl2.l);
 
   /* the multiply is done as one 16x16 multiply and two 16x8 multiplies */
-  result = (unsigned long)((unsigned short)(fl1.l >> 8)) * (unsigned short)(fl2.l >> 8);
-  result += ((unsigned long)((unsigned short)(fl1.l & 0xff)) * (unsigned short)(fl2.l >> 8)) >> 8;
-  result += ((unsigned long)((unsigned short)(fl2.l & 0xff)) * (unsigned short)(fl1.l >> 8)) >> 8;
+  /* On targets where sizeof(int)==2, unsigned short promotes to signed int,
+     causing sign extension for values >= 0x8000.  Cast both operands to
+     unsigned long to prevent this. */
+  result = ((unsigned long)(unsigned short)(fl1.l >> 8)) * ((unsigned long)(unsigned short)(fl2.l >> 8));
+  result += (((unsigned long)(unsigned short)(fl1.l & 0xff)) * ((unsigned long)(unsigned short)(fl2.l >> 8))) >> 8;
+  result += (((unsigned long)(unsigned short)(fl2.l & 0xff)) * ((unsigned long)(unsigned short)(fl1.l >> 8))) >> 8;
 
   /* round, phase 1 */
   result += 0x40;

@@ -408,9 +408,11 @@ _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
   if (getSize (left) == 1 && getSize (right) == 1)
     return true;
 
-  return getSize (left) == 2 && getSize (right) == 2 &&
-         SPEC_USIGN (getSpec (left)) && SPEC_USIGN (getSpec (right)) &&
-         getSize (operandType (IC_RESULT (ic))) == 4;
+  /* Disable native 16x16->32 multiply for now: the mcs251GenUnsignedWordMultiply
+     codegen has a register destruction bug in the opPut/preserveDword interaction
+     that produces incorrect results.  Fall back to __mullong (32x32->32) which
+     is slower but correct. */
+  return false;
 }
 
 static int
