@@ -318,14 +318,14 @@ cl_uc251::inst_alu_a_op8(int op, t_mem b)
     {
     case 0: r= a + b;               acc->write(r); set_flags_add8(a, b, r); break;
     case 1: {
-      t_mem c= (bits->read(0xd7)) ? 1 : 0;
+      t_mem c= (bits->get(0xd7)) ? 1 : 0;
       r= a + b + c;
       acc->write(r);
       set_flags_add8(a, b + c, r);
       break;
     }
     case 2: {
-      t_mem c= (bits->read(0xd7)) ? 1 : 0;
+      t_mem c= (bits->get(0xd7)) ? 1 : 0;
       r= a - b - c;
       acc->write(r);
       bits->set(0xd7, (a < (b + c)) ? 0x80 : 0);
@@ -1124,7 +1124,7 @@ cl_uc251::exec_inst(void)
       {
 	t_mem a= acc->read();
 	t_mem newCY= a & 1;
-	acc->write((a >> 1) | ((bits->read(0xd7)) ? 0x80 : 0));
+	acc->write((a >> 1) | ((bits->get(0xd7)) ? 0x80 : 0));
 	bits->set(0xd7, newCY);
 	return(resGO);
       }
@@ -1135,7 +1135,7 @@ cl_uc251::exec_inst(void)
       {
 	t_mem a= acc->read();
 	t_mem newCY= (a >> 7) & 1;
-	acc->write((a << 1) | ((bits->read(0xd7)) ? 1 : 0));
+	acc->write((a << 1) | ((bits->get(0xd7)) ? 1 : 0));
 	bits->set(0xd7, newCY);
 	return(resGO);
       }
@@ -1189,7 +1189,7 @@ cl_uc251::exec_inst(void)
 	return(resGO);
       }
     case 0xb3: /* CPL CY */
-      bits->set(0xd7, (bits->read(0xd7)) ? 0 : 1);
+      bits->set(0xd7, (bits->get(0xd7)) ? 0 : 1);
       return(resGO);
 
     case 0xb4: /* CJNE A,#data,rel */
@@ -1230,22 +1230,22 @@ cl_uc251::exec_inst(void)
 	return(resGO);
       }
     case 0x72: /* ORL C,bit */
-      bits->write(0xd7, bits->read(0xd7) | bits->read(fetch()));
+      bits->write(0xd7, bits->get(0xd7) | bits->read(fetch()));
       return(resGO);
     case 0x82: /* ANL C,bit */
-      bits->write(0xd7, bits->read(0xd7) & bits->read(fetch()));
+      bits->write(0xd7, bits->get(0xd7) & bits->read(fetch()));
       return(resGO);
     case 0xa0: /* ORL C,/bit */
-      bits->write(0xd7, bits->read(0xd7) | (bits->read(fetch()) ? 0 : 1));
+      bits->write(0xd7, bits->get(0xd7) | (bits->read(fetch()) ? 0 : 1));
       return(resGO);
     case 0xb0: /* ANL C,/bit */
-      bits->write(0xd7, bits->read(0xd7) & (bits->read(fetch()) ? 0 : 1));
+      bits->write(0xd7, bits->get(0xd7) & (bits->read(fetch()) ? 0 : 1));
       return(resGO);
     case 0xa2: /* MOV C,bit */
       bits->write(0xd7, bits->read(fetch()));
       return(resGO);
     case 0x92: /* MOV bit,C */
-      bits->write(fetch(), bits->read(0xd7));
+      bits->write(fetch(), bits->get(0xd7));
       return(resGO);
     case 0x10: /* JBC bit,rel (clear bit and jump if set) */
       {
@@ -1319,7 +1319,7 @@ cl_uc251::exec_inst(void)
     case 0x50: /* JNC rel */
       {
 	t_mem rel= fetch();
-	if ((code == 0x40) == ((bits->read(0xd7)) != 0))
+	if ((code == 0x40) == ((bits->get(0xd7)) != 0))
 	  PC= rom->validate_address(PC + (signed char)rel);
 	return(resGO);
       }

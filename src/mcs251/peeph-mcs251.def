@@ -712,3 +712,51 @@ replace {
 } by {
 	mov	@spx-0x%2,wr0
 } if inSequence('1' %1 %2)
+
+// MCS-251 R8-R15 live in a dedicated CPU register file, NOT in IRAM, so they
+// have no "arN" direct-address form (only R0-R7 map to IRAM ar0-ar7).  The
+// inherited MCS-51 peephole 130 rewrites "mov rN,@rM" into "mov arN,@rM"
+// unconditionally; for N >= 8 this produces an undefined symbol (ar8..ar15)
+// that the linker rejects.  Undo that rewrite for R8-R15 by matching the
+// rewritten form and restoring the register-mode move.  (R0-R7 keep the
+// peephole-130 optimization since ar0-ar7 are valid.)
+replace {
+	mov	ar8,%1
+} by {
+	mov	r8,%1
+}
+replace {
+	mov	ar9,%1
+} by {
+	mov	r9,%1
+}
+replace {
+	mov	ar10,%1
+} by {
+	mov	r10,%1
+}
+replace {
+	mov	ar11,%1
+} by {
+	mov	r11,%1
+}
+replace {
+	mov	ar12,%1
+} by {
+	mov	r12,%1
+}
+replace {
+	mov	ar13,%1
+} by {
+	mov	r13,%1
+}
+replace {
+	mov	ar14,%1
+} by {
+	mov	r14,%1
+}
+replace {
+	mov	ar15,%1
+} by {
+	mov	r15,%1
+}
