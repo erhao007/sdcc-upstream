@@ -13,6 +13,11 @@
 /* until changed, isr's must have a prototype in the module containing main */
 void T2_isr (void) __interrupt (5);
 #define MEMSPACE_BUF __idata
+#elif defined(__SDCC_mcs251)
+/* MCS-251 has only 128 bytes of directly-addressable RAM (DSEG), like mcs51.
+   Place the print buffers in XDATA (on-chip xRAM) so they neither consume
+   scarce direct-addressing space nor crowd the ISEG/stack window in IRAM. */
+#define MEMSPACE_BUF __xdata
 #else
 #define MEMSPACE_BUF
 #endif
