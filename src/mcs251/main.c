@@ -196,6 +196,14 @@ _mcs251_setDefaultOptions (void)
      objects are addressed relative to the complete 16-bit SPX, so no legacy
      8-bit frame pointer is needed. */
   options.xdata_loc = 0x010000;
+  /* MCS-251 has no mcs51-style P2 paging for pdata: PSEG lives in the same
+     flat xdata space as XSEG.  The global default in SDCCmain.c sets
+     xstack_loc = 1 (for the mcs51 external-stack page), which would otherwise
+     link PSEG at flat address 0x0001 -- inside the register-bank area of
+     IRAM/edata -- so crtxclear would zero R1-R7 and corrupt the running
+     program.  Point it at the xdata base instead; the finaliseOptions() hook
+     keeps the "follow xdata_loc" fallback for callers that set neither. */
+  options.xstack_loc = 0x010000;
   options.omitFramePtr = 1;
   /* MCS-251 has 256 bytes of IRAM (region 00:0000-00:00FF), unlike the
      mcs51 default of 128.  Tell the linker so it can place __start__stack
