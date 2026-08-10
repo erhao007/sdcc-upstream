@@ -1434,6 +1434,9 @@ constIntVal (const char *s)
     }
   else if (u_suffix) // Choose first of unsigned int, unsigned long int, unsigned long long int that fits.
     {
+      if (z_suffix && TARGET_IS_MCS251) // size_t is unsigned long, see stddef.h
+        l_suffix = TRUE;
+
       SPEC_USIGN (val->type) = 1;
       if (ll_suffix || dval > 0xffffffff)
         SPEC_LONGLONG (val->type) = 1;
