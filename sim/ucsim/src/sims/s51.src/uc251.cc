@@ -1077,6 +1077,27 @@ cl_uc251::exec_inst(void)
 
   t_mem code= fetch();
 
+  /* Diagnostic: per-instruction trace to stderr.  Enabled by UC251_TRACE.
+     UC251_TRACE=N traces only when PC is in [N, N+0x10000) (a code-range
+     filter, hex).  Useful for debugging heisenbugs where source
+     instrumentation changes codegen.  Format:
+     PC SPX A B DPL DPH R4 R5 R6 R7  <disasm> */
+  if (getenv("UC251_TRACE"))
+    {
+      static const char *tr_range= getenv("UC251_TRACE");
+      unsigned long lo= 0, hi= 0xffffffff;
+      int filtered= (tr_range[0] != '\0');
+      if (filtered) { lo= strtoul(tr_range, 0, 16); hi= lo + 0x10000; }
+      if (!filtered || ((unsigned long)PC >= lo && (unsigned long)PC < hi))
+        {
+          fprintf(stderr, "%05x spx=%04x a=%02x b=%02x dpl=%02x dph=%02x r4=%02x r5=%02x r6=%02x r7=%02x\n",
+                  (unsigned)PC, (unsigned)spx,
+                  acc->read(), sfr->read(0xf0),
+                  sfr->read(0x82), sfr->read(0x83),
+                  get_r8(4), get_r8(5), get_r8(6), get_r8(7));
+        }
+    }
+
   switch (code)
     {
     case 0x00: /* NOP */
