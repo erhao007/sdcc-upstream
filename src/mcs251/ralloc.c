@@ -2147,12 +2147,13 @@ createRegMask (eBBlock ** ebbs, int count)
 
 /*-----------------------------------------------------------------*/
 /* rematStr - returns the rematerialized string for a remat var    */
+/*   extra_offset is added to the accumulated address-chain offset. */
 /*-----------------------------------------------------------------*/
 static char *
-rematStr (symbol * sym)
+rematStrExtra (symbol * sym, int extra_offset)
 {
   iCode *ic = sym->rematiCode;
-  int offset = 0;
+  int offset = extra_offset;
   struct dbuf_s dbuf;
 
   while (1)
@@ -2193,6 +2194,15 @@ rematStr (symbol * sym)
       dbuf_append_str (&dbuf, OP_SYMBOL (IC_LEFT (ic))->rname);
     }
   return dbuf_detach_c_str (&dbuf);
+}
+
+/*-----------------------------------------------------------------*/
+/* rematStr - returns the rematerialized string for a remat var    */
+/*-----------------------------------------------------------------*/
+static char *
+rematStr (symbol * sym)
+{
+  return rematStrExtra (sym, 0);
 }
 
 /*------------------------------------------------------------------*/
@@ -2298,7 +2308,18 @@ regTypeNum (eBBlock * ebbs)
             {
               if (ptrPseudoSymSafe (sym, ic))
                 {
-                  char *s = rematStr (OP_SYMBOL (IC_LEFT (ic)));
+                  /* On native big-endian MCS-251, narrowRead() folds a
+                     downcast of a pointer read into a smaller read whose
+                     byte offset (member_size - result_size) is carried in
+                     IC_RIGHT(ic).  rematStr only walks the pointer's
+                     address chain, so fold this byte offset into the
+                     pseudo-symbol address here, else the rematerialised
+                     direct read fetches the wrong bytes (e.g. a long->int
+                     truncation of struct member r.b would read +4,+5
+                     instead of +6,+7). */
+                  int byteoff = (IC_RIGHT (ic) && IS_OP_LITERAL (IC_RIGHT (ic))) ?
+                    (int) operandLitValue (IC_RIGHT (ic)) : 0;
+                  char *s = rematStrExtra (OP_SYMBOL (IC_LEFT (ic)), byteoff);
                   ptrPseudoSymConvert (sym, ic, s);
                   Safe_free (s);
                   continue;
