@@ -9284,6 +9284,10 @@ genPagedPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iC
 
   aopOp (result, ic, TRUE);
 
+  /* On big-endian MCS-251, fold the narrowRead() byte offset (IC_RIGHT)
+     into the paged pointer before the MOVX loop. */
+  mcs251ApplyPointerOffset (ic, rname, FALSE);
+
   /* if bitfield then unpack the bits */
   if (IS_BITFIELD (retype))
     {
@@ -9385,6 +9389,10 @@ genFarPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCod
   aopOp (left, ic, FALSE);
   loadDptrFromOperand (left, FALSE);
 
+  /* On big-endian MCS-251, fold the narrowRead() byte offset (IC_RIGHT)
+     into the far pointer before the MOVC loop, mirroring genCodePointerGet. */
+  mcs251ApplyPointerOffset (ic, NULL, TRUE);
+
   /* Preserve the source pointer before selecting an XDATA spill
      destination: MCS251 has only one DPX. */
   emitcode ("mov", "dr28,dpx");
@@ -9467,6 +9475,12 @@ genCodePointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCo
 
   aopOp (left, ic, FALSE);
   loadDptrFromOperand (left, FALSE);
+
+  /* On big-endian MCS-251, narrowRead() folds a downcast of a pointer
+     read into a smaller read whose byte offset (member_size - result_size)
+     is carried in IC_RIGHT(ic).  Fold it into the far-pointer here before
+     the MOVC loop, mirroring genDataPointerGet / mcs251ApplyPointerOffset. */
+  mcs251ApplyPointerOffset (ic, NULL, TRUE);
 
   emitcode ("mov", "dr28,dpx");
 
