@@ -647,7 +647,7 @@ replace {
 	mov	r6,a
 } by {
 	mov	wr6,@spx-0x%2
-} if inSequence('1' %1 %2)
+} if inSequence('1' %1 %2), notUsed('a')
 
 replace {
 	mov	a,@spx-0x%1
@@ -656,7 +656,7 @@ replace {
 	mov	r4,a
 } by {
 	mov	wr4,@spx-0x%2
-} if inSequence('1' %1 %2)
+} if inSequence('1' %1 %2), notUsed('a')
 
 replace {
 	mov	a,@spx-0x%1
@@ -665,7 +665,7 @@ replace {
 	mov	r2,a
 } by {
 	mov	wr2,@spx-0x%2
-} if inSequence('1' %1 %2)
+} if inSequence('1' %1 %2), notUsed('a')
 
 replace {
 	mov	a,@spx-0x%1
@@ -674,7 +674,7 @@ replace {
 	mov	r0,a
 } by {
 	mov	wr0,@spx-0x%2
-} if inSequence('1' %1 %2)
+} if inSequence('1' %1 %2), notUsed('a')
 
 // Merge byte-pair hardware-stack stores into native 16-bit WR stores.
 replace {
