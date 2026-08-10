@@ -160,7 +160,7 @@ const UCHAR _cTokenTag[] = "";
 
 void sip_new_from()
 {
-#ifdef __SDCC_mcs51
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
 	UCHAR pBuf[64];
 #else
 	UCHAR pBuf[128];

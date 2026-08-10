@@ -11,6 +11,9 @@
 #include <stdio.h>
 
 #if !defined(__SDCC_pdk14) && !defined(__SDCC_pdk15) // Lack of memory
+#if defined(__SDCC_mcs251)
+__xdata
+#endif
 char buf[40];
 #endif
 

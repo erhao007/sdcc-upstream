@@ -2,6 +2,9 @@
 
 int main()
 {
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
+   static __xdata
+#endif
    char Buf[100];
    int Count;
 

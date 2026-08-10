@@ -13,6 +13,7 @@ typedef struct HuffTableT
    uint8 mValPtr[16];
 } HuffTable;
 
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) // Bug #3875
 static HuffTable gHuffTab0;
 static uint8 gBits[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
@@ -50,9 +51,10 @@ static void huffCreate(const uint8* pBits, HuffTable* pHuffTable)
          break;
    }
 }
+#endif
 
 void testBug(void) {
-#ifndef __SDCC_mcs51 // Bug #3875
+#if !defined(__SDCC_mcs51) && !defined(__SDCC_mcs251) // Bug #3875
     huffCreate(gBits, &gHuffTab0);
 
     ASSERT(gHuffTab0.mMinCode[0] == 0x0000);
