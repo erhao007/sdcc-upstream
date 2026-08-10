@@ -461,23 +461,35 @@ replace {
 	eret
 }
 
-replace {
-	ecall	%1
-	eret
-} by {
-	; MCS251 tail call: preserve the 24-bit return frame owned by our caller
-	ejmp	%1
-} if optimizeReturn(), notSame(%1 '_longjmp')
-
-replace {
-	ecall	%1
-%2:
-	eret
-} by {
-	; MCS251 tail call: preserve the 24-bit return frame owned by our caller
-	ejmp	%1
-	;
-} if optimizeReturn(), notSame(%1 '_longjmp'), labelRefCount(%2 0)
+// Disabled: the ecall/eret -> ejmp tail-call conversion is unsafe on
+// MCS-251.  When the calling function owns an SPX-allocated stack frame
+// (inc/dec spx prologue/epilogue), the converted ejmp skips the frame
+// teardown that would have run before the original eret, leaving the
+// stack mis-aligned for the callee's @spx-relative locals and for any
+// further ecall chain.  This broke reentrant recursion via the test
+// framework's __runSuite -> testReent tail call (sum(9) returned a
+// wrong value).  optimizeReturn() is a global flag, not a per-function
+// check, so it cannot guard against functions with stack frames.  The
+// 2-byte code-size saving is not worth the correctness risk; revert to
+// the plain ecall/eret sequence.
+//
+// replace {
+// 	ecall	%1
+// 	eret
+// } by {
+// 	; MCS251 tail call: preserve the 24-bit return frame owned by our caller
+// 	ejmp	%1
+// } if optimizeReturn(), notSame(%1 '_longjmp')
+//
+// replace {
+// 	ecall	%1
+// %2:
+// 	eret
+// } by {
+// 	; MCS251 tail call: preserve the 24-bit return frame owned by our caller
+// 	ejmp	%1
+// 	;
+// } if optimizeReturn(), notSame(%1 '_longjmp'), labelRefCount(%2 0)
 
 // === MCS251 code-size optimizations ===
 
