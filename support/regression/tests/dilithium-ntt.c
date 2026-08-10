@@ -10,7 +10,8 @@
 
 // Dilithum is somewhat memory-hungry.
 #if defined(__SDCC_pdk13) || defined(__SDCC_pdk14) || defined(__SDCC_pdk15) \
-  || defined(__SDCC_mcs51) && !defined(__SDCC_MODEL_LARGE) && !defined(__SDCC_MODEL_HUGE)
+  || defined(__SDCC_mcs51) && !defined(__SDCC_MODEL_LARGE) && !defined(__SDCC_MODEL_HUGE) \
+  || defined(__SDCC_mcs251)
 #define LACK_OF_MEMORY
 #endif
 

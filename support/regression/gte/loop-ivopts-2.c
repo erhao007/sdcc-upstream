@@ -34,6 +34,9 @@ int
 main (void)
 {
   int i;
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
+  static __xdata
+#endif
   unsigned int l[288];
 
   for (i = 0; i < 144; i++)

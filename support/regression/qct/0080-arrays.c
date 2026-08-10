@@ -2,6 +2,9 @@
 int
 foo(int x[100])
 {
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
+	__xdata
+#endif
 	int y[100];
 	int *p;
 	
@@ -42,8 +45,11 @@ foo(int x[100])
 int
 main()
 {
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
+	__xdata
+#endif
 	int x[100];
 	x[0] = 1000;
-	
+
 	return foo(x);
 }

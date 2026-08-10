@@ -6,6 +6,9 @@ struct point
    double y;
 };
 
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
+__xdata
+#endif
 struct point point_array[100];
 
 int main()

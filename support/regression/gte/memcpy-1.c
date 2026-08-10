@@ -17,7 +17,13 @@ void *copy (void *o, const void *i, unsigned l)
 void main (void)
 {
   unsigned i;
+#if defined(__SDCC_mcs251)
+  static __xdata
+#endif
   unsigned char src[MEMCPY_SIZE];
+#if defined(__SDCC_mcs251)
+  static __xdata
+#endif
   unsigned char dst[MEMCPY_SIZE];
 
   for (i = 0; i < MEMCPY_SIZE; i++)
