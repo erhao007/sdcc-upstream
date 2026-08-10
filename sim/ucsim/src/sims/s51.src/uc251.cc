@@ -270,6 +270,23 @@ cl_uc251::read_edata(t_addr addr)
   return(xram->read(addr & 0xffff));
 }
 
+/* Read the actual edata/xram/iram data cell, bypassing read_edata's
+   von-Neumann ROM mirror.  The MCS-251 SPX hardware stack, PUSH/POP,
+   LCALL/ECALL return frames and SPX-relative (@spx±dis) locals all live
+   in real data RAM.  When the stack grows into 0x100..0xFFFF it overlaps
+   the code region in the simulator's flat model; read_edata would then
+   return the ROM byte and silently drop values that write_edata stored
+   to xram (asymmetric read/write).  Use this for all genuine stack/data
+   accesses so stores are visible to subsequent loads. */
+t_mem
+cl_uc251::read_edata_ram(t_addr addr)
+{
+  addr &= 0xffffff;
+  if (addr < 0x100)
+    return(iram->read(addr));
+  return(xram->read(addr & 0xffff));
+}
+
 
 void
 cl_uc251::write_edata(t_addr addr, t_mem v)
@@ -284,7 +301,7 @@ cl_uc251::write_edata(t_addr addr, t_mem v)
 t_mem
 cl_uc251::read_spx_dis16(t_addr dis)
 {
-  return(read_edata((spx + dis) & 0xffff));
+  return(read_edata_ram((spx + dis) & 0xffff));
 }
 
 
@@ -378,9 +395,9 @@ cl_uc251::inst_alu_a_imm8(int op)
 int
 cl_uc251::inst_ret251(void)
 {
-  t_mem h= read_edata(spx);                  // stack top = high byte (edata)
+  t_mem h= read_edata_ram(spx);             // stack top = high byte (edata)
   spx= (spx - 1) & 0xffff;
-  t_mem l= read_edata(spx);
+  t_mem l= read_edata_ram(spx);
   spx= (spx - 1) & 0xffff;
   PC= h * 256 + l;
   vc.rd+= 2;
@@ -399,11 +416,11 @@ cl_uc251::inst_reti251(void)
 int
 cl_uc251::inst_eret251(void)
 {
-  t_mem h= read_edata(spx);
+  t_mem h= read_edata_ram(spx);
   spx= (spx - 1) & 0xffff;
-  t_mem m= read_edata(spx);
+  t_mem m= read_edata_ram(spx);
   spx= (spx - 1) & 0xffff;
-  t_mem l= read_edata(spx);
+  t_mem l= read_edata_ram(spx);
   spx= (spx - 1) & 0xffff;
   PC= (h << 16) | (m << 8) | l;
   vc.rd+= 3;
@@ -574,7 +591,7 @@ cl_uc251::exec_7e(t_mem sub)
 	t_mem dst= fetch();
 	t_mem v;
 	if (reg == 15)
-	  v= read_edata(spx);
+	  v= read_edata_ram(spx);          /* @SPX = real stack RAM */
 	else if (reg == 14)
 	  v= read_edata(get_dr(56));        /* @DPX */
 	else
@@ -762,10 +779,16 @@ exec_idx16(cl_uc251 *cpu, int code, t_mem sub)
       cpu->set_r8(reg, cpu->read_edata(cpu->get_wr(idx * 2) + dis));
       return(0);
     case 0x29: /* 8-bit load into Rm (reg<<4) */
-      cpu->set_r8(reg, cpu->read_edata(a));
+      /* SPX-relative loads (@spx±dis) read the real stack RAM (no
+         von-Neumann ROM mirror); DRk-based loads may be code/const
+         pointers, keep the mirror. */
+      cpu->set_r8(reg, (idx == 15) ? cpu->read_edata_ram(a) : cpu->read_edata(a));
       return(0);
     case 0x69: /* 16-bit load into WRj (reg<<4, j=reg*2) */
-      cpu->set_wr(reg * 2, (cpu->read_edata(a) << 8) | cpu->read_edata(a + 1));
+      if (idx == 15)
+        cpu->set_wr(reg * 2, (cpu->read_edata_ram(a) << 8) | cpu->read_edata_ram(a + 1));
+      else
+        cpu->set_wr(reg * 2, (cpu->read_edata(a) << 8) | cpu->read_edata(a + 1));
       return(0);
     case 0x39: /* 8-bit store from Rm (reg<<4) */
       cpu->write_edata(a, cpu->get_r8(reg));
@@ -850,14 +873,14 @@ exec_da(cl_uc251 *cpu, t_mem sub)
   switch (sub & 0x0f)
     {
     case 0x08: /* POP Rm */
-      cpu->set_r8(reg, cpu->read_edata(cpu->spx));
+      cpu->set_r8(reg, cpu->read_edata_ram(cpu->spx));
       cpu->spx= (cpu->spx - 1) & 0xffff;
       return(0);
     case 0x09: /* POP WRj */
       {
-	t_mem l= cpu->read_edata(cpu->spx);
+	t_mem l= cpu->read_edata_ram(cpu->spx);
 	cpu->spx= (cpu->spx - 1) & 0xffff;
-	t_mem h= cpu->read_edata(cpu->spx);
+	t_mem h= cpu->read_edata_ram(cpu->spx);
 	cpu->spx= (cpu->spx - 1) & 0xffff;
 	cpu->set_wr(reg * 2, (h << 8) | l);
 	return(0);
@@ -868,7 +891,7 @@ exec_da(cl_uc251 *cpu, t_mem sub)
 	int i;
 	for (i= 0; i < 4; i++)
 	  {
-	    v |= cpu->read_edata(cpu->spx) << (8 * i);
+	    v |= cpu->read_edata_ram(cpu->spx) << (8 * i);
 	    cpu->spx= (cpu->spx - 1) & 0xffff;
 	  }
 	cpu->set_dr(reg * 4, v);

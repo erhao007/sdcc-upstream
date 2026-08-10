@@ -78,6 +78,7 @@ public:
   t_mem read_ri(int ri);                  // @Ri indirect (Ri in {R0,R1})
   void  write_ri(int ri, t_mem v);
   t_mem read_edata(t_addr addr);          // EDATA (stack/SPX space) via xram
+  t_mem read_edata_ram(t_addr addr);      // EDATA RAM (no von-Neumann ROM mirror)
   void  write_edata(t_addr addr, t_mem v);
   t_mem read_spx_dis16(t_addr dis);       // edata[SPX+dis16]
   void  write_spx_dis16(t_addr dis, t_mem v);
