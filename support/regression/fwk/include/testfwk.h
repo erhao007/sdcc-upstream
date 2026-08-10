@@ -122,7 +122,7 @@ void __printf(const char *szFormat, ...);
 # define __pdata __data
 #endif
 
-void __fail (__code const char *szMsg, __code const char *szCond, __code const char *szFile, int line);
+void __fail (__code const char *szMsg, __code const char *szCond, __code const char *szFile, int line) __reentrant;
 void __prints (const char *s);
 void __printd (int n);
 #ifndef TARGET_VERY_LOW_MEMORY
