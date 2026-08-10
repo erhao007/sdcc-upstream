@@ -10251,6 +10251,13 @@ genFarPointerSet (operand * right, operand * result, iCode * ic, iCode * pi)
   aopOp (result, ic, FALSE);
   loadDptrFromOperand (result, FALSE);
 
+  /* loadDptrFromOperand skips dpxl when the operand's AOP_SIZE < 3 (e.g. a
+     near-pointer-typed element inside a far struct).  But this is a far
+     pointer write -- the 24-bit address must be complete.  Set dpxl from
+     the immediate symbol if it wasn't already loaded. */
+  if (AOP_TYPE (result) == AOP_IMMD && AOP_SIZE (result) < 3)
+    emitcode ("mov", "dpxl,#(%s >> 16)", AOP (result)->aopu.aop_immd.aop_immd1);
+
   emitcode ("mov", "dr28,dpx");
 
   /* so dptr now contains the address */
