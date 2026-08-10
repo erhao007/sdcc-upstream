@@ -81,7 +81,7 @@ float args[] =
   -987654321.0F
 };
 
-#ifdef __SDCC_mcs51
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
 const
 #endif
 
