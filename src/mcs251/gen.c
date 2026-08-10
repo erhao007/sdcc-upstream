@@ -9411,6 +9411,11 @@ genFarPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCod
   aopOp (left, ic, FALSE);
   loadDptrFromOperand (left, FALSE);
 
+  /* loadDptrFromOperand skips dpxl when AOP_SIZE < 3 (e.g. a near-pointer-
+     typed element inside a far struct).  Set dpxl explicitly. */
+  if (AOP_TYPE (left) == AOP_IMMD && AOP_SIZE (left) < 3)
+    emitcode ("mov", "dpxl,#(%s >> 16)", AOP (left)->aopu.aop_immd.aop_immd1);
+
   /* On big-endian MCS-251, fold the narrowRead() byte offset (IC_RIGHT)
      into the far pointer before the MOVC loop, mirroring genCodePointerGet. */
   mcs251ApplyPointerOffset (ic, NULL, TRUE);
@@ -9704,7 +9709,8 @@ genPointerGet (iCode * ic, iCode * pi, iCode * ifx)
       break;
 
     case PPOINTER:
-      genPagedPointerGet (left, result, ic, pi, ifx);
+      /* MCS-251 flat mode: PSEG at 0x010000+, use far path. */
+      genFarPointerGet (left, result, ic, pi, ifx);
       break;
 
     case FPOINTER:
@@ -10435,7 +10441,10 @@ genPointerSet (iCode * ic, iCode * pi)
       break;
 
     case PPOINTER:
-      genPagedPointerSet (right, result, ic, pi);
+      /* MCS-251 flat mode: PSEG at 0x010000+.  The paged-pointer @r0 path
+         only has 8 address bits; route through genFarPointerSet for the
+         full 24-bit DPX address. */
+      genFarPointerSet (right, result, ic, pi);
       break;
 
     case FPOINTER:
