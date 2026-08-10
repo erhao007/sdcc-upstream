@@ -953,6 +953,19 @@ asmLineNodeFromLineNode (lineNode *ln)
         aln->regsRead = bitVectSetBit (aln->regsRead, CND_IDX);
       if (strchr(opdat->pswtype,'w'))
         aln->regsWritten = bitVectSetBit (aln->regsWritten, CND_IDX);
+      /* Function calls read their arguments from DPL/DPH/B/A (ABDPTR,
+         the MCS-251 parameter-passing and return-value convention).
+         Without this, the peephole dead-move scan treats ecall/lcall
+         as not touching A, and deletes a "mov a,r4" that feeds the
+         call's fourth argument (e.g. floorf's r=x passing x to
+         ___fs2slong), corrupting the float exponent byte. */
+      if (!strcmp (inst, "ecall") || !strcmp (inst, "lcall"))
+        {
+          aln->regsRead = bitVectSetBit (aln->regsRead, A_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, DPL_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, DPH_IDX);
+        }
     }
 
   return aln;
