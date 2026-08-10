@@ -8,6 +8,9 @@ int main() {
   int k;
   int i;
   int j;
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
+  static __xdata
+#endif
   creal_T t2[N];
   double inval;
 
