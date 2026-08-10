@@ -9052,11 +9052,21 @@ genDataPointerGet (operand * left, operand * result, iCode * ic)
 {
   const char *l;
   int size, physicalOffset = 0;
+  int baseOffset = 0;     /* literal byte offset folded into IC_RIGHT(ic) */
   sym_link *type = operandType (result);
 
   D (emitcode (";", "genDataPointerGet"));
 
   aopOp (result, ic, TRUE);
+
+  /* Apply the literal byte offset carried in IC_RIGHT(ic).  On big-endian
+     targets SDCC's narrowRead() pass folds a downcast (e.g. reading a long
+     field as int) into a smaller read by adding (member_size - result_size)
+     to the pointer's byte offset; genNearPointerGet's register path handles
+     this via mcs251ApplyPointerOffset (emit 'inc rname'), but this
+     rematerialised-address path must fold it directly into the address. */
+  if (IC_RIGHT (ic) && IS_OP_LITERAL (IC_RIGHT (ic)))
+    baseOffset = (int) byteOfVal (OP_VALUE (IC_RIGHT (ic)), 0);
 
   /* get the string representation of the name */
   l = opGet (left, 0, FALSE, TRUE) + 1;        // remove #
@@ -9070,7 +9080,11 @@ genDataPointerGet (operand * left, operand * result, iCode * ic)
       dbuf_init (&dbuf, 128);
       if (AOP_SIZE (result) > 1)
         {
-          dbuf_printf (&dbuf, "(%s + %d)", l, physicalOffset);
+          dbuf_printf (&dbuf, "(%s + %d)", l, baseOffset + physicalOffset);
+        }
+      else if (baseOffset)
+        {
+          dbuf_printf (&dbuf, "(%s + %d)", l, baseOffset);
         }
       else
         {
