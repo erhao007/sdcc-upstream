@@ -1584,7 +1584,11 @@ cl_uc251::exec_inst(void)
 	  }
 	else
 	  {
-	    write_dir8(addr, read_edata(spx));
+	    /* POP dir8 reads the real stack RAM (no von-Neumann ROM mirror),
+	       matching PUSH dir8's write_edata.  read_edata's mirror would
+	       return the overlapping ROM byte for stack addresses in
+	       0x100..0xFFFF, dropping the saved register value. */
+	    write_dir8(addr, read_edata_ram(spx));
 	    spx= (spx - 1) & 0xffff;
 	  }
 	return(resGO);
