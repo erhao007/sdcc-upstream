@@ -123,10 +123,22 @@ genMove_o (asmop *result, int roffset, asmop *source, int soffset, int size, boo
     {
       bool a_dead = a_dead_global && (source->regs[A_IDX] <= soffset + i || source->regs[A_IDX] >= soffset + size) && (result->regs[A_IDX] < roffset || result->regs[A_IDX] >= roffset + i) || pushed_a;
 
-      if (pushed_a && aopInReg (source, i, A_IDX) && result->type != AOP_MCS251_STK)
+      if (pushed_a && aopInReg (source, i, A_IDX))
         {
+          /* The source byte is the accumulator itself.  Since we pushed
+             acc earlier its live value is on the stack, while A now holds
+             whatever the last mov-a left there.  Pop to restore the real
+             value; for AOP_MCS251_STK results we re-push immediately
+             afterwards so the @spx-N displacement (which is resolved at
+             codegen time against _G.stack.pushed) stays consistent with the
+             bytes that took the push-acc path above. */
           emitpop ("acc");
           pushed_a = false;
+          if (result->type == AOP_MCS251_STK)
+            {
+              emitpush ("acc");
+              pushed_a = true;
+            }
         }
 
       if (!a_dead && !pushed_a && (aopGetUsesAcc (source, soffset + i) && !aopInReg (source, soffset + i, A_IDX) || result->paged ||
