@@ -123,13 +123,23 @@ genMove_o (asmop *result, int roffset, asmop *source, int soffset, int size, boo
     {
       bool a_dead = a_dead_global && (source->regs[A_IDX] <= soffset + i || source->regs[A_IDX] >= soffset + size) && (result->regs[A_IDX] < roffset || result->regs[A_IDX] >= roffset + i) || pushed_a;
 
-      if (pushed_a && aopInReg (source, i, A_IDX))
+      if (pushed_a && aopInReg (source, i, A_IDX) && result->type != AOP_MCS251_STK)
         {
           emitpop ("acc");
           pushed_a = false;
         }
 
-      if (!a_dead && !pushed_a && (aopGetUsesAcc (source, soffset + i) && !aopInReg (source, soffset + i, A_IDX) || result->paged))
+      if (!a_dead && !pushed_a && (aopGetUsesAcc (source, soffset + i) && !aopInReg (source, soffset + i, A_IDX) || result->paged ||
+          /* MCS251 stack operands (@spx-N) are resolved at codegen time
+             against the live _G.stack.pushed counter.  When some bytes of
+             a multi-byte move take the emitpush("acc") path inside cheapMove
+             (e.g. DPL/DPH/B bytes of an ABDPTR return value) but a later
+             byte's source is already A -- so cheapMove emits a bare aopPut
+             without push/pop -- that byte computes its stack displacement
+             with a different pushed value and lands on the wrong address.
+             Keep push/pop balanced across every byte of a stack move by
+             pushing here whenever A is not dead, regardless of the source. */
+          result->type == AOP_MCS251_STK))
         {
           emitpush ("acc");
           pushed_a = true;
