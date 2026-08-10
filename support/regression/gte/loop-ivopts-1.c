@@ -3,6 +3,9 @@ void foo(float * x);
 
 int main()
 {
+#if defined(__SDCC_mcs251)
+  __xdata
+#endif
   float x[4];
   foo (x);
   return 0;
@@ -12,9 +15,15 @@ void foo (float *x)
 {
     int i,j,k;
     float temp;
-    static float t16[16]={1.,2.,3.,4.,5.,6.,7.,8.,9.,
+#if defined(__SDCC_mcs251)
+    static __xdata
+#endif
+    float t16[16]={1.,2.,3.,4.,5.,6.,7.,8.,9.,
 			  10.,11.,12.,13.,14.,15.,16.};
-    static float tmp[4]={0.,0.,0.,0.};
+#if defined(__SDCC_mcs251)
+    static __xdata
+#endif
+    float tmp[4]={0.,0.,0.,0.};
 
     for (i=0; i<4; i++) {
 	k = 3 - i;

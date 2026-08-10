@@ -18,7 +18,13 @@ float foo(struct Point p, struct Rect r) {
 }
 
 int main(int argc, char **argv) {
+#if defined(__SDCC_mcs251)
+   static __xdata
+#endif
    struct Point p = {1, 2};
+#if defined(__SDCC_mcs251)
+   static __xdata
+#endif
    struct Rect r = {{3, 4}, {5, 6}};
    (void)argc;
    (void)argv;

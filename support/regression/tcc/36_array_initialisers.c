@@ -6,11 +6,17 @@ int main()
 {
    int Count;
 
+#if defined(__SDCC_mcs251)
+   static __xdata
+#endif
    int Array[10] = { 12, 34, 56, 78, 90, 123, 456, 789, 8642, 9753 };
 
    for (Count = 0; Count < 10; Count++)
       printf("%d: %d\n", Count, Array[Count]);
 
+#if defined(__SDCC_mcs251)
+   static __xdata
+#endif
    int Array2[10] = { 12, 34, 56, 78, 90, 123, 456, 789, 8642, 9753, };
 
    for (Count = 0; Count < 10; Count++)

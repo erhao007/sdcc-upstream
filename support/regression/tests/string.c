@@ -51,6 +51,9 @@ do_teststrcpy (void)
 #if !(defined (__SDCC_pdk15) && defined(__SDCC_STACK_AUTO)) // Lack of code memory
   static char empty[] = "";
   static char string[] = "\1\2\0\3";
+#if defined(__SDCC_mcs251)
+  __xdata
+#endif
   char buf[40] = "abcdefghijklmnopqrstuvwxyz";
 
   char * result = strcpy (buf, empty);
