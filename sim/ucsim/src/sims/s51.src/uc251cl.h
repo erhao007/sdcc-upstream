@@ -82,6 +82,14 @@ public:
   t_mem read_spx_dis16(t_addr dis);       // edata[SPX+dis16]
   void  write_spx_dis16(t_addr dis, t_mem v);
 
+  // Override set_rom to record which ROM cells were loaded from the hex
+  // file.  read_edata's von-Neumann mirror needs this to distinguish a
+  // genuine 0xFF data byte (loaded code/const) from an unprogrammed 0xFF
+  // (empty ROM), so that e.g. crtxinit copying a float constant whose
+  // bytes include 0xFF does not fetch garbage from xram instead.
+  virtual bool set_rom(class cl_inspec *is, t_addr addr, t_mem val, bool check);
+  bool rom_loaded_p(t_addr addr);         // true if ROM[addr] was loaded
+
   // SPX (16-bit stack pointer extension); edata base for @SPX addressing
   t_mem spx;
 
@@ -114,6 +122,10 @@ public:
 protected:
   t_mem psw1;                       // MCS-251 PSW1: bit7=N, bit6=Z (SFR 0xA0)
   t_mem rfile[24];                  // CPU register file R8-R31 (R11 alias of ACC)
+  // Bitmap of ROM cells loaded from the hex file (1 bit per ROM byte).
+  // Used by read_edata's von-Neumann mirror to tell loaded 0xFF data from
+  // empty (erased) ROM.  Covers the full 128 KiB ROM window.
+  unsigned char rom_loaded[0x20000 / 8];
 };
 
 

@@ -44,6 +44,7 @@ cl_uc251::cl_uc251(struct cpu_entry *Itype, class cl_sim *asim):
   psw1= 0;
   spx= 0;
   memset(rfile, 0, sizeof(rfile));
+  memset(rom_loaded, 0, sizeof(rom_loaded));
   /* MCS-251 has a 24-bit program counter (16 MiB linear code space).  */
   PCmask= 0xffffff;
 }
@@ -222,6 +223,28 @@ cl_uc251::write_ri(int ri, t_mem v)
 }
 
 
+/* Record a ROM cell loaded from the hex file so read_edata's von-Neumann
+   mirror can distinguish a genuine 0xFF data byte (loaded code/const)
+   from an erased 0xFF (empty ROM).  Without this, crtxinit copying a
+   float constant whose bytes include 0xFF fetches garbage from xram. */
+bool
+cl_uc251::set_rom(class cl_inspec *is, t_addr addr, t_mem val, bool check)
+{
+  bool r= cl_uc89c51r::set_rom(is, addr, val, check);
+  if ((unsigned)t_addr(addr) < sizeof(rom_loaded) * 8)
+    rom_loaded[addr >> 3] |= (1 << (addr & 7));
+  return r;
+}
+
+bool
+cl_uc251::rom_loaded_p(t_addr addr)
+{
+  if ((unsigned)addr >= sizeof(rom_loaded) * 8)
+    return false;
+  return (rom_loaded[addr >> 3] & (1 << (addr & 7))) != 0;
+}
+
+
 /* EDATA: 00:0000-00:00FF aliases IRAM; 00:0100-00:FFFF maps onto    */
 /* xram[addr].  XDATA (0x010000+) maps onto xram[addr & 0xffff].     */
 /* Region 00 also mirrors CODE/CONST in ROM: SDCC/mcs251 places code  */
@@ -238,9 +261,10 @@ cl_uc251::read_edata(t_addr addr)
     return(iram->read(addr));
   if (addr < 0x10000)
     {
-      t_mem code= rom->read(addr);
-      if (code != 0xff)                      /* ROM holds code/const here */
-	return(code);
+      /* Only treat the cell as code/const if the hex file actually
+         loaded it; a bare 0xFF in erased ROM must fall through to xram. */
+      if (rom_loaded_p(addr))
+	return(rom->read(addr));
       return(xram->read(addr & 0xffff));
     }
   return(xram->read(addr & 0xffff));
