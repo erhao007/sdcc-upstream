@@ -32,7 +32,7 @@ testSmallDense (void)
 #endif
 }
 
-#ifdef __SDCC_mcs51
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
 __idata
 #elif defined(__SDCC_pdk14)
 const
@@ -59,7 +59,7 @@ testSmallSparse (void)
 #endif
 }
 
-#ifdef __SDCC_mcs51
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
 __idata
 #elif defined(__SDCC_pdk14) || defined(__SDCC_pdk15)
 const
@@ -90,7 +90,7 @@ testSmallSparseZero (void)
 #endif
 }
 
-#ifdef __SDCC_mcs51
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
 __xdata
 #elif __SDCC_pic16
 __code
