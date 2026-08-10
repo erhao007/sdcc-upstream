@@ -9,7 +9,7 @@ volatile char tmp;
 
 void set_RAM_bank1(void) { tmp = 1; }
 
-#if defined(__SDCC_mcs51)
+#if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
 #define DATA
 #elif !defined(PORT_HOST)
 __addressmod set_RAM_bank1 DATA;
