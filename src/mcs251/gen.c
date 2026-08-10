@@ -9412,9 +9412,14 @@ genFarPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCod
   loadDptrFromOperand (left, FALSE);
 
   /* loadDptrFromOperand skips dpxl when AOP_SIZE < 3 (e.g. a near-pointer-
-     typed element inside a far struct).  Set dpxl explicitly. */
+     typed element inside a far struct, or a runtime-computed __pdata
+     address in registers).  Set dpxl explicitly. */
   if (AOP_TYPE (left) == AOP_IMMD && AOP_SIZE (left) < 3)
     emitcode ("mov", "dpxl,#(%s >> 16)", AOP (left)->aopu.aop_immd.aop_immd1);
+  else if (AOP_SIZE (left) < 3 &&
+           IS_PTR (operandType (left)) &&
+           DCL_TYPE (operandType (left)) == PPOINTER)
+    emitcode ("mov", "dpxl,#0x01");  /* mcs251 PSEG base = 0x010000 */
 
   /* On big-endian MCS-251, fold the narrowRead() byte offset (IC_RIGHT)
      into the far pointer before the MOVC loop, mirroring genCodePointerGet. */
@@ -10258,11 +10263,22 @@ genFarPointerSet (operand * right, operand * result, iCode * ic, iCode * pi)
   loadDptrFromOperand (result, FALSE);
 
   /* loadDptrFromOperand skips dpxl when the operand's AOP_SIZE < 3 (e.g. a
-     near-pointer-typed element inside a far struct).  But this is a far
-     pointer write -- the 24-bit address must be complete.  Set dpxl from
-     the immediate symbol if it wasn't already loaded. */
+     near-pointer-typed element inside a far struct, or a paged __pdata
+     pointer whose 8-bit offset was computed by genPlus into registers).
+     But this is a far pointer write -- the 24-bit address must be
+     complete.  Set dpxl from the immediate symbol if it wasn't already
+     loaded. */
   if (AOP_TYPE (result) == AOP_IMMD && AOP_SIZE (result) < 3)
     emitcode ("mov", "dpxl,#(%s >> 16)", AOP (result)->aopu.aop_immd.aop_immd1);
+  /* For PPOINTER (__pdata) addresses that were computed at runtime
+     (genPlus put them in registers, so AOP_TYPE is not AOP_IMMD and
+     the branch above is skipped), we still need dpxl because mcs251
+     PSEG lives at flat 0x10000.  Recover the dpxl from the pointer
+     type's storage class. */
+  else if (AOP_SIZE (result) < 3 &&
+           IS_PTR (operandType (result)) &&
+           DCL_TYPE (operandType (result)) == PPOINTER)
+    emitcode ("mov", "dpxl,#0x01");  /* mcs251 PSEG base = 0x010000 */
 
   emitcode ("mov", "dr28,dpx");
 
