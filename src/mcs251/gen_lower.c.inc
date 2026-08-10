@@ -1149,9 +1149,11 @@ aopForRemat (symbol *sym)
     }
 
   aop->aopu.aop_immd.aop_immd1 = dbuf_detach_c_str (&dbuf);
-  aop->aopu.aop_immd.mcs251_pdata_page =
-    from_type && IS_PTR (from_type) &&
-    DCL_TYPE (from_type) == PPOINTER;
+  /* MCS-251 uses flat 24-bit addressing: a __pdata symbol's rematerialized
+     address already carries its full flat bytes (_ta resolves to 0x10000,
+     _ta>>8 to 0x100, _ta>>16 to 0x01).  There is no mcs51-style MXAX:P2
+     paging register to capture, so never mark the page here. */
+  aop->aopu.aop_immd.mcs251_pdata_page = FALSE;
   /* set immd2 field if required */
   if (GPTRSIZE > FARPTRSIZE && aop->aopu.aop_immd.from_cast_remat)
     {
@@ -1942,15 +1944,7 @@ aopGet (asmop *aop, int offset, bool bit16, bool dname)
           break;
 
         case AOP_IMMD:
-          if (aop->aopu.aop_immd.mcs251_pdata_page && offset == 1)
-            {
-              dbuf_append_str (&dbuf, "P2");
-            }
-          else if (aop->aopu.aop_immd.mcs251_pdata_page && offset == 2)
-            {
-              dbuf_append_str (&dbuf, "0xeb"); /* STC MXAX */
-            }
-          else if (GPTRSIZE > FARPTRSIZE && aop->aopu.aop_immd.from_cast_remat && aop->aop_litimmd_is_gptr && offset == GPTRSIZE - 1)
+          if (GPTRSIZE > FARPTRSIZE && aop->aopu.aop_immd.from_cast_remat && aop->aop_litimmd_is_gptr && offset == GPTRSIZE - 1)
             {
               dbuf_printf (&dbuf, "%s", aop->aopu.aop_immd.aop_immd2);
             }
@@ -2347,15 +2341,7 @@ loadDptrFromOperand (operand *op, bool loadBToo)
 
         case AOP_IMMD:
         case AOP_LIT:
-          if (AOP_TYPE (op) == AOP_IMMD &&
-              AOP (op)->aopu.aop_immd.mcs251_pdata_page)
-            {
-              emitcode ("mov", "dpl,%s", opGet (op, 0, FALSE, FALSE));
-              emitcode ("mov", "dph,%s", opGet (op, 1, FALSE, FALSE));
-              emitcode ("mov", "dpxl,%s", opGet (op, 2, FALSE, FALSE));
-            }
-          else
-            {
+          {
               /* Check the DPTR cache: if dptr already points to the
                  same far symbol+offset, skip the reload.
                  opGet returns a pointer to a static buffer, so we must

@@ -10948,37 +10948,12 @@ genCast (iCode * ic)
       else
         p_type = PTR_TYPE (SPEC_OCLS (etype));
 
-      /* MCS251 __pdata keeps the inherited one-byte offset, but MOVX @Ri
-         supplies the remaining address bytes from P2 and STC MXAX.  A
-         conversion to the flat ABI must capture that live page rather than
-         zero-extending the offset into region 00. */
-      if (p_type == PPOINTER)
-        {
-          symbol *nullPointer = newiTempLabel (NULL);
-          symbol *converted = newiTempLabel (NULL);
-
-          /* The sole byte of a __pdata null pointer is zero.  Preserve the
-             C null-pointer guarantee when widening it: capturing the live
-             page for offset zero would otherwise make it non-null. */
-          MOVA (opGet (right, 0, FALSE, FALSE));
-          opPut (result, "a", 0);
-          emitcode ("jz", "!tlabel", labelKey2num (nullPointer->key));
-
-          offset = 1;
-          if (offset < AOP_SIZE (result))
-            opPut (result, "P2", offset++);
-          if (offset < AOP_SIZE (result))
-            opPut (result, "0xeb", offset++); /* STC MXAX */
-          while (offset < AOP_SIZE (result))
-            opPut (result, zero, offset++);
-          emitcode ("sjmp", "!tlabel", labelKey2num (converted->key));
-
-          emitLabel (nullPointer);
-          for (offset = 1; offset < AOP_SIZE (result); ++offset)
-            opPut (result, zero, offset);
-          emitLabel (converted);
-          goto release;
-        }
+      /* MCS-251 uses flat 24-bit addressing: a __pdata symbol resolves to
+         its full flat address (e.g. _ta = 0x10000), and rematerialized
+         AOP_IMMD operands already emit the correct bytes via opGet
+         (#_ta, #(_ta >> 8), #(_ta >> 16)).  There is no mcs51-style MXAX:P2
+         paging register to capture, so a paged->generic cast must fall
+         through to the plain copy path below, exactly like __xdata. */
 
       if (GPTRSIZE <= FARPTRSIZE)
         {
