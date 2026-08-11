@@ -1,4 +1,4 @@
-OUTPUTS = 8751 DS390F
+OUTPUTS = 8751 DS390F 251
 
 
 # Ignore changes in white space. The field widths for labels

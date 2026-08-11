@@ -1,0 +1,61 @@
+uCsim, Copyright (C) 1997 Daniel Drotos.
+uCsim comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
+This is free software, and you are welcome to redistribute it
+under certain conditions; type `show c' for details.
+dc 0x0 0x73
+0x00000    00          NOP                                           
+0x00001    74 10       MOV    A,#0x10                                
+0x00003    75 30 55    MOV    0x30,#0x55                             
+0x00006    e5 82       MOV    A,0x82 <DPL>                           
+0x00008    f5 a8       MOV    0xa8 <IE>,A                            
+0x0000a    24 05       ADD    A,#0x05                                
+0x0000c    25 30       ADD    A,0x30                                 
+0x0000e    54 0f       ANL    A,#0x0f                                
+0x00010    42 90       ORL    0x90 <P1>,A                            
+0x00012    04          INC    A                                      
+0x00013    05 30       INC    0x30                                   
+0x00015    14          DEC    A                                      
+0x00016    03          RR     A                                      
+0x00017    33          RLC    A                                      
+0x00018    c4          SWAP   A                                      
+0x00019    e4          CLR    A                                      
+0x0001a    c3          CLR    C                                      
+0x0001b    d3          SETB   C                                      
+0x0001c    12 00 22    LCALL  0x00022                                
+0x0001f    02 00 23    LJMP   0x00023                                
+0x00022    22          RET                                           
+0x00023    a5 fc       MOV    R4,A                                   
+0x00025    a5 ed       MOV    A,R5                                   
+0x00027    a5 2e       ADD    A,R6                                   
+0x00029    a5 26       ADD    A,@R0                                  
+0x0002b    a5 07       INC    @R1                                    
+0x0002d    a5 76 99    MOV    @R0,#0x99                              
+0x00030    a5 cb       XCH    A,R3                                   
+0x00032    a5 ba 07 00 CJNE   R2,#0x07,0x00036                       
+0x00036    a5 dc 00    DJNZ   R4,0x00039                             
+0x00039    7e 30 aa    MOV    R3,#0xaa                               
+0x0003c    7e 31 40    MOV    R3,0x40                                
+0x0003f    7e 34 12 34 MOV    WR6,#0x1234                            
+0x00043    7e 35 82    MOV    WR6,0x82 <DPL>                         
+0x00046    7e 28 40 00 MOV    DR8,#0x4000                            
+0x0004a    7d 13       MOV    WR2,WR6                                
+0x0004c    7f 23       MOV    DR8,DR12                               
+0x0004e    0b 34       INC    WR6                                    
+0x00050    0b 2c       INC    DR8                                    
+0x00052    1b 14       DEC    WR2                                    
+0x00054    2c bf       ADD    R11,R15                                
+0x00056    9c 34       SUB    R3,R4                                  
+0x00058    2d 23       ADD    WR4,WR6                                
+0x0005a    2f 23       ADD    DR8,DR12                               
+0x0005c    8a 00 00 65 EJMP   0x000065                               
+0x00060    9a 00 00 64 ECALL  0x000064                               
+0x00064    aa          ERET                                          
+0x00065    a4          MUL    AB                                     
+0x00066    84          DIV    AB                                     
+0x00067    bc 30       CMP    R3,R0                                  
+0x00069    c0 a8       PUSH   0xa8 <IE>                              
+0x0006b    ca 48       PUSH   R4                                     
+0x0006d    ca 19       PUSH   WR2                                    
+0x0006f    da 1b       POP    DR4                                    
+0x00071    80 00       SJMP   0x00073                                
+0x00073    22          RET                                           

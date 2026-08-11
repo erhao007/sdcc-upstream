@@ -59,6 +59,17 @@ public:
   virtual int exec_inst(void);
   virtual void make_address_spaces(void);
 
+  // Disassembly: override the inherited 8051 table decoder with a real
+  // MCS-251 Source-mode decoder.  Without this, uCsim decodes MCS-251 bytes
+  // using the 8051 table, so any prefix byte (A5/7E/7A/7C-7F/0B-1B/09/29/
+  // .../89/99/BC/CA/DA) is split into separate 8051 ops and the instruction
+  // boundary is lost (e.g. 7E 74 71 82 shows as 4 unrelated 8051 ops instead
+  // of one "MOV WR14,#0x7182").  inst_length/longest_inst are overridden so
+  // the dc loop and print_disass advance by the true MCS-251 step.
+  virtual char *disass(t_addr addr);
+  virtual int inst_length(t_addr addr);
+  virtual int longest_inst(void);
+
   // MCS-251 register file helpers.
   // Register file layout (Intel 8XC251SB User's Manual, Ch.3):
   //   R0-R7   bank-selected, mapped to IRAM 0x00-0x1F (4 banks x 8 bytes)
@@ -127,6 +138,31 @@ protected:
   // Used by read_edata's von-Neumann mirror to tell loaded 0xFF data from
   // empty (erased) ROM.  Covers the full 128 KiB ROM window.
   unsigned char rom_loaded[0x20000 / 8];
+
+  // --- Disassembly decode (private; mirrors exec_inst's dispatch tree) ---
+  // disass_251 decodes the instruction whose opcode is at PC=addr.  It writes
+  // the mnemonic+operands into *out (if non-NULL) using the same column
+  // convention as cl_51core::disass (mnemonic padded to 6 cols, then one
+  // separating space, then operands), and returns the instruction length in
+  // bytes.  Unknown/illegal bytes return length 1 and emit ".db 0xNN" so the
+  // dc loop always advances.  disass() and inst_length() both delegate here.
+  int disass_251(t_addr addr, chars *out);
+  // Per-family sub-decoders (each reads operand bytes via rom->get at fixed
+  // offsets from addr; returns the total length including the prefix byte).
+  int disass_a5(t_addr addr, chars *out);              // A5 prefix
+  int disass_7e(t_addr addr, chars *out);              // 7E prefix (MOV family)
+  int disass_7a(t_addr addr, chars *out);              // 7A prefix (store forms)
+  int disass_regmove(t_addr addr, int code, chars *out); // 7C/7D/7F
+  int disass_0b(t_addr addr, int dec, chars *out);     // 0B/1B (INC/DEC + WRj move)
+  int disass_idx16(t_addr addr, int code, chars *out); // 09/29/39/59/69/79
+  int disass_ca(t_addr addr, chars *out);              // CA (PUSH family)
+  int disass_da(t_addr addr, chars *out);              // DA (POP family)
+  int disass_alu_rm(t_addr addr, int op, chars *out);  // 2E/4E/5E/6E/9E/BE
+  // Register-name helpers (write the name into *out).
+  static void rname(int idx, chars *out);              // Rn
+  static void wrname(int reg, chars *out);             // WRj, j=reg*2
+  static void drname(int reg, chars *out);             // DRk, k=reg*4
+  static void riname(int ri, chars *out);              // @Ri (ri&1)
 };
 
 

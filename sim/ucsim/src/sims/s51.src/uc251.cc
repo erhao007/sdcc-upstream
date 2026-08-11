@@ -1675,4 +1675,1009 @@ cl_uc251::exec_inst(void)
     }
 }
 
+
+/* ====================================================================== */
+/* Disassembly (MCS-251 Source mode)                                       */
+/*                                                                        */
+/* cl_uc251 inherits cl_51core's 8051 table disassembler, which splits    */
+/* every MCS-251 prefix byte (A5/7E/7A/7C-7F/0B-1B/09/29/.../89/99/BC/   */
+/* CA/DA) into unrelated 8051 ops.  disass_251 mirrors exec_inst's        */
+/* dispatch tree to decode each implemented MCS-251 instruction as one    */
+/* line.  Operand bytes are read from ROM at fixed offsets (no fetch /    */
+/* PC advance); the mnemonic is formatted with the same 6-column padding   */
+/* convention as cl_51core::disass (mnemonic padded to width 6, then one   */
+/* separating space, then operands).  Unknown/illegal bytes return         */
+/* length 1 and emit ".db 0xNN" so the dc loop always advances.            */
+/* ====================================================================== */
+
+/* Pad the mnemonic field already written to *out to 6 columns, then append
+   the single separating space before operands.  No-op when out==NULL. */
+static void
+mne_sep(chars *out)
+{
+  if (!out)
+    return;
+  while (out->len() < 6)
+    out->append(' ');
+  out->append(' ');
+}
+
+/* daddr_name formats its buffer with chars::format (replace), which would
+   wipe the mnemonic already written to the work buffer.  Route through a
+   private temp and append the result.  (baddr_name uses appendf and is safe
+   to call directly on the work buffer.) */
+static void
+dir8_out(cl_uc251 *cpu, t_mem a, chars *out)
+{
+  if (!out)
+    return;
+  chars tmp;
+  cpu->daddr_name(a, &tmp);
+  out->append(tmp.c_str());
+}
+
+void
+cl_uc251::rname(int idx, chars *out)
+{
+  if (out)
+    out->appendf("R%d", idx);
+}
+
+void
+cl_uc251::wrname(int reg, chars *out)
+{
+  if (out)
+    out->appendf("WR%d", reg * 2);
+}
+
+void
+cl_uc251::drname(int reg, chars *out)
+{
+  if (out)
+    out->appendf("DR%d", reg * 4);
+}
+
+void
+cl_uc251::riname(int ri, chars *out)
+{
+  if (out)
+    out->appendf("@R%d", ri & 1);
+}
+
+char *
+cl_uc251::disass(t_addr addr)
+{
+  chars work;
+  (void)disass_251(addr, &work);
+  return strdup(work.c_str());
+}
+
+int
+cl_uc251::inst_length(t_addr addr)
+{
+  return disass_251(addr, NULL);
+}
+
+int
+cl_uc251::longest_inst(void)
+{
+  return 4;     /* EJMP/ECALL addr24 are 4 bytes */
+}
+
+
+/* --- per-family sub-decoders ------------------------------------------ */
+
+/* A5 <fnrn>: fnrn = (function<<3) | (Rn or @Ri selector).  Mirrors exec_a5. */
+int
+cl_uc251::disass_a5(t_addr addr, chars *out)
+{
+  t_mem fnrn= rom->get(addr + 1);
+  int n= fnrn & 0x07;
+  int ri= fnrn & 0x01;
+  const char *opname= NULL;     /* binary "A,<rhs>" ALU op (op2 in exec_a5) */
+  int len= 2;                   /* A5 + fnrn by default */
+  const char *form= NULL;       /* non-ALU mnemonic form, fully custom */
+
+  switch (fnrn >> 3)
+    {
+    case 0x00:
+      if (fnrn >= 0x06) form= "INC";        /* INC @Ri */
+      break;
+    case 0x02: form= "DEC"; break;          /* DEC @Ri */
+    case 0x04: opname= "ADD"; break;        /* ADD A,@Ri */
+    case 0x05: opname= "ADD"; break;        /* ADD A,Rn  */
+    case 0x06: opname= "ADDC"; break;
+    case 0x07: opname= "ADDC"; break;
+    case 0x08: opname= "ORL"; break;
+    case 0x09: opname= "ORL"; break;
+    case 0x0a: opname= "ANL"; break;
+    case 0x0b: opname= "ANL"; break;
+    case 0x0c: opname= "XRL"; break;
+    case 0x0d: opname= "XRL"; break;
+    case 0x12: opname= "SUBB"; break;
+    case 0x13: opname= "SUBB"; break;
+    case 0x19: form= "XCH"; break;          /* XCH A,Rn */
+    case 0x1c: form= "MOV"; break;          /* MOV A,@Ri (src=@Ri) */
+    case 0x1d: form= "MOVRN"; break;        /* MOV A,Rn */
+    case 0x1e: form= "MOVRI"; break;        /* MOV @Ri,A */
+    case 0x1f: form= "MOVRNA"; break;       /* MOV Rn,A */
+    case 0x0e:                               /* MOV @Ri,#data */
+      len= 3;
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          riname(ri, out); out->append(",#");
+          out->appendf("0x%02x", (unsigned)rom->get(addr + 2));
+        }
+      return len;
+    case 0x10:                               /* MOV dir8,@Ri */
+      len= 3;
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          dir8_out(this, rom->get(addr + 2), out); out->append(",");
+          riname(ri, out);
+        }
+      return len;
+    case 0x14:                               /* MOV @Ri,dir8 */
+      len= 3;
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          riname(ri, out); out->append(",");
+          dir8_out(this, rom->get(addr + 2), out);
+        }
+      return len;
+    case 0x17:                               /* CJNE Rn,#data,rel */
+      len= 4;
+      if (out)
+        {
+          t_addr target= (addr + len + (i32_t)(i8_t)rom->get(addr + 3)) & 0xffffff;
+          out->append("CJNE"); mne_sep(out);
+          rname(n, out); out->append(",#");
+          out->appendf("0x%02x,", (unsigned)rom->get(addr + 2));
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return len;
+    case 0x1b:                               /* DJNZ Rn,rel */
+      len= 3;
+      if (out)
+        {
+          t_addr target= (addr + len + (i32_t)(i8_t)rom->get(addr + 2)) & 0xffffff;
+          out->append("DJNZ"); mne_sep(out);
+          rname(n, out); out->append(",");
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return len;
+    default: break;   /* unimplemented A5 function */
+    }
+
+  if (opname)
+    {
+      /* ADD/ADDC/ORL/ANL/XRL/SUBB A,{@Ri|Rn} */
+      if (out)
+        {
+          out->append(opname); mne_sep(out);
+          out->append("A,");
+          if (((fnrn >> 3) & 1) == 0)
+            riname(ri, out);          /* even function codes: @Ri form */
+          else
+            rname(n, out);            /* odd function codes: Rn form */
+        }
+      return 2;
+    }
+  if (form)
+    {
+      if (out)
+        {
+          /* All the @Ri/Rn MOV/XCH/INC/DEC single-byte-operand forms. */
+          if (strcmp(form, "INC") == 0 || strcmp(form, "DEC") == 0)
+            {
+              out->append(form); mne_sep(out);
+              riname(ri, out);
+            }
+          else if (strcmp(form, "XCH") == 0)        /* XCH A,Rn */
+            {
+              out->append("XCH"); mne_sep(out);
+              out->append("A,"); rname(n, out);
+            }
+          else if (strcmp(form, "MOV") == 0)        /* MOV A,@Ri */
+            {
+              out->append("MOV"); mne_sep(out);
+              out->append("A,"); riname(ri, out);
+            }
+          else if (strcmp(form, "MOVRN") == 0)      /* MOV A,Rn */
+            {
+              out->append("MOV"); mne_sep(out);
+              out->append("A,"); rname(n, out);
+            }
+          else if (strcmp(form, "MOVRI") == 0)      /* MOV @Ri,A */
+            {
+              out->append("MOV"); mne_sep(out);
+              riname(ri, out); out->append(",A");
+            }
+          else                                      /* MOVRNA: MOV Rn,A */
+            {
+              out->append("MOV"); mne_sep(out);
+              rname(n, out); out->append(",A");
+            }
+        }
+      return 2;
+    }
+  /* Unknown A5 function: emit the prefix byte as data and let dc move on. */
+  if (out)
+    out->appendf(".db 0x%02x", (unsigned)rom->get(addr));
+  return 1;
+}
+
+
+/* 7E <reg><type>: MOV Rm/WRj/DRk immediate/direct family.  Mirrors exec_7e. */
+int
+cl_uc251::disass_7e(t_addr addr, chars *out)
+{
+  t_mem sub= rom->get(addr + 1);
+  int reg= sub >> 4;
+  switch (sub & 0x0f)
+    {
+    case 0x00:        /* MOV Rm,#data */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          rname(reg, out); out->append(",#");
+          out->appendf("0x%02x", (unsigned)rom->get(addr + 2));
+        }
+      return 3;
+    case 0x01:        /* MOV Rm,dir8 */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          rname(reg, out); out->append(",");
+          dir8_out(this, rom->get(addr + 2), out);
+        }
+      return 3;
+    case 0x04:        /* MOV WRj,#data16 */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          wrname(reg, out); out->append(",#");
+          out->appendf("0x%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+        }
+      return 4;
+    case 0x05:        /* MOV WRj,dir8 (read dir8,dir8+1) */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          wrname(reg, out); out->append(",");
+          dir8_out(this, rom->get(addr + 2), out);
+        }
+      return 3;
+    case 0x08:        /* MOV DRk,#0data16 (high 16 bits zero) */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          drname(reg, out); out->append(",#0x");
+          out->appendf("%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+        }
+      return 4;
+    case 0x0c:        /* MOV DRk,#1data16 (high 16 bits ones) */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          drname(reg, out); out->append(",#0xffff");
+          out->appendf("%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+        }
+      return 4;
+    case 0x0d:        /* MOV DRk,dir8 (read 4 bytes big-endian) */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          drname(reg, out); out->append(",");
+          dir8_out(this, rom->get(addr + 2), out);
+        }
+      return 3;
+    case 0x09:        /* MOV Rm,@WRj (third byte: dst<<4) */
+      if (out)
+        {
+          int dst= rom->get(addr + 2) >> 4;
+          out->append("MOV"); mne_sep(out);
+          rname(dst, out); out->append(",@");
+          wrname(reg, out);
+        }
+      return 3;
+    case 0x0b:        /* MOV Rm,@DRk/@DPX/@SPX (third byte: dst<<4) */
+      if (out)
+        {
+          int dst= rom->get(addr + 2) >> 4;
+          out->append("MOV"); mne_sep(out);
+          rname(dst, out); out->append(",@");
+          drname(reg, out);
+        }
+      return 3;
+    default: break;   /* unimplemented 7E type */
+    }
+  if (out)
+    out->appendf(".db 0x%02x", (unsigned)rom->get(addr));
+  return 1;
+}
+
+
+/* 7A <reg><type>: store forms.  Mirrors exec_7a. */
+int
+cl_uc251::disass_7a(t_addr addr, chars *out)
+{
+  t_mem sub= rom->get(addr + 1);
+  int reg= sub >> 4;
+  switch (sub & 0x0f)
+    {
+    case 0x01:        /* MOV dir8,Rm */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          dir8_out(this, rom->get(addr + 2), out); out->append(",");
+          rname(reg, out);
+        }
+      return 3;
+    case 0x05:        /* MOV dir8,WRj */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          dir8_out(this, rom->get(addr + 2), out); out->append(",");
+          wrname(reg, out);
+        }
+      return 3;
+    case 0x0b:        /* MOV @DRk/@SPX,Rm (third byte: src<<4) */
+      if (out)
+        {
+          int src= rom->get(addr + 2) >> 4;
+          out->append("MOV"); mne_sep(out);
+          out->append("@"); drname(reg, out); out->append(",");
+          rname(src, out);
+        }
+      return 3;
+    default: break;
+    }
+  if (out)
+    out->appendf(".db 0x%02x", (unsigned)rom->get(addr));
+  return 1;
+}
+
+
+/* 7C/7D/7F <d><s>: register-to-register moves.  Mirrors exec_regmove. */
+int
+cl_uc251::disass_regmove(t_addr addr, int code, chars *out)
+{
+  t_mem sub= rom->get(addr + 1);
+  int d= sub >> 4, s= sub & 0x0f;
+  if (out)
+    {
+      out->append("MOV"); mne_sep(out);
+      switch (code)
+        {
+        case 0x7c: rname(d, out); out->append(","); rname(s, out); break;
+        case 0x7d: wrname(d, out); out->append(","); wrname(s, out); break;
+        default:   drname(d, out); out->append(","); drname(s, out); break;  /* 0x7f */
+        }
+    }
+  return 2;
+}
+
+
+/* 0B/1B prefix: INC/DEC family + embedded 16-bit WRj memory move.
+   Mirrors exec_0b.  dec=0 for 0x0B, dec=1 for 0x1B. */
+int
+cl_uc251::disass_0b(t_addr addr, int dec, chars *out)
+{
+  t_mem sub= rom->get(addr + 1);
+  int reg= sub >> 4;
+  int lo= sub & 0x0f;
+  const char *mne= dec ? "DEC" : "INC";
+
+  if (lo == 0x08 || lo == 0x0a)
+    {
+      /* 16-bit WRj memory move; third byte = src/dst WRj index << 4. */
+      int wj= rom->get(addr + 2) >> 4;
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          if (dec)      /* 0x1B: store WRj -> @base */
+            {
+              out->append("@");
+              if (lo == 0x0a) drname(reg, out);
+              else            wrname(reg, out);
+              out->append(",");
+              wrname(wj, out);
+            }
+          else          /* 0x0B: load WRj <- @base */
+            {
+              wrname(wj, out); out->append(",@");
+              if (lo == 0x0a) drname(reg, out);
+              else            wrname(reg, out);
+            }
+        }
+      return 3;
+    }
+
+  int kind;    /* 0=Rm, 1=WRj, 2=DRk */
+  if (lo < 3)             kind= 0;
+  else if (lo >= 4 && lo <= 6) kind= 1;
+  else if (lo >= 0x0c && lo <= 0x0e) kind= 2;
+  else
+    {
+      if (out)
+        out->appendf(".db 0x%02x", (unsigned)rom->get(addr));
+      return 1;
+    }
+  if (out)
+    {
+      out->append(mne); mne_sep(out);
+      if (kind == 0)      rname(reg, out);
+      else if (kind == 1) wrname(reg, out);
+      else                drname(reg, out);   /* reg 15 -> DR60 (== SPX alias) */
+    }
+  return 2;
+}
+
+
+/* 09/29/39/59/69/79: indexed MOV with 16-bit displacement.  Mirrors
+   exec_idx16.  Encoding: sub=(reg<<4)|idx (idx 15 = SPX base for DRk forms);
+   then 2 big-endian displacement bytes.  Note: 0x09 uses WRj base
+   (WR(idx*2)); the others use DRk base (DR(idx*4)) or SPX if idx==15. */
+int
+cl_uc251::disass_idx16(t_addr addr, int code, chars *out)
+{
+  t_mem sub= rom->get(addr + 1);
+  int reg= sub >> 4;
+  int idx= sub & 0x0f;
+  unsigned dis= (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3));
+  if (out)
+    {
+      out->append("MOV"); mne_sep(out);
+      /* base register name for the DRk forms (idx 15 -> SPX) */
+      bool spx= (idx == 15);
+      switch (code)
+        {
+        case 0x09:       /* MOV Rm,@WRj+dis16 (WRj base) */
+          rname(reg, out); out->append(",@");
+          wrname(idx, out); out->appendf("+0x%04x", dis);
+          break;
+        case 0x29:       /* MOV Rm,@DRk/SPX+dis16 */
+          rname(reg, out); out->append(",@");
+          if (spx) out->append("SPX"); else drname(idx, out);
+          out->appendf("+0x%04x", dis);
+          break;
+        case 0x69:       /* MOV WRj,@DRk/SPX+dis16 */
+          wrname(reg, out); out->append(",@");
+          if (spx) out->append("SPX"); else drname(idx, out);
+          out->appendf("+0x%04x", dis);
+          break;
+        case 0x39:       /* MOV @DRk/SPX+dis16,Rm */
+          out->append("@");
+          if (spx) out->append("SPX"); else drname(idx, out);
+          out->appendf("+0x%04x,", dis);
+          rname(reg, out);
+          break;
+        default:         /* 0x59 / 0x79: MOV @DRk/SPX+dis16,WRj */
+          out->append("@");
+          if (spx) out->append("SPX"); else drname(idx, out);
+          out->appendf("+0x%04x,", dis);
+          wrname(reg, out);
+          break;
+        }
+    }
+  return 4;
+}
+
+
+/* CA <reg><type>: PUSH family.  Mirrors exec_ca. */
+int
+cl_uc251::disass_ca(t_addr addr, chars *out)
+{
+  t_mem sub= rom->get(addr + 1);
+  int reg= sub >> 4;
+  switch (sub & 0x0f)
+    {
+    case 0x02:      /* PUSH #data8 */
+      if (out)
+        {
+          out->append("PUSH"); mne_sep(out);
+          out->appendf("#0x%02x", (unsigned)rom->get(addr + 2));
+        }
+      return 3;
+    case 0x06:      /* PUSH #data16 (big-endian; pushed low-then-high) */
+      if (out)
+        {
+          out->append("PUSH"); mne_sep(out);
+          out->appendf("#0x%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+        }
+      return 4;
+    case 0x08:      /* PUSH Rm */
+      if (out) { out->append("PUSH"); mne_sep(out); rname(reg, out); }
+      return 2;
+    case 0x09:      /* PUSH WRj */
+      if (out) { out->append("PUSH"); mne_sep(out); wrname(reg, out); }
+      return 2;
+    case 0x0b:      /* PUSH DRk */
+      if (out) { out->append("PUSH"); mne_sep(out); drname(reg, out); }
+      return 2;
+    default: break;
+    }
+  if (out)
+    out->appendf(".db 0x%02x", (unsigned)rom->get(addr));
+  return 1;
+}
+
+
+/* DA <reg><type>: POP family.  Mirrors exec_da.  Always 2 bytes. */
+int
+cl_uc251::disass_da(t_addr addr, chars *out)
+{
+  t_mem sub= rom->get(addr + 1);
+  int reg= sub >> 4;
+  switch (sub & 0x0f)
+    {
+    case 0x08:
+      if (out) { out->append("POP"); mne_sep(out); rname(reg, out); }
+      return 2;
+    case 0x09:
+      if (out) { out->append("POP"); mne_sep(out); wrname(reg, out); }
+      return 2;
+    case 0x0b:
+      if (out) { out->append("POP"); mne_sep(out); drname(reg, out); }
+      return 2;
+    default: break;
+    }
+  if (out)
+    out->appendf(".db 0x%02x", (unsigned)rom->get(addr));
+  return 1;
+}
+
+
+/* 2E/4E/5E/6E/9E/BE: ADD/ORL/ANL/XRL/SUB/CMP Rm/WRj/DRk,<operand>.
+   Mirrors exec_alu_rm.  op: 0=ADD,1=ORL,2=ANL,3=XRL,4=SUB,5=CMP. */
+int
+cl_uc251::disass_alu_rm(t_addr addr, int op, chars *out)
+{
+  static const char * const name[6]= {"ADD","ORL","ANL","XRL","SUB","CMP"};
+  t_mem sub= rom->get(addr + 1);
+  int reg= sub >> 4;
+  int width;     /* 0=Rm, 1=WRj, 2=DRk */
+  int len;
+  /* compute length + width from the low nibble, matching exec_alu_rm */
+  switch (sub & 0x0f)
+    {
+    case 0x00: width= 0; len= 3; break;   /* #data8  */
+    case 0x01: width= 0; len= 3; break;   /* dir8    */
+    case 0x04: width= 1; len= 4; break;   /* #data16 */
+    case 0x05: width= 1; len= 3; break;   /* dir8    */
+    case 0x08: width= 2; len= 4; break;   /* #0data16*/
+    case 0x0c: width= 2; len= 4; break;   /* #1data16*/
+    case 0x0d: width= 2; len= 3; break;   /* dir8    */
+    case 0x09: width= 0; len= 2; break;   /* @WRj    */
+    case 0x0b: width= 0; len= 2; break;   /* @DRk    */
+    default:
+      if (out)
+        out->appendf(".db 0x%02x", (unsigned)rom->get(addr));
+      return 1;
+    }
+  if (out)
+    {
+      out->append(name[op]); mne_sep(out);
+      if (width == 0)      rname(reg, out);
+      else if (width == 1) wrname(reg, out);
+      else                 drname(reg, out);
+      out->append(",");
+      switch (sub & 0x0f)
+        {
+        case 0x00: out->appendf("#0x%02x", (unsigned)rom->get(addr + 2)); break;
+        case 0x01: dir8_out(this, rom->get(addr + 2), out); break;
+        case 0x04: out->appendf("#0x%04x",
+                                (unsigned)(rom->get(addr+2)*256 + rom->get(addr+3))); break;
+        case 0x05: dir8_out(this, rom->get(addr + 2), out); break;
+        case 0x08: out->appendf("#0x%04x",
+                                (unsigned)(rom->get(addr+2)*256 + rom->get(addr+3))); break;
+        case 0x0c: out->appendf("#0xffff%04x",
+                                (unsigned)(rom->get(addr+2)*256 + rom->get(addr+3))); break;
+        case 0x0d: dir8_out(this, rom->get(addr + 2), out); break;
+        case 0x09: out->append("@"); wrname(reg, out); break;
+        case 0x0b: out->append("@"); drname(reg, out); break;
+        }
+    }
+  return len;
+}
+
+
+/* --- main decoder: mirrors exec_inst's switch ------------------------- */
+int
+cl_uc251::disass_251(t_addr addr, chars *out)
+{
+  t_mem code= rom->get(addr);
+  switch (code)
+    {
+    case 0x00: if (out) out->append("NOP"); return 1;
+
+    case 0x02:        /* LJMP addr16 */
+      if (out)
+        {
+          t_addr target= rom->get(addr+1)*256 + rom->get(addr+2);
+          out->append("LJMP"); mne_sep(out);
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return 3;
+    case 0x12:        /* LCALL addr16 */
+      if (out)
+        {
+          t_addr target= rom->get(addr+1)*256 + rom->get(addr+2);
+          out->append("LCALL"); mne_sep(out);
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return 3;
+    case 0x22: if (out) out->append("RET");   return 1;
+    case 0x32: if (out) out->append("RETI");  return 1;
+    case 0xaa: if (out) out->append("ERET");  return 1;
+
+    /* ADD/ADDC/SUBB/ANL/ORL/XRL A,#data (2 bytes) */
+    case 0x24: if (out) { out->append("ADD");  mne_sep(out); out->append("A,#"); out->appendf("0x%02x",(unsigned)rom->get(addr+1)); } return 2;
+    case 0x34: if (out) { out->append("ADDC"); mne_sep(out); out->append("A,#"); out->appendf("0x%02x",(unsigned)rom->get(addr+1)); } return 2;
+    case 0x94: if (out) { out->append("SUBB"); mne_sep(out); out->append("A,#"); out->appendf("0x%02x",(unsigned)rom->get(addr+1)); } return 2;
+    case 0x54: if (out) { out->append("ANL");  mne_sep(out); out->append("A,#"); out->appendf("0x%02x",(unsigned)rom->get(addr+1)); } return 2;
+    case 0x44: if (out) { out->append("ORL");  mne_sep(out); out->append("A,#"); out->appendf("0x%02x",(unsigned)rom->get(addr+1)); } return 2;
+    case 0x64: if (out) { out->append("XRL");  mne_sep(out); out->append("A,#"); out->appendf("0x%02x",(unsigned)rom->get(addr+1)); } return 2;
+
+    /* ADD/ADDC/SUBB/ANL/ORL/XRL A,dir8 (2 bytes) */
+    case 0x25: if (out) { out->append("ADD");  mne_sep(out); out->append("A,"); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0x35: if (out) { out->append("ADDC"); mne_sep(out); out->append("A,"); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0x95: if (out) { out->append("SUBB"); mne_sep(out); out->append("A,"); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0x55: if (out) { out->append("ANL");  mne_sep(out); out->append("A,"); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0x45: if (out) { out->append("ORL");  mne_sep(out); out->append("A,"); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0x65: if (out) { out->append("XRL");  mne_sep(out); out->append("A,"); dir8_out(this, rom->get(addr+1), out); } return 2;
+
+    /* ANL/ORL/XRL dir8,A (2 bytes) */
+    case 0x52: if (out) { out->append("ANL"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); out->append(",A"); } return 2;
+    case 0x42: if (out) { out->append("ORL"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); out->append(",A"); } return 2;
+    case 0x62: if (out) { out->append("XRL"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); out->append(",A"); } return 2;
+    /* ANL/ORL/XRL dir8,#data (3 bytes) */
+    case 0x53: if (out) { out->append("ANL"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); out->append(",#"); out->appendf("0x%02x",(unsigned)rom->get(addr+2)); } return 3;
+    case 0x43: if (out) { out->append("ORL"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); out->append(",#"); out->appendf("0x%02x",(unsigned)rom->get(addr+2)); } return 3;
+    case 0x63: if (out) { out->append("XRL"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); out->append(",#"); out->appendf("0x%02x",(unsigned)rom->get(addr+2)); } return 3;
+
+    case 0x04: if (out) { out->append("INC"); mne_sep(out); out->append("A"); } return 1;
+    case 0x14: if (out) { out->append("DEC"); mne_sep(out); out->append("A"); } return 1;
+    case 0x03: if (out) { out->append("RR");  mne_sep(out); out->append("A"); } return 1;
+    case 0x13: if (out) { out->append("RRC"); mne_sep(out); out->append("A"); } return 1;
+    case 0x23: if (out) { out->append("RL");  mne_sep(out); out->append("A"); } return 1;
+    case 0x33: if (out) { out->append("RLC"); mne_sep(out); out->append("A"); } return 1;
+    case 0xc4: if (out) { out->append("SWAP"); mne_sep(out); out->append("A"); } return 1;
+    case 0xc5: if (out) { out->append("XCH"); mne_sep(out); out->append("A,"); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0x05: if (out) { out->append("INC"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0x15: if (out) { out->append("DEC"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0xa3: if (out) { out->append("INC"); mne_sep(out); out->append("DPTR"); } return 1;
+
+    case 0xe4: if (out) { out->append("CLR"); mne_sep(out); out->append("A"); } return 1;
+    case 0xf4: if (out) { out->append("CPL"); mne_sep(out); out->append("A"); } return 1;
+    case 0xc3: if (out) { out->append("CLR"); mne_sep(out); out->append("C"); } return 1;
+    case 0xd3: if (out) { out->append("SETB"); mne_sep(out); out->append("C"); } return 1;
+    case 0xb3: if (out) { out->append("CPL"); mne_sep(out); out->append("C"); } return 1;
+
+    case 0xd5:        /* DJNZ dir8,rel */
+      if (out)
+        {
+          t_addr target= (addr + 3 + (i32_t)(i8_t)rom->get(addr+2)) & 0xffffff;
+          out->append("DJNZ"); mne_sep(out);
+          dir8_out(this, rom->get(addr+1), out); out->append(",");
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return 3;
+
+    case 0xb4:        /* CJNE A,#data,rel */
+      if (out)
+        {
+          t_addr target= (addr + 3 + (i32_t)(i8_t)rom->get(addr+2)) & 0xffffff;
+          out->append("CJNE"); mne_sep(out);
+          out->append("A,#"); out->appendf("0x%02x,",(unsigned)rom->get(addr+1));
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return 3;
+    case 0xb5:        /* CJNE A,dir8,rel */
+      if (out)
+        {
+          t_addr target= (addr + 3 + (i32_t)(i8_t)rom->get(addr+2)) & 0xffffff;
+          out->append("CJNE"); mne_sep(out);
+          out->append("A,"); dir8_out(this, rom->get(addr+1), out); out->append(",");
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return 3;
+
+    /* bit operations (2-3 bytes) */
+    case 0xc2: if (out) { out->append("CLR");  mne_sep(out); baddr_name(rom->get(addr+1), out); } return 2;
+    case 0xd2: if (out) { out->append("SETB"); mne_sep(out); baddr_name(rom->get(addr+1), out); } return 2;
+    case 0xb2: if (out) { out->append("CPL");  mne_sep(out); baddr_name(rom->get(addr+1), out); } return 2;
+    case 0x72: if (out) { out->append("ORL"); mne_sep(out); out->append("C,"); baddr_name(rom->get(addr+1), out); } return 2;
+    case 0x82: if (out) { out->append("ANL"); mne_sep(out); out->append("C,"); baddr_name(rom->get(addr+1), out); } return 2;
+    case 0xa0: if (out) { out->append("ORL"); mne_sep(out); out->append("C,/"); baddr_name(rom->get(addr+1), out); } return 2;
+    case 0xb0: if (out) { out->append("ANL"); mne_sep(out); out->append("C,/"); baddr_name(rom->get(addr+1), out); } return 2;
+    case 0xa2: if (out) { out->append("MOV"); mne_sep(out); out->append("C,"); baddr_name(rom->get(addr+1), out); } return 2;
+    case 0x92: if (out) { out->append("MOV"); mne_sep(out); baddr_name(rom->get(addr+1), out); out->append(",C"); } return 2;
+    case 0x10:        /* JBC bit,rel */
+      if (out)
+        {
+          t_addr target= (addr + 3 + (i32_t)(i8_t)rom->get(addr+2)) & 0xffffff;
+          out->append("JBC"); mne_sep(out);
+          baddr_name(rom->get(addr+1), out); out->append(",");
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return 3;
+    case 0x20:        /* JB bit,rel */
+      if (out)
+        {
+          t_addr target= (addr + 3 + (i32_t)(i8_t)rom->get(addr+2)) & 0xffffff;
+          out->append("JB"); mne_sep(out);
+          baddr_name(rom->get(addr+1), out); out->append(",");
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return 3;
+    case 0x30:        /* JNB bit,rel */
+      if (out)
+        {
+          t_addr target= (addr + 3 + (i32_t)(i8_t)rom->get(addr+2)) & 0xffffff;
+          out->append("JNB"); mne_sep(out);
+          baddr_name(rom->get(addr+1), out); out->append(",");
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return 3;
+
+    case 0x74: if (out) { out->append("MOV"); mne_sep(out); out->append("A,#"); out->appendf("0x%02x",(unsigned)rom->get(addr+1)); } return 2;
+    case 0x75: if (out) { out->append("MOV"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); out->append(",#"); out->appendf("0x%02x",(unsigned)rom->get(addr+2)); } return 3;
+    case 0xe5: if (out) { out->append("MOV"); mne_sep(out); out->append("A,"); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0xf5: if (out) { out->append("MOV"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); out->append(",A"); } return 2;
+    case 0x85:        /* MOV dir8,dir8 (src first, dst second) */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          dir8_out(this, rom->get(addr+2), out); out->append(",");
+          dir8_out(this, rom->get(addr+1), out);
+        }
+      return 3;
+    case 0x90:        /* MOV DPTR,#data16 */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          out->append("DPTR,#");
+          out->appendf("0x%04x",(unsigned)(rom->get(addr+1)*256 + rom->get(addr+2)));
+        }
+      return 3;
+
+    /* relative branches (2 bytes: opcode + rel8) */
+    case 0x60:        /* JZ */
+    case 0x70:        /* JNZ */
+    case 0x40:        /* JC */
+    case 0x50:        /* JNC */
+    case 0x80:        /* SJMP */
+    case 0x08:        /* JSLE */
+    case 0x18:        /* JSG */
+    case 0x28:        /* JLE */
+    case 0x38:        /* JG */
+    case 0x48:        /* JSL */
+    case 0x58:        /* JSGE */
+    case 0x68:        /* JE */
+    case 0x78:        /* JNE */
+      {
+        static const struct { t_mem op; const char *n; } rel2[]=
+          { {0x60,"JZ"},{0x70,"JNZ"},{0x40,"JC"},{0x50,"JNC"},{0x80,"SJMP"},
+            {0x08,"JSLE"},{0x18,"JSG"},{0x28,"JLE"},{0x38,"JG"},
+            {0x48,"JSL"},{0x58,"JSGE"},{0x68,"JE"},{0x78,"JNE"} };
+        const char *n= "SJMP";
+        for (unsigned i= 0; i < sizeof(rel2)/sizeof(rel2[0]); i++)
+          if (rel2[i].op == code) { n= rel2[i].n; break; }
+        if (out)
+          {
+            t_addr target= (addr + 2 + (i32_t)(i8_t)rom->get(addr+1)) & 0xffffff;
+            out->append(n); mne_sep(out);
+            out->appendf(rom->addr_format, target);
+            addr_name(target, rom, out);
+          }
+        return 2;
+      }
+
+    case 0x0a:        /* MOVZ WRj,Rm (zero-extend) */
+    case 0x1a:        /* MOVS WRj,Rm (sign-extend) */
+      {
+        t_mem b= rom->get(addr+1);
+        int dst= b >> 4, src= b & 0x0f;
+        if (out)
+          {
+            out->append(code == 0x0a ? "MOVZ" : "MOVS"); mne_sep(out);
+            wrname(dst, out); out->append(",");
+            rname(src, out);
+          }
+        return 2;
+      }
+
+    case 0x73: if (out) { out->append("JMP"); mne_sep(out); out->append("@A+DPTR"); } return 1;
+    case 0x83: if (out) { out->append("MOVC"); mne_sep(out); out->append("A,@A+PC"); } return 1;
+    case 0x93: if (out) { out->append("MOVC"); mne_sep(out); out->append("A,@A+DPTR"); } return 1;
+
+    case 0x89:        /* EJMP @DRk (low nibble must be 8) */
+      {
+        t_mem sub= rom->get(addr+1);
+        if ((sub & 0x0f) == 8)
+          {
+            if (out)
+              {
+                out->append("EJMP"); mne_sep(out);
+                out->append("@"); drname(sub >> 4, out);
+              }
+            return 2;
+          }
+        if (out) out->appendf(".db 0x%02x",(unsigned)code);
+        return 1;
+      }
+    case 0x99:        /* LCALL @WRj (lo4) / ECALL @DRk (lo8) */
+      {
+        t_mem sub= rom->get(addr+1);
+        int reg= sub >> 4;
+        if ((sub & 0x0f) == 4)
+          {
+            if (out) { out->append("LCALL"); mne_sep(out); out->append("@"); wrname(reg, out); }
+            return 2;
+          }
+        if ((sub & 0x0f) == 8)
+          {
+            if (out) { out->append("ECALL"); mne_sep(out); out->append("@"); drname(reg, out); }
+            return 2;
+          }
+        if (out) out->appendf(".db 0x%02x",(unsigned)code);
+        return 1;
+      }
+    case 0x8a:        /* EJMP addr24 */
+      if (out)
+        {
+          t_addr target= ((t_mem)rom->get(addr+1)<<16) | (rom->get(addr+2)<<8) | rom->get(addr+3);
+          out->append("EJMP"); mne_sep(out);
+          out->appendf("0x%06x", (unsigned)target);
+          addr_name(target, rom, out);
+        }
+      return 4;
+    case 0x9a:        /* ECALL addr24 */
+      if (out)
+        {
+          t_addr target= ((t_mem)rom->get(addr+1)<<16) | (rom->get(addr+2)<<8) | rom->get(addr+3);
+          out->append("ECALL"); mne_sep(out);
+          out->appendf("0x%06x", (unsigned)target);
+          addr_name(target, rom, out);
+        }
+      return 4;
+
+    case 0xa5: return disass_a5(addr, out);
+    case 0x7e: return disass_7e(addr, out);
+    case 0x7a: return disass_7a(addr, out);
+    case 0x09:
+    case 0x29:
+    case 0x69:
+    case 0x39:
+    case 0x59:
+    case 0x79: return disass_idx16(addr, code, out);
+    case 0x0b: return disass_0b(addr, 0, out);
+    case 0x1b: return disass_0b(addr, 1, out);
+
+    case 0xa4: if (out) { out->append("MUL"); mne_sep(out); out->append("AB"); } return 1;
+    case 0x84: if (out) { out->append("DIV"); mne_sep(out); out->append("AB"); } return 1;
+    case 0xad:        /* MUL WRj,WRms (16x16 -> 32) */
+      {
+        t_mem sub= rom->get(addr+1);
+        if (out)
+          {
+            out->append("MUL"); mne_sep(out);
+            wrname(sub >> 4, out); out->append(","); wrname(sub & 0x0f, out);
+          }
+        return 2;
+      }
+    case 0x8d:        /* DIV WRj,WRms (16/16) */
+      {
+        t_mem sub= rom->get(addr+1);
+        if (out)
+          {
+            out->append("DIV"); mne_sep(out);
+            wrname(sub >> 4, out); out->append(","); wrname(sub & 0x0f, out);
+          }
+        return 2;
+      }
+
+    case 0xca: return disass_ca(addr, out);
+    case 0xda: return disass_da(addr, out);
+    case 0xc0: if (out) { out->append("PUSH"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); } return 2;
+    case 0xd0: if (out) { out->append("POP");  mne_sep(out); dir8_out(this, rom->get(addr+1), out); } return 2;
+
+    case 0xe0: if (out) { out->append("MOVX"); mne_sep(out); out->append("A,@DPTR"); } return 1;
+    case 0xe2: if (out) { out->append("MOVX"); mne_sep(out); out->append("A,@R0"); } return 1;
+    case 0xe3: if (out) { out->append("MOVX"); mne_sep(out); out->append("A,@R1"); } return 1;
+    case 0xf0: if (out) { out->append("MOVX"); mne_sep(out); out->append("@DPTR,A"); } return 1;
+    case 0xf2: if (out) { out->append("MOVX"); mne_sep(out); out->append("@R0,A"); } return 1;
+    case 0xf3: if (out) { out->append("MOVX"); mne_sep(out); out->append("@R1,A"); } return 1;
+
+    /* 2C/9C/5C/4C/6C: ADD/SUB/ANL/ORL/XRL Rmd,Rms (2 bytes) */
+    case 0x2c:
+    case 0x9c:
+    case 0x5c:
+    case 0x4c:
+    case 0x6c:
+      {
+        static const struct { t_mem op; const char *n; } t[]=
+          { {0x2c,"ADD"},{0x9c,"SUB"},{0x5c,"ANL"},{0x4c,"ORL"},{0x6c,"XRL"} };
+        const char *n= "XRL";
+        for (unsigned i= 0; i < sizeof(t)/sizeof(t[0]); i++)
+          if (t[i].op == code) { n= t[i].n; break; }
+        t_mem sub= rom->get(addr+1);
+        if (out)
+          {
+            out->append(n); mne_sep(out);
+            rname(sub >> 4, out); out->append(","); rname(sub & 0x0f, out);
+          }
+        return 2;
+      }
+
+    /* 2D/9D/5D/4D/6D (WRj) + 2F/9F/5F/4F/6F (DRk): ADD/SUB/ANL/ORL/XRL (2b) */
+    case 0x2d: case 0x9d: case 0x5d: case 0x4d: case 0x6d:
+    case 0x2f: case 0x9f: case 0x5f: case 0x4f: case 0x6f:
+      {
+        static const struct { t_mem op; const char *n; } t[]=
+          { {0x2d,"ADD"},{0x9d,"SUB"},{0x5d,"ANL"},{0x4d,"ORL"},{0x6d,"XRL"} };
+        int dr= (code & 0x02) != 0;
+        const char *n= "XRL";
+        for (unsigned i= 0; i < sizeof(t)/sizeof(t[0]); i++)
+          if (t[i].op == (code & 0xfd)) { n= t[i].n; break; }
+        t_mem sub= rom->get(addr+1);
+        int d= sub >> 4, s= sub & 0x0f;
+        if (out)
+          {
+            out->append(n); mne_sep(out);
+            if (dr) { drname(d, out); out->append(","); drname(s, out); }
+            else    { wrname(d, out); out->append(","); wrname(s, out); }
+          }
+        return 2;
+      }
+
+    /* 2E/4E/5E/6E/9E/BE: ADD/ORL/ANL/XRL/SUB/CMP Rm/WRj/DRk,operand */
+    case 0x2e: return disass_alu_rm(addr, 0, out);
+    case 0x4e: return disass_alu_rm(addr, 1, out);
+    case 0x5e: return disass_alu_rm(addr, 2, out);
+    case 0x6e: return disass_alu_rm(addr, 3, out);
+    case 0x9e: return disass_alu_rm(addr, 4, out);
+    case 0xbe: return disass_alu_rm(addr, 5, out);
+
+    case 0xbc:        /* CMP Rm,Rn (byte compare) */
+      {
+        t_mem sub= rom->get(addr+1);
+        if (out)
+          {
+            out->append("CMP"); mne_sep(out);
+            rname(sub >> 4, out); out->append(","); rname(sub & 0x0f, out);
+          }
+        return 2;
+      }
+
+    case 0x7c: return disass_regmove(addr, 0x7c, out);
+    case 0x7d: return disass_regmove(addr, 0x7d, out);
+    case 0x7f: return disass_regmove(addr, 0x7f, out);
+
+    default:
+      if (out)
+        out->appendf(".db 0x%02x", (unsigned)code);
+      return 1;
+    }
+}
+
 /* End of s51.src/uc251.cc */
