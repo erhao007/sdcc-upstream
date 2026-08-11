@@ -58,6 +58,8 @@ public:
 
   virtual int exec_inst(void);
   virtual void make_address_spaces(void);
+  virtual void make_chips(void);            // chains to inherited, then adds eaxfr_chip
+  virtual void make_memories(void);         // chains to inherited, then decode_eaxfr()
 
   // Disassembly: override the inherited 8051 table decoder with a real
   // MCS-251 Source-mode decoder.  Without this, uCsim decodes MCS-251 bytes
@@ -138,6 +140,20 @@ protected:
   // Used by read_edata's von-Neumann mirror to tell loaded 0xFF data from
   // empty (erased) ROM.  Covers the full 128 KiB ROM window.
   unsigned char rom_loaded[0x20000 / 8];
+
+  // EAXFR (extended SFR) region 0x7E0000-0x7EFFFF: extended peripherals
+  // (I2C/PWM/DMA/CAN) declared in stc32g12k128.h as __xdata __at(0x7E....).
+  // Firmware reaches them via a 24-bit @dpx pointer (DPXL=0x7E), which
+  // write_edata/read_edata route.  Without this dedicated backing store
+  // those addresses silently alias xram[addr & 0xffff].  Wired as a proper
+  // three-piece (address space + chip + decoder) so the cells are decoded
+  // (CELL_NON_DECODED cleared) and the region shows up in `info mem` /
+  // VCD.  Note: P_SW2.EAXFR (bit 7 of SFR 0xBA) gates access on real
+  // hardware; the simulator does NOT enforce the gate (it routes
+  // 0x7E0000+ unconditionally; disabled-state behaviour is unverified).
+  class cl_address_space *eaxfr;
+  class cl_memory_chip *eaxfr_chip;
+  void decode_eaxfr(void);
 
   // --- Disassembly decode (private; mirrors exec_inst's dispatch tree) ---
   // disass_251 decodes the instruction whose opcode is at PC=addr.  It writes

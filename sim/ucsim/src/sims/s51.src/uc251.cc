@@ -73,6 +73,15 @@ cl_uc251::make_address_spaces(void)
   xram->init();
   address_spaces->add(xram);
 
+  /* EAXFR (extended SFR) region 0x7E0000-0x7EFFFF: I2C/PWM/DMA/CAN etc.,
+     declared in stc32g12k128.h as __xdata __at(0x7E....) and reached via a
+     24-bit @dpx pointer.  Has its own backing store so 0x7E.... no longer
+     aliases xram[addr & 0xffff].  Chip + decoder are wired in make_chips()
+     and decode_eaxfr() (see make_memories). */
+  eaxfr= new cl_address_space("eaxfr", 0x7E0000, 0x10000, 8);
+  eaxfr->init();
+  address_spaces->add(eaxfr);
+
   regs= new cl_address_space("regs", 0, 8, 8);
   regs->init();
   address_spaces->add(regs);
@@ -84,6 +93,39 @@ cl_uc251::make_address_spaces(void)
   dptr= new cl_address_space("dptr", 0, 4, 8);
   dptr->init();
   address_spaces->add(dptr);
+}
+
+
+/* Chip + decoder for the EAXFR region (mirrors cl_51core::make_chips and  */
+/* decode_xram).  make_memories orchestrates: address spaces (above),       */
+/* chips, then decode_*; we chain to the inherited versions for everything  */
+/* except eaxfr, then wire eaxfr<->eaxfr_chip ourselves.                    */
+void
+cl_uc251::make_chips(void)
+{
+  cl_uc51r::make_chips();   /* rom/iram/xram/sfr/eram chips (inherited) */
+
+  eaxfr_chip= new cl_chip8("eaxfr_chip", 0x10000, 8);
+  eaxfr_chip->init();
+  memchips->add(eaxfr_chip);
+}
+
+void
+cl_uc251::make_memories(void)
+{
+  cl_uc89c51r::make_memories();   /* default address spaces + chips + decode_* */
+  decode_eaxfr();
+}
+
+void
+cl_uc251::decode_eaxfr(void)
+{
+  class cl_address_decoder *ad;
+  ad= new cl_address_decoder(eaxfr, eaxfr_chip, 0x7E0000, 0x7EFFFF, 0);
+  ad->init();
+  ad->set_name("def_eaxfr_decoder");
+  eaxfr->decoders->add(ad);
+  ad->activate(0);   /* clears CELL_NON_DECODED -> visible in info mem, VCD-safe */
 }
 
 
@@ -267,6 +309,8 @@ cl_uc251::read_edata(t_addr addr)
 	return(rom->read(addr));
       return(xram->read(addr & 0xffff));
     }
+  if (addr >= 0x7E0000 && addr < 0x7F0000)
+    return(eaxfr->read(addr));   /* extended SFR (I2C/PWM/DMA/CAN) */
   return(xram->read(addr & 0xffff));
 }
 
@@ -291,8 +335,15 @@ cl_uc251::read_edata_ram(t_addr addr)
 void
 cl_uc251::write_edata(t_addr addr, t_mem v)
 {
+  addr &= 0xffffff;   /* match read_edata/read_edata_ram: a generic @dpx
+                         pointer can carry a full 24-bit DPX (DPXL<<16 |
+                         DPH<<8 | DPL), so normalise before the region
+                         checks or a high-byte-set address would bypass
+                         the EAXFR branch and fold into xram. */
   if (addr < 0x100)
     iram->write(addr, v);
+  else if (addr >= 0x7E0000 && addr < 0x7F0000)
+    eaxfr->write(addr, v);   /* extended SFR (I2C/PWM/DMA/CAN) */
   else
     xram->write(addr & 0xffff, v);
 }

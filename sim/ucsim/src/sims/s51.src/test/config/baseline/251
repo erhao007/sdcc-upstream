@@ -26,7 +26,7 @@ Controller has 16 hardware element(s).
 @R1 73 s  PSW= 0x00 CY=0 AC=0 OV=0 P=0
 SP 0x07 -> 6b 95 bc 8b c9 fc 58 41
   *DPTR0= 0x0000 @DPTR0= 0xe4 228 .
-   DPTR1= 0xad03 @DPTR1= 0x9c 156 .
+   DPTR1= 0x5873 @DPTR1= 0xd5 213 .
 0x00000    ff          .db 0xff                                      
 Memory chips:
   0x000000-0x0000ff      256 variable_storage (32,%08x,0x%02x)
@@ -35,6 +35,7 @@ Memory chips:
   0x000000-0x00ffff    65536 xram_chip (8,%02x,0x%04x)
   0x000000-0x00007f      128 sfr_chip (8,%02x,0x%02x)
   0x000000-0x0000ff      256 eram_chip (8,%02x,0x%02x)
+  0x000000-0x00ffff    65536 eaxfr_chip (8,%02x,0x%04x)
   0x000000-0x000017       24 dptr_chip (8,%02x,0x%02x)
 Address spaces:
   0x000000-0x0000ff      256 variables (32,%08x,0x%02x)
@@ -42,6 +43,7 @@ Address spaces:
   0x000000-0x0000ff      256 iram (8,%02x,0x%02x)
   0x000080-0x0000ff      128 sfr (8,%02x,0x%02x)
   0x000000-0x00ffff    65536 xram (8,%02x,0x%04x)
+  0x7e0000-0x7effff    65536 eaxfr (8,%02x,0x%04x)
   0x000000-0x000007        8 regs (8,%02x,0x%01x)
   0x000000-0x0000ff      256 bits (1,%01x,0x%02x)
   0x000000-0x000003        4 dptr (8,%02x,0x%01x)
@@ -61,6 +63,7 @@ Address decoders:
       *   0. eram_chip 0x00
           1. xram_chip 0x0000
   xram 0x0100 0xffff -> xram_chip 0x0100 activated
+  eaxfr 0x7e0000 0x7effff -> eaxfr_chip 0x0000 activated
   regs 0x0 0x7 -> banked
     bank selector: sfr[0xd0] mask=0x18 banks=4 act=0
     banks:
