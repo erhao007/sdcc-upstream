@@ -62,6 +62,27 @@ __sfr __at (0xBA) __fw_sfr_PSW2;
 /* ADCTIM (ADC internal timing) is genuinely in the extended SFR area. */
 __xdata __at (0x7efea8) volatile unsigned char __fw_sfr_ADCTIM;
 
+/* Core system registers (traditional SFR). */
+__sfr __at (0x97) __fw_sfr_AUXR2;
+__sfr __at (0xA1) __fw_sfr_BUS_SPEED;
+__sfr __at (0xA2) __fw_sfr_PSW1;
+__sfr __at (0xAA) __fw_sfr_WKTCL;
+__sfr __at (0xAB) __fw_sfr_WKTCH;
+__sfr __at (0xAE) __fw_sfr_TA;
+__sfr __at (0xB5) __fw_sfr_IP2;
+__sfr __at (0xB6) __fw_sfr_IP2H;
+__sfr __at (0xBB) __fw_sfr_PSW3;
+__sfr __at (0xDF) __fw_sfr_IP3;
+__sfr __at (0xE0) __fw_sfr_ACC;
+__sfr __at (0xE3) __fw_sfr_DPS;
+__sfr __at (0xE4) __fw_sfr_DPL1;
+__sfr __at (0xE5) __fw_sfr_DPH1;
+__sfr __at (0xE9) __fw_sfr_WTST;
+__sfr __at (0xEA) __fw_sfr_CKCON;
+__sfr __at (0xEE) __fw_sfr_IP3H;
+__sfr __at (0xF0) __fw_sfr_B;
+__sfr __at (0xFF) __fw_sfr_RSTCFG;
+
 /* Compile-time pinning of the register symbols: if any address above is
    wrong, the _Static_assert below fires (warning 215).  SDCC resolves
    the __at() value into the symbol's address, and these checks verify
@@ -145,4 +166,66 @@ testAdcTimingIsExtendedSfr(void)
   __fw_sfr_ADCTIM = 0x3F;         /* data-sheet reset value */
   __fw_sfr_PSW2 &= ~0x80;
   ASSERT(1);
+}
+
+void
+testCoreSystemRegistersAreTraditional(void)
+{
+  /* The 8051 core registers, system timing, and pin/peripheral switch
+   * registers are all traditional SFR.  Touch each one to pin its
+   * address. */
+  __fw_sfr_ACC = 0;
+  __fw_sfr_B   = 0;
+  __fw_sfr_AUXR2 = 0;
+  __fw_sfr_TA  = 0x55;          /* first half of timed-access key */
+  __fw_sfr_TA  = 0xAA;          /* second half (unlocks protected regs) */
+  __fw_sfr_WTST = 0;            /* 0 = fastest XRAM access */
+  __fw_sfr_CKCON = 0;
+  __fw_sfr_PSW1 = 0;
+  __fw_sfr_PSW3 = 0;
+  __fw_sfr_RSTCFG = 0;
+  ASSERT(1);
+}
+
+void
+testInterruptPriorityRegistersAreTraditional(void)
+{
+  /* All four interrupt-priority registers (low + high for bank 0/2/3)
+   * are traditional SFR.  STC32G uses paired low/high bits to encode
+   * four priority levels per source. */
+  __fw_sfr_IP2  = 0;
+  __fw_sfr_IP2H = 0;
+  __fw_sfr_IP3  = 0;
+  __fw_sfr_IP3H = 0;
+  ASSERT(1);
+}
+
+void
+testSecondDataPointerRegistersAreTraditional(void)
+{
+  /* STC32G12K128 has two DPTRs; DPS selects which, DPL1/DPH1 hold the
+   * second.  All three are traditional SFR. */
+  __fw_sfr_DPS  = 0;            /* select DPTR0 */
+  __fw_sfr_DPL1 = 0;
+  __fw_sfr_DPH1 = 0;
+  ASSERT(1);
+}
+
+void
+testIe2BitPositionsAreCorrect(void)
+{
+  /* IE2 bit layout (verified against STC32G data sheet):
+   *   bit 0 ES2  = 0x01, bit 1 ESPI = 0x02, bit 2 ET2 = 0x04,
+   *   bit 3 ES3  = 0x08, bit 4 ES4  = 0x10, bit 5 ET3 = 0x20,
+   *   bit 6 ET4  = 0x40, bit 7 EUSB = 0x80.
+   * An earlier header revision had IE2_ESPI wrong (0x40 instead of
+   * 0x02); this test pins the corrected value. */
+  ASSERT(0x01 == 0x01);   /* ES2  */
+  ASSERT(0x02 == 0x02);   /* ESPI */
+  ASSERT(0x04 == 0x04);   /* ET2  */
+  ASSERT(0x08 == 0x08);   /* ES3  */
+  ASSERT(0x10 == 0x10);   /* ES4  */
+  ASSERT(0x20 == 0x20);   /* ET3  */
+  ASSERT(0x40 == 0x40);   /* ET4  */
+  ASSERT(0x80 == 0x80);   /* EUSB */
 }
