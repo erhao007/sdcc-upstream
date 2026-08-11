@@ -192,7 +192,13 @@ awk '
 
 grep -Eq '^[[:space:]]*ecall[[:space:]]+_mcs251_callee$' \
     "$test_dir/call-24bit.asm"
-grep -Eq '^[[:space:]]*ejmp[[:space:]]+_mcs251_stop$' \
+# Tail-call optimisation (ejmp for _Noreturn callees) was disabled in
+# 640a233 because the global optimizeReturn flag made it unsafe for
+# callers with stack frames (ejmp skips the dec-spx epilogue).  The
+# current backend always uses ecall for _Noreturn functions; the
+# noreturn-with-stack-argument guard below confirms that case is also
+# ecall, not ejmp.
+grep -Eq '^[[:space:]]*ecall[[:space:]]+_mcs251_stop$' \
     "$test_dir/call-24bit.asm"
 grep -Eq '^[[:space:]]*ecall[[:space:]]+_mcs251_stop_with_stack_argument$' \
     "$test_dir/call-24bit.asm"
@@ -217,7 +223,9 @@ grep -Eq '^[[:space:]]*mov[[:space:]]+b,[[:space:]]*r5$' \
     "$test_dir/forward-four-bytes.asm"
 grep -Eq '^[[:space:]]*mov[[:space:]]+a,[[:space:]]*r4$' \
     "$test_dir/forward-four-bytes.asm"
-grep -Eq '^[[:space:]]*ejmp[[:space:]]+_mcs251_two_argument_callee$' \
+# forward_four_bytes tail-calls two_argument_callee; the tail-call
+# optimisation was disabled (640a233) so this is now ecall+eret, not ejmp.
+grep -Eq '^[[:space:]]*ecall[[:space:]]+_mcs251_two_argument_callee$' \
     "$test_dir/forward-four-bytes.asm"
 
 if grep -Eq '^[[:space:]]*(lcall|ljmp)[[:space:]]+_mcs251_(callee|stop)$' \
