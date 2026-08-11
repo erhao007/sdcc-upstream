@@ -95,6 +95,7 @@ __sfr __at (0xDF) IP3;      /* interrupt priority 3 (UART3/4) */
 __sfr __at (0xD0) PSW;      /* 251 PSW (CY/AC/F0/RS1/RS0/OV/F1/P) */
 __sfr __at (0xD1) PSW1;     /* 251 PSW1 (bit7=N, bit6=Z, ...) */
 __sfr __at (0xD8) CCON;     /* PCA control (251 bit-addressable) */
+__sfr __at (0xDC) USBCLK;   /* USB clock control */
 __sfr __at (0xE0) ACC;      /* 8051 accumulator (compiler-reserved on mcs251) */
 __sfr __at (0xE1) P7M1;
 __sfr __at (0xE2) P7M0;
@@ -110,7 +111,10 @@ __sfr __at (0xED) DMAIR;    /* DMA interrupt flag register */
 __sfr __at (0xEE) IP3H;     /* interrupt priority 3 high byte */
 __sfr __at (0xEF) AUXINTIF; /* auxiliary interrupt flag (INT2/INT3/INT4/COMPCA) */
 __sfr __at (0xF0) B;        /* 8051 B register (mul/div second operand) */
+__sfr __at (0xF1) CANICR;   /* CAN interrupt control (CANIE/CANIF/CAN2IE/CAN2IF + priority) */
+__sfr __at (0xF4) USBCON;   /* USB control register */
 __sfr __at (0xF8) P7;
+__sfr __at (0xFC) USBADR;   /* USB endpoint address register */
 __sfr __at (0xFF) RSTCFG;   /* reset configuration (ENCLKLVL, BOOT/ISP options) */
 
 /* -------------------------------------------------------------------------
@@ -346,6 +350,208 @@ __xdata __at (EAXFR_BASE + 0xfeff) volatile unsigned char PWMB_OISR;
 __xdata __at (EAXFR_BASE + 0xfbf4) volatile unsigned char PWMB_CFG;
 __xdata __at (EAXFR_BASE + 0xfbf5) volatile unsigned char PWMB_ADR;
 __xdata __at (EAXFR_BASE + 0xfbf6) volatile unsigned char PWMB_DAT;
+
+/* CAN (extended SFR).  STC32G12K128 has 1 or 2 CAN controllers (CAN1,
+ * optionally CAN2).  All CAN register access is indirect through a
+ * two-byte window: write the register index to CANAR, then read or
+ * write CANDR.  Enable/order the controllers via AUXR2 bits (CANEN,
+ * CAN2EN, CANSEL) and route pins via P_SW1 (CAN_S0/S1) and P_SW3. */
+__xdata __at (EAXFR_BASE + 0xfebb) volatile unsigned char CANAR;  /* CAN register address (index) */
+__xdata __at (EAXFR_BASE + 0xfebc) volatile unsigned char CANDR;  /* CAN register data */
+
+/* CAN interrupt-control register (traditional SFR 0xF1, declared above
+ * as CANICR).  Bit layout:
+ *   bit 1 CANIE  = CAN1 interrupt enable
+ *   bit 2 CANIF  = CAN1 interrupt flag (hardware set, software clear)
+ *   bit 3 PCANL  = CAN1 priority low
+ *   bit 5 CAN2IE = CAN2 interrupt enable
+ *   bit 6 CAN2IF = CAN2 interrupt flag
+ *   bit 7 PCAN2L = CAN2 priority low  (bits 4/7 are the low half of
+ *                  the 2-bit priority; PCANH/PCAN2H are reserved for
+ *                  a future high-half register). */
+#define CANICR_CANIE   0x02   /* bit 1: CAN1 interrupt enable */
+#define CANICR_CANIF   0x04   /* bit 2: CAN1 interrupt flag */
+#define CANICR_PCANL   0x08   /* bit 3: CAN1 priority low */
+#define CANICR_CAN2IE  0x20   /* bit 5: CAN2 interrupt enable */
+#define CANICR_CAN2IF  0x40   /* bit 6: CAN2 interrupt flag */
+
+/* CAN controller enable / select (AUXR2 bits). */
+#define AUXR2_CANEN    0x02   /* AUXR2 bit 1: CAN1 enable */
+#define AUXR2_CAN2EN   0x04   /* AUXR2 bit 2: CAN2 enable */
+#define AUXR2_CANSEL   0x08   /* AUXR2 bit 3: CAN register target (0=CAN1, 1=CAN2) */
+
+/* CAN pin routing (P_SW1 for CAN1, P_SW3 for CAN2). */
+#define P_SW1_CAN_S0   0x10   /* P_SW1 bit 4: CAN1 pin select bit 0 */
+#define P_SW1_CAN_S1   0x20   /* P_SW1 bit 5: CAN1 pin select bit 1 */
+
+#define CAN_VECTOR     19     /* CAN1 interrupt vector */
+
+/* DMA (extended SFR).  Each DMA channel has a standard register set:
+ * CFG (config), CR (control), STA (status), AMT (transfer amount),
+ * DONE (bytes done), TXAH/TXAL (tx address), RXAH/RXAL (rx address,
+ * bidirectional channels only), plus AMTH/DONEH high-byte extensions.
+ * Channels: M2M (memory-to-memory), ADC, SPI, LCM, UR1T..UR4T (UART
+ * 1-4 transmit), UR1R..UR4R (receive), I2CT/I2CR (I2C tx/rx),
+ * I2ST/I2SR (I2S tx/rx), ARB (priority arbiter).
+ * All accesses require P_SW2 |= P_SW2_EAXFR. */
+__xdata __at (EAXFR_BASE + 0xfa00) volatile unsigned char DMA_M2M_CFG;
+__xdata __at (EAXFR_BASE + 0xfa01) volatile unsigned char DMA_M2M_CR;
+__xdata __at (EAXFR_BASE + 0xfa02) volatile unsigned char DMA_M2M_STA;
+__xdata __at (EAXFR_BASE + 0xfa03) volatile unsigned char DMA_M2M_AMT;
+__xdata __at (EAXFR_BASE + 0xfa04) volatile unsigned char DMA_M2M_DONE;
+__xdata __at (EAXFR_BASE + 0xfa05) volatile unsigned char DMA_M2M_TXAH;
+__xdata __at (EAXFR_BASE + 0xfa06) volatile unsigned char DMA_M2M_TXAL;
+__xdata __at (EAXFR_BASE + 0xfa07) volatile unsigned char DMA_M2M_RXAH;
+__xdata __at (EAXFR_BASE + 0xfa08) volatile unsigned char DMA_M2M_RXAL;
+__xdata __at (EAXFR_BASE + 0xfa10) volatile unsigned char DMA_ADC_CFG;
+__xdata __at (EAXFR_BASE + 0xfa11) volatile unsigned char DMA_ADC_CR;
+__xdata __at (EAXFR_BASE + 0xfa12) volatile unsigned char DMA_ADC_STA;
+__xdata __at (EAXFR_BASE + 0xfa17) volatile unsigned char DMA_ADC_RXAH;
+__xdata __at (EAXFR_BASE + 0xfa18) volatile unsigned char DMA_ADC_RXAL;
+__xdata __at (EAXFR_BASE + 0xfa19) volatile unsigned char DMA_ADC_CFG2;
+__xdata __at (EAXFR_BASE + 0xfa1a) volatile unsigned char DMA_ADC_CHSW0;
+__xdata __at (EAXFR_BASE + 0xfa1b) volatile unsigned char DMA_ADC_CHSW1;
+__xdata __at (EAXFR_BASE + 0xfa20) volatile unsigned char DMA_SPI_CFG;
+__xdata __at (EAXFR_BASE + 0xfa21) volatile unsigned char DMA_SPI_CR;
+__xdata __at (EAXFR_BASE + 0xfa22) volatile unsigned char DMA_SPI_STA;
+__xdata __at (EAXFR_BASE + 0xfa23) volatile unsigned char DMA_SPI_AMT;
+__xdata __at (EAXFR_BASE + 0xfa24) volatile unsigned char DMA_SPI_DONE;
+__xdata __at (EAXFR_BASE + 0xfa25) volatile unsigned char DMA_SPI_TXAH;
+__xdata __at (EAXFR_BASE + 0xfa26) volatile unsigned char DMA_SPI_TXAL;
+__xdata __at (EAXFR_BASE + 0xfa27) volatile unsigned char DMA_SPI_RXAH;
+__xdata __at (EAXFR_BASE + 0xfa28) volatile unsigned char DMA_SPI_RXAL;
+__xdata __at (EAXFR_BASE + 0xfa29) volatile unsigned char DMA_SPI_CFG2;
+__xdata __at (EAXFR_BASE + 0xfa30) volatile unsigned char DMA_UR1T_CFG;
+__xdata __at (EAXFR_BASE + 0xfa31) volatile unsigned char DMA_UR1T_CR;
+__xdata __at (EAXFR_BASE + 0xfa32) volatile unsigned char DMA_UR1T_STA;
+__xdata __at (EAXFR_BASE + 0xfa33) volatile unsigned char DMA_UR1T_AMT;
+__xdata __at (EAXFR_BASE + 0xfa34) volatile unsigned char DMA_UR1T_DONE;
+__xdata __at (EAXFR_BASE + 0xfa35) volatile unsigned char DMA_UR1T_TXAH;
+__xdata __at (EAXFR_BASE + 0xfa36) volatile unsigned char DMA_UR1T_TXAL;
+__xdata __at (EAXFR_BASE + 0xfa38) volatile unsigned char DMA_UR1R_CFG;
+__xdata __at (EAXFR_BASE + 0xfa39) volatile unsigned char DMA_UR1R_CR;
+__xdata __at (EAXFR_BASE + 0xfa3a) volatile unsigned char DMA_UR1R_STA;
+__xdata __at (EAXFR_BASE + 0xfa3b) volatile unsigned char DMA_UR1R_AMT;
+__xdata __at (EAXFR_BASE + 0xfa3c) volatile unsigned char DMA_UR1R_DONE;
+__xdata __at (EAXFR_BASE + 0xfa3d) volatile unsigned char DMA_UR1R_RXAH;
+__xdata __at (EAXFR_BASE + 0xfa3e) volatile unsigned char DMA_UR1R_RXAL;
+__xdata __at (EAXFR_BASE + 0xfa40) volatile unsigned char DMA_UR2T_CFG;
+__xdata __at (EAXFR_BASE + 0xfa41) volatile unsigned char DMA_UR2T_CR;
+__xdata __at (EAXFR_BASE + 0xfa42) volatile unsigned char DMA_UR2T_STA;
+__xdata __at (EAXFR_BASE + 0xfa43) volatile unsigned char DMA_UR2T_AMT;
+__xdata __at (EAXFR_BASE + 0xfa44) volatile unsigned char DMA_UR2T_DONE;
+__xdata __at (EAXFR_BASE + 0xfa45) volatile unsigned char DMA_UR2T_TXAH;
+__xdata __at (EAXFR_BASE + 0xfa46) volatile unsigned char DMA_UR2T_TXAL;
+__xdata __at (EAXFR_BASE + 0xfa48) volatile unsigned char DMA_UR2R_CFG;
+__xdata __at (EAXFR_BASE + 0xfa49) volatile unsigned char DMA_UR2R_CR;
+__xdata __at (EAXFR_BASE + 0xfa4a) volatile unsigned char DMA_UR2R_STA;
+__xdata __at (EAXFR_BASE + 0xfa4b) volatile unsigned char DMA_UR2R_AMT;
+__xdata __at (EAXFR_BASE + 0xfa4c) volatile unsigned char DMA_UR2R_DONE;
+__xdata __at (EAXFR_BASE + 0xfa4d) volatile unsigned char DMA_UR2R_RXAH;
+__xdata __at (EAXFR_BASE + 0xfa4e) volatile unsigned char DMA_UR2R_RXAL;
+__xdata __at (EAXFR_BASE + 0xfa50) volatile unsigned char DMA_UR3T_CFG;
+__xdata __at (EAXFR_BASE + 0xfa51) volatile unsigned char DMA_UR3T_CR;
+__xdata __at (EAXFR_BASE + 0xfa52) volatile unsigned char DMA_UR3T_STA;
+__xdata __at (EAXFR_BASE + 0xfa53) volatile unsigned char DMA_UR3T_AMT;
+__xdata __at (EAXFR_BASE + 0xfa54) volatile unsigned char DMA_UR3T_DONE;
+__xdata __at (EAXFR_BASE + 0xfa55) volatile unsigned char DMA_UR3T_TXAH;
+__xdata __at (EAXFR_BASE + 0xfa56) volatile unsigned char DMA_UR3T_TXAL;
+__xdata __at (EAXFR_BASE + 0xfa58) volatile unsigned char DMA_UR3R_CFG;
+__xdata __at (EAXFR_BASE + 0xfa59) volatile unsigned char DMA_UR3R_CR;
+__xdata __at (EAXFR_BASE + 0xfa5a) volatile unsigned char DMA_UR3R_STA;
+__xdata __at (EAXFR_BASE + 0xfa5b) volatile unsigned char DMA_UR3R_AMT;
+__xdata __at (EAXFR_BASE + 0xfa5c) volatile unsigned char DMA_UR3R_DONE;
+__xdata __at (EAXFR_BASE + 0xfa5d) volatile unsigned char DMA_UR3R_RXAH;
+__xdata __at (EAXFR_BASE + 0xfa5e) volatile unsigned char DMA_UR3R_RXAL;
+__xdata __at (EAXFR_BASE + 0xfa60) volatile unsigned char DMA_UR4T_CFG;
+__xdata __at (EAXFR_BASE + 0xfa61) volatile unsigned char DMA_UR4T_CR;
+__xdata __at (EAXFR_BASE + 0xfa62) volatile unsigned char DMA_UR4T_STA;
+__xdata __at (EAXFR_BASE + 0xfa63) volatile unsigned char DMA_UR4T_AMT;
+__xdata __at (EAXFR_BASE + 0xfa64) volatile unsigned char DMA_UR4T_DONE;
+__xdata __at (EAXFR_BASE + 0xfa65) volatile unsigned char DMA_UR4T_TXAH;
+__xdata __at (EAXFR_BASE + 0xfa66) volatile unsigned char DMA_UR4T_TXAL;
+__xdata __at (EAXFR_BASE + 0xfa68) volatile unsigned char DMA_UR4R_CFG;
+__xdata __at (EAXFR_BASE + 0xfa69) volatile unsigned char DMA_UR4R_CR;
+__xdata __at (EAXFR_BASE + 0xfa6a) volatile unsigned char DMA_UR4R_STA;
+__xdata __at (EAXFR_BASE + 0xfa6b) volatile unsigned char DMA_UR4R_AMT;
+__xdata __at (EAXFR_BASE + 0xfa6c) volatile unsigned char DMA_UR4R_DONE;
+__xdata __at (EAXFR_BASE + 0xfa6d) volatile unsigned char DMA_UR4R_RXAH;
+__xdata __at (EAXFR_BASE + 0xfa6e) volatile unsigned char DMA_UR4R_RXAL;
+__xdata __at (EAXFR_BASE + 0xfa70) volatile unsigned char DMA_LCM_CFG;
+__xdata __at (EAXFR_BASE + 0xfa71) volatile unsigned char DMA_LCM_CR;
+__xdata __at (EAXFR_BASE + 0xfa72) volatile unsigned char DMA_LCM_STA;
+__xdata __at (EAXFR_BASE + 0xfa73) volatile unsigned char DMA_LCM_AMT;
+__xdata __at (EAXFR_BASE + 0xfa74) volatile unsigned char DMA_LCM_DONE;
+__xdata __at (EAXFR_BASE + 0xfa75) volatile unsigned char DMA_LCM_TXAH;
+__xdata __at (EAXFR_BASE + 0xfa76) volatile unsigned char DMA_LCM_TXAL;
+__xdata __at (EAXFR_BASE + 0xfa77) volatile unsigned char DMA_LCM_RXAH;
+__xdata __at (EAXFR_BASE + 0xfa78) volatile unsigned char DMA_LCM_RXAL;
+__xdata __at (EAXFR_BASE + 0xfa80) volatile unsigned char DMA_M2M_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa81) volatile unsigned char DMA_M2M_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa84) volatile unsigned char DMA_SPI_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa85) volatile unsigned char DMA_SPI_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa86) volatile unsigned char DMA_LCM_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa87) volatile unsigned char DMA_LCM_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa88) volatile unsigned char DMA_UR1T_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa89) volatile unsigned char DMA_UR1T_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa8a) volatile unsigned char DMA_UR1R_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa8b) volatile unsigned char DMA_UR1R_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa8c) volatile unsigned char DMA_UR2T_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa8d) volatile unsigned char DMA_UR2T_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa8e) volatile unsigned char DMA_UR2R_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa8f) volatile unsigned char DMA_UR2R_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa90) volatile unsigned char DMA_UR3T_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa91) volatile unsigned char DMA_UR3T_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa92) volatile unsigned char DMA_UR3R_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa93) volatile unsigned char DMA_UR3R_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa94) volatile unsigned char DMA_UR4T_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa95) volatile unsigned char DMA_UR4T_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa96) volatile unsigned char DMA_UR4R_AMTH;
+__xdata __at (EAXFR_BASE + 0xfa97) volatile unsigned char DMA_UR4R_DONEH;
+__xdata __at (EAXFR_BASE + 0xfa98) volatile unsigned char DMA_I2CT_CFG;
+__xdata __at (EAXFR_BASE + 0xfa99) volatile unsigned char DMA_I2CT_CR;
+__xdata __at (EAXFR_BASE + 0xfa9a) volatile unsigned char DMA_I2CT_STA;
+__xdata __at (EAXFR_BASE + 0xfa9b) volatile unsigned char DMA_I2CT_AMT;
+__xdata __at (EAXFR_BASE + 0xfa9c) volatile unsigned char DMA_I2CT_DONE;
+__xdata __at (EAXFR_BASE + 0xfa9d) volatile unsigned char DMA_I2CT_TXAH;
+__xdata __at (EAXFR_BASE + 0xfa9e) volatile unsigned char DMA_I2CT_TXAL;
+__xdata __at (EAXFR_BASE + 0xfaa0) volatile unsigned char DMA_I2CR_CFG;
+__xdata __at (EAXFR_BASE + 0xfaa1) volatile unsigned char DMA_I2CR_CR;
+__xdata __at (EAXFR_BASE + 0xfaa2) volatile unsigned char DMA_I2CR_STA;
+__xdata __at (EAXFR_BASE + 0xfaa3) volatile unsigned char DMA_I2CR_AMT;
+__xdata __at (EAXFR_BASE + 0xfaa4) volatile unsigned char DMA_I2CR_DONE;
+__xdata __at (EAXFR_BASE + 0xfaa5) volatile unsigned char DMA_I2CR_RXAH;
+__xdata __at (EAXFR_BASE + 0xfaa6) volatile unsigned char DMA_I2CR_RXAL;
+__xdata __at (EAXFR_BASE + 0xfaa8) volatile unsigned char DMA_I2CT_AMTH;
+__xdata __at (EAXFR_BASE + 0xfaa9) volatile unsigned char DMA_I2CT_DONEH;
+__xdata __at (EAXFR_BASE + 0xfaaa) volatile unsigned char DMA_I2CR_AMTH;
+__xdata __at (EAXFR_BASE + 0xfaab) volatile unsigned char DMA_I2CR_DONEH;
+__xdata __at (EAXFR_BASE + 0xfaad) volatile unsigned char DMA_I2C_CR;
+__xdata __at (EAXFR_BASE + 0xfaae) volatile unsigned char DMA_I2C_ST1;
+__xdata __at (EAXFR_BASE + 0xfaaf) volatile unsigned char DMA_I2C_ST2;
+__xdata __at (EAXFR_BASE + 0xfab0) volatile unsigned char DMA_I2ST_CFG;
+__xdata __at (EAXFR_BASE + 0xfab1) volatile unsigned char DMA_I2ST_CR;
+__xdata __at (EAXFR_BASE + 0xfab2) volatile unsigned char DMA_I2ST_STA;
+__xdata __at (EAXFR_BASE + 0xfab3) volatile unsigned char DMA_I2ST_AMT;
+__xdata __at (EAXFR_BASE + 0xfab4) volatile unsigned char DMA_I2ST_DONE;
+__xdata __at (EAXFR_BASE + 0xfab5) volatile unsigned char DMA_I2ST_TXAH;
+__xdata __at (EAXFR_BASE + 0xfab6) volatile unsigned char DMA_I2ST_TXAL;
+__xdata __at (EAXFR_BASE + 0xfab8) volatile unsigned char DMA_I2SR_CFG;
+__xdata __at (EAXFR_BASE + 0xfab9) volatile unsigned char DMA_I2SR_CR;
+__xdata __at (EAXFR_BASE + 0xfaba) volatile unsigned char DMA_I2SR_STA;
+__xdata __at (EAXFR_BASE + 0xfabb) volatile unsigned char DMA_I2SR_AMT;
+__xdata __at (EAXFR_BASE + 0xfabc) volatile unsigned char DMA_I2SR_DONE;
+__xdata __at (EAXFR_BASE + 0xfabd) volatile unsigned char DMA_I2SR_TXAH;
+__xdata __at (EAXFR_BASE + 0xfabe) volatile unsigned char DMA_I2SR_TXAL;
+__xdata __at (EAXFR_BASE + 0xfac0) volatile unsigned char DMA_I2ST_AMTH;
+__xdata __at (EAXFR_BASE + 0xfac1) volatile unsigned char DMA_I2ST_DONEH;
+__xdata __at (EAXFR_BASE + 0xfac2) volatile unsigned char DMA_I2SR_AMTH;
+__xdata __at (EAXFR_BASE + 0xfac3) volatile unsigned char DMA_I2SR_DONEH;
+__xdata __at (EAXFR_BASE + 0xfaf8) volatile unsigned char DMA_ARB_CFG;
+__xdata __at (EAXFR_BASE + 0xfaf9) volatile unsigned char DMA_ARB_STA;
+
+#define DMA_M2M_CR_EN    0x01   /* bit 0: memory-to-memory DMA enable */
+#define DMA_M2M_STA_DONE 0x01   /* bit 0: transfer complete */
 
 /* PWMA / PWMB key bit positions (STM32-TIM-compatible semantics). */
 #define PWMA_CR1_CEN    0x01   /* bit 0: counter enable */
