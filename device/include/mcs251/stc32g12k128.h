@@ -22,13 +22,30 @@
 #ifndef __STC32G12K128_H__
 #define __STC32G12K128_H__
 
+/* SFR address contract: single source of truth for registers that have
+ * historically been placed at the wrong address.  The __sfr __at()
+ * declarations below reference these macros, and fw-header-contract.c
+ * verifies the macros match the STC32G data sheet via #if / #error.
+ * Keep this list limited to registers that have had address bugs or
+ * are safety-critical (IAP, interrupts, SPI pin routing). */
+#define STC_SFR_ADDR_WDT_CONTR  0xC1
+#define STC_SFR_ADDR_IAP_CONTR  0xC7
+#define STC_SFR_ADDR_IE2        0xAF
+#define STC_SFR_ADDR_SADDR      0xA9
+#define STC_SFR_ADDR_ADC_CONTR  0xBC
+#define STC_SFR_ADDR_ADCCFG     0xDE
+#define STC_SFR_ADDR_SPCTL      0xCE
+#define STC_SFR_ADDR_CANICR     0xF1
+#define STC_SFR_ADDR_USBCON     0xF4
+#define STC_SFR_ADDR_SPH        0x85
+
 /* MCS-251 core SFRs (present on all 251 variants) */
 __sfr __at (0x80) P0;
 __sfr __at (0x81) SP;       /* legacy 8-bit stack pointer (unused on 251; SPX is active) */
 __sfr __at (0x82) DPL;
 __sfr __at (0x83) DPH;
 __sfr __at (0x84) DPXL;     /* DPX bits 16-23; reset value 0x00 on STC32G */
-__sfr __at (0x85) SPH;      /* legacy SP high byte */
+__sfr __at (STC_SFR_ADDR_SPH) SPH;  /* legacy SP high byte */
 __sfr __at (0x87) PCON;
 __sfr __at (0x88) TCON;
 __sfr __at (0x89) TMOD;
@@ -55,8 +72,8 @@ __sfr __at (0xAA) WKTCL;    /* wake-up timer low byte (power-down wake) */
 __sfr __at (0xAB) WKTCH;    /* wake-up timer high byte + enable */
 __sfr __at (0xAE) TA;       /* timed-access key (write 0x55,0xAA to unlock) */
 __sfr __at (0xA8) IE;       /* interrupt enable */
-__sfr __at (0xA9) SADDR;    /* UART1 slave-address (multiprocessor comms) */
-__sfr __at (0xAF) IE2;      /* interrupt enable 2 (SPI/UART2/Timer2-4/USB) */
+__sfr __at (STC_SFR_ADDR_SADDR) SADDR;    /* UART1 slave-address (multiprocessor comms) */
+__sfr __at (STC_SFR_ADDR_IE2) IE2;      /* interrupt enable 2 (SPI/UART2/Timer2-4/USB) */
 __sfr __at (0xB0) P3;
 __sfr __at (0xB1) P3M1;
 __sfr __at (0xB2) P3M0;
@@ -79,13 +96,13 @@ __sfr __at (0xC0) P4;
    load IAP_ADDRH/IAP_ADDRL + IAP_CMD, then write 0x5A followed by 0xA5
    to IAP_TRIG to launch the command.  See STC32G data sheet chapter
    "EEPROM/IAP" for the command encoding and timing-control bit field. */
-__sfr __at (0xC1) WDT_CONTR;  /* watchdog control (enable, prescaler, idle-count) */
+__sfr __at (STC_SFR_ADDR_WDT_CONTR) WDT_CONTR;  /* watchdog control (enable, prescaler, idle-count) */
 __sfr __at (0xC2) IAP_DATA;   /* IAP data (read/write byte) */
 __sfr __at (0xC3) IAP_ADDRH;  /* IAP address high byte */
 __sfr __at (0xC4) IAP_ADDRL;  /* IAP address low byte */
 __sfr __at (0xC5) IAP_CMD;    /* IAP command: 0=idle, 1=read, 2=write, 3=erase */
 __sfr __at (0xC6) IAP_TRIG;   /* IAP trigger: write 0x5A then 0xA5 to execute */
-__sfr __at (0xC7) IAP_CONTR;  /* IAP control (IAPEN enable, SWBS, SWRST, wait time) */
+__sfr __at (STC_SFR_ADDR_IAP_CONTR) IAP_CONTR;  /* IAP control (IAPEN enable, SWBS, SWRST, wait time) */
 __sfr __at (0xC8) P5;
 __sfr __at (0xC9) P5M1;
 __sfr __at (0xCA) P5M0;
@@ -111,8 +128,8 @@ __sfr __at (0xED) DMAIR;    /* DMA interrupt flag register */
 __sfr __at (0xEE) IP3H;     /* interrupt priority 3 high byte */
 __sfr __at (0xEF) AUXINTIF; /* auxiliary interrupt flag (INT2/INT3/INT4/COMPCA) */
 __sfr __at (0xF0) B;        /* 8051 B register (mul/div second operand) */
-__sfr __at (0xF1) CANICR;   /* CAN interrupt control (CANIE/CANIF/CAN2IE/CAN2IF + priority) */
-__sfr __at (0xF4) USBCON;   /* USB control register */
+__sfr __at (STC_SFR_ADDR_CANICR) CANICR;   /* CAN interrupt control (CANIE/CANIF/CAN2IE/CAN2IF + priority) */
+__sfr __at (STC_SFR_ADDR_USBCON) USBCON;   /* USB control register */
 __sfr __at (0xF8) P7;
 __sfr __at (0xFC) USBADR;   /* USB endpoint address register */
 __sfr __at (0xFF) RSTCFG;   /* reset configuration (ENCLKLVL, BOOT/ISP options) */
@@ -133,10 +150,10 @@ __sfr __at (0xFF) RSTCFG;   /* reset configuration (ENCLKLVL, BOOT/ISP options) 
    ------------------------------------------------------------------------- */
 
 /* --- ADC (12-bit, traditional SFR) -------------------------------------- */
-__sfr __at (0xBC) ADC_CONTR;  /* ADC control: ADC_POWER/START/FLAG/EPWMT + chan */
+__sfr __at (STC_SFR_ADDR_ADC_CONTR) ADC_CONTR;  /* ADC control: ADC_POWER/START/FLAG/EPWMT + chan */
 __sfr __at (0xBD) ADC_RES;    /* ADC result high byte (or low, per RESFMT) */
 __sfr __at (0xBE) ADC_RESL;   /* ADC result low byte */
-__sfr __at (0xDE) ADCCFG;     /* ADC config: SPEED[3:0] clock, RESFMT(bit5 align) */
+__sfr __at (STC_SFR_ADDR_ADCCFG) ADCCFG;     /* ADC config: SPEED[3:0] clock, RESFMT(bit5 align) */
 
 #define ADC_CONTR_ADC_POWER 0x80   /* bit 7: ADC power on */
 #define ADC_CONTR_ADC_START 0x40   /* bit 6: start a conversion */
@@ -155,7 +172,7 @@ __sfr __at (0xDE) ADCCFG;     /* ADC config: SPEED[3:0] clock, RESFMT(bit5 align
 
 /* --- SPI (traditional SFR) ---------------------------------------------- */
 __sfr __at (0xCD) SPSTAT;     /* SPI status */
-__sfr __at (0xCE) SPCTL;      /* SPI control */
+__sfr __at (STC_SFR_ADDR_SPCTL) SPCTL;      /* SPI control */
 __sfr __at (0xCF) SPDAT;      /* SPI data */
 
 #define SPSTAT_SPIF 0x80       /* bit 7: SPI transfer-complete flag */
@@ -741,25 +758,8 @@ __xdata __at (EAXFR_BASE + 0xfaf9) volatile unsigned char DMA_ARB_STA;
 #define WDT_CONTR_IDLE_WDT 0x08  /* keep counting in idle mode */
 #define WDT_CONTR_PS_MASK  0x07  /* prescaler bits [2:0] */
 
-/* -------------------------------------------------------------------------
-   SFR address contract: these macros are the single source of truth for
-   the registers that have historically been placed at the wrong address.
-   The __sfr __at() declarations above MUST match these values; the
-   fw-header-contract regression test uses #if / #error to verify the
-   match at compile time, so a future edit that moves a register triggers
-   an immediate build failure rather than a silent regression.
-   Keep this list limited to registers that have had address bugs or are
-   safety-critical (IAP, interrupts, SPI pin routing).
-   ------------------------------------------------------------------------- */
-#define STC_SFR_ADDR_WDT_CONTR  0xC1
-#define STC_SFR_ADDR_IAP_CONTR  0xC7
-#define STC_SFR_ADDR_IE2        0xAF
-#define STC_SFR_ADDR_SADDR      0xA9
-#define STC_SFR_ADDR_ADC_CONTR  0xBC
-#define STC_SFR_ADDR_ADCCFG     0xDE
-#define STC_SFR_ADDR_SPCTL      0xCE
-#define STC_SFR_ADDR_CANICR     0xF1
-#define STC_SFR_ADDR_USBCON     0xF4
-#define STC_SFR_ADDR_SPH        0x85
+/* The SFR address contract macros (STC_SFR_ADDR_*) are defined at the
+ * top of this file and referenced by the __sfr __at() declarations.
+ * See the comment there for the rationale. */
 
 #endif /* __STC32G12K128_H__ */
