@@ -76,10 +76,90 @@ __sfr __at (0xF8) P7;
 __xdata __at (EAXFR_BASE + 0xfea0) volatile unsigned char TM0PS;
 __xdata __at (EAXFR_BASE + 0xfea1) volatile unsigned char TM1PS;
 __xdata __at (EAXFR_BASE + 0xfea2) volatile unsigned char TM2PS;
+__xdata __at (EAXFR_BASE + 0xfea3) volatile unsigned char TM3PS;
+__xdata __at (EAXFR_BASE + 0xfea4) volatile unsigned char TM4PS;
 __xdata __at (EAXFR_BASE + 0xfe23) volatile unsigned char T2CR;   /* Timer2 control */
 __xdata __at (EAXFR_BASE + 0xfe24) volatile unsigned char T2CFG;
 __xdata __at (EAXFR_BASE + 0xfe7a) volatile unsigned char T2H;
 __xdata __at (EAXFR_BASE + 0xfe7b) volatile unsigned char T2L;
+
+/* Timer 3/4 (extended, accessed via EAXFR) */
+__xdata __at (EAXFR_BASE + 0xfe40) volatile unsigned char T4CR;
+__xdata __at (EAXFR_BASE + 0xfe41) volatile unsigned char T4CFG;
+__xdata __at (EAXFR_BASE + 0xfe42) volatile unsigned char T3CR;
+__xdata __at (EAXFR_BASE + 0xfe43) volatile unsigned char T3CFG;
+__xdata __at (EAXFR_BASE + 0xfe6a) volatile unsigned char T3H;
+__xdata __at (EAXFR_BASE + 0xfe6b) volatile unsigned char T3L;
+__xdata __at (EAXFR_BASE + 0xfe6c) volatile unsigned char T4H;
+__xdata __at (EAXFR_BASE + 0xfe6d) volatile unsigned char T4L;
+
+/* UART2 (extended SFR via EAXFR) */
+__xdata __at (EAXFR_BASE + 0xfe70) volatile unsigned char S2CON;
+__xdata __at (EAXFR_BASE + 0xfe71) volatile unsigned char S2BUF;
+#define S2CON_S2TI  0x02
+#define S2CON_S2RI  0x01
+#define S2CON_S2SM0 0x80
+#define S2CON_S2SM1 0x40
+#define S2CON_S2REN 0x10
+
+/* UART3 (extended SFR via EAXFR) */
+__xdata __at (EAXFR_BASE + 0xfe74) volatile unsigned char S3CON;
+__xdata __at (EAXFR_BASE + 0xfe75) volatile unsigned char S3BUF;
+
+/* UART4 (extended SFR via EAXFR) */
+__xdata __at (EAXFR_BASE + 0xfe78) volatile unsigned char S4CON;
+__xdata __at (EAXFR_BASE + 0xfe79) volatile unsigned char S4BUF;
+
+/* SPI (extended SFR via EAXFR) */
+__xdata __at (EAXFR_BASE + 0xfee0) volatile unsigned char SPSTAT;
+__xdata __at (EAXFR_BASE + 0xfee1) volatile unsigned char SPCTL;
+__xdata __at (EAXFR_BASE + 0xfee2) volatile unsigned char SPDAT;
+#define SPSTAT_SPIF 0x80
+#define SPSTAT_WCOL 0x40
+#define SPCTL_SSPEN 0x40
+#define SPCTL_MSTR  0x10
+
+/* I2C (extended SFR via EAXFR) */
+__xdata __at (EAXFR_BASE + 0xfe80) volatile unsigned char I2CCFG;
+__xdata __at (EAXFR_BASE + 0xfe81) volatile unsigned char I2CMSCR;
+__xdata __at (EAXFR_BASE + 0xfe82) volatile unsigned char I2CMSST;
+__xdata __at (EAXFR_BASE + 0xfe83) volatile unsigned char I2CSLCR;
+__xdata __at (EAXFR_BASE + 0xfe84) volatile unsigned char I2CSLCST;
+__xdata __at (EAXFR_BASE + 0xfe85) volatile unsigned char I2CTXD;
+__xdata __at (EAXFR_BASE + 0xfe86) volatile unsigned char I2CRXD;
+__xdata __at (EAXFR_BASE + 0xfe87) volatile unsigned char I2CMSAUX;
+#define I2CCFG_ENI2C    0x80
+#define I2CCFG_MSSL     0x40
+
+/* ADC (extended SFR via EAXFR) */
+__xdata __at (EAXFR_BASE + 0xfe00) volatile unsigned char ADC_CONTR;
+__xdata __at (EAXFR_BASE + 0xfe01) volatile unsigned char ADC_CFG;
+__xdata __at (EAXFR_BASE + 0xfe02) volatile unsigned char ADC_DAT;  /* low byte */
+__xdata __at (EAXFR_BASE + 0xfe03) volatile unsigned char ADC_DATL; /* alternative name */
+#define ADC_CONTR_ADC_POWER 0x80
+#define ADC_CONTR_ADC_START  0x40
+#define ADC_CONTR_ADC_FLAG   0x20
+#define ADC_CONTR_ADC_EPAGE  0x0F  /* channel select bits [3:0] */
+
+/* Interrupt enable 2 (IE2 bit definitions) */
+#define IE2_ET2  0x04   /* Timer2 interrupt enable */
+#define IE2_ESPI 0x40   /* SPI interrupt enable */
+#define IE2_ES2  0x01   /* UART2 interrupt enable */
+
+/* Interrupt vector addresses for __interrupt() */
+#define INT0_VECTOR    0    /* External Interrupt 0 */
+#define TIMER0_VECTOR  1    /* Timer 0 */
+#define INT1_VECTOR    2    /* External Interrupt 1 */
+#define TIMER1_VECTOR  3    /* Timer 1 */
+#define UART1_VECTOR   4    /* UART1 */
+#define ADC_VECTOR     5    /* ADC */
+#define LVD_VECTOR     6    /* Low Voltage Detect */
+#define PCA_VECTOR     7    /* PCA */
+#define UART2_VECTOR   8    /* UART2 */
+#define SPI_VECTOR     9    /* SPI */
+#define INT2_VECTOR   10    /* External Interrupt 2 */
+#define INT3_VECTOR   11    /* External Interrupt 3 */
+#define TIMER2_VECTOR 12    /* Timer 2 */
 
 /* --- Bit definitions for commonly used SFRs --- */
 
