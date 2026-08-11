@@ -82,6 +82,14 @@ cl_uc251::make_address_spaces(void)
   eaxfr->init();
   address_spaces->add(eaxfr);
 
+  /* XDATA region 0x010000-0x01FFFF: the real external SRAM (SDCC default
+     xdata_loc).  Has its own backing store so region 01 no longer aliases
+     the edata window (region 00) via xram[addr & 0xffff].  Chip + decoder
+     are wired in make_chips() and decode_xdata() (see make_memories). */
+  xdata= new cl_address_space("xdata", 0x010000, 0x10000, 8);
+  xdata->init();
+  address_spaces->add(xdata);
+
   regs= new cl_address_space("regs", 0, 8, 8);
   regs->init();
   address_spaces->add(regs);
@@ -108,6 +116,10 @@ cl_uc251::make_chips(void)
   eaxfr_chip= new cl_chip8("eaxfr_chip", 0x10000, 8);
   eaxfr_chip->init();
   memchips->add(eaxfr_chip);
+
+  xdata_chip= new cl_chip8("xdata_chip", 0x10000, 8);
+  xdata_chip->init();
+  memchips->add(xdata_chip);
 }
 
 void
@@ -115,6 +127,7 @@ cl_uc251::make_memories(void)
 {
   cl_uc89c51r::make_memories();   /* default address spaces + chips + decode_* */
   decode_eaxfr();
+  decode_xdata();
 }
 
 void
@@ -125,6 +138,17 @@ cl_uc251::decode_eaxfr(void)
   ad->init();
   ad->set_name("def_eaxfr_decoder");
   eaxfr->decoders->add(ad);
+  ad->activate(0);   /* clears CELL_NON_DECODED -> visible in info mem, VCD-safe */
+}
+
+void
+cl_uc251::decode_xdata(void)
+{
+  class cl_address_decoder *ad;
+  ad= new cl_address_decoder(xdata, xdata_chip, 0x010000, 0x01FFFF, 0);
+  ad->init();
+  ad->set_name("def_xdata_decoder");
+  xdata->decoders->add(ad);
   ad->activate(0);   /* clears CELL_NON_DECODED -> visible in info mem, VCD-safe */
 }
 
@@ -309,6 +333,8 @@ cl_uc251::read_edata(t_addr addr)
 	return(rom->read(addr));
       return(xram->read(addr & 0xffff));
     }
+  if (addr >= 0x010000 && addr < 0x020000)
+    return(xdata->read(addr));   /* XDATA SRAM (de-aliased from the edata window) */
   if (addr >= 0x7E0000 && addr < 0x7F0000)
     return(eaxfr->read(addr));   /* extended SFR (I2C/PWM/DMA/CAN) */
   return(xram->read(addr & 0xffff));
@@ -342,6 +368,8 @@ cl_uc251::write_edata(t_addr addr, t_mem v)
                          the EAXFR branch and fold into xram. */
   if (addr < 0x100)
     iram->write(addr, v);
+  else if (addr >= 0x010000 && addr < 0x020000)
+    xdata->write(addr, v);   /* XDATA SRAM (de-aliased from the edata window) */
   else if (addr >= 0x7E0000 && addr < 0x7F0000)
     eaxfr->write(addr, v);   /* extended SFR (I2C/PWM/DMA/CAN) */
   else

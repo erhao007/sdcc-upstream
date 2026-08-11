@@ -155,6 +155,20 @@ protected:
   class cl_memory_chip *eaxfr_chip;
   void decode_eaxfr(void);
 
+  // XDATA region 0x010000-0x01FFFF: the real external SRAM (SDCC default
+  // xdata_loc).  Firmware reaches it via a 24-bit @dpx pointer (DPXL=0x01),
+  // routed by write_edata/read_edata.  Previously region 01 folded into the
+  // same xram[addr & 0xffff] backing as the edata window (region 00), so e.g.
+  // xdata 0x01F000 aliased edata 0x00F000.  This dedicated three-piece store
+  // de-aliases them.  crtxinit/crtxclear (which use @dpx, DPXL=0x01) target
+  // this store; the edata window and von-Neumann ROM mirror (region 00) are
+  // unchanged.  read_edata_ram is left routing to xram (its callers are all
+  // 16-bit SPX stack addresses that cannot reach region 01).  MOVX (legacy
+  // 8051-compat, unused by mcs251 codegen) still hits xram directly.
+  class cl_address_space *xdata;
+  class cl_memory_chip *xdata_chip;
+  void decode_xdata(void);
+
   // --- Disassembly decode (private; mirrors exec_inst's dispatch tree) ---
   // disass_251 decodes the instruction whose opcode is at PC=addr.  It writes
   // the mnemonic+operands into *out (if non-NULL) using the same column
