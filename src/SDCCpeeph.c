@@ -1006,7 +1006,7 @@ notVolatileVariable(const char *var, lineNode *currPl, lineNode *endPl)
   if (TARGET_MCS51_LIKE)
     {
       if (*var=='@')
-        return global_not_volatile;
+        return false;
     }
   if (TARGET_Z80_LIKE)
     {
