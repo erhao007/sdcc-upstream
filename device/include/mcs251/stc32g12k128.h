@@ -27,8 +27,8 @@ __sfr __at (0x80) P0;
 __sfr __at (0x81) SP;       /* legacy 8-bit stack pointer (unused on 251; SPX is active) */
 __sfr __at (0x82) DPL;
 __sfr __at (0x83) DPH;
-__sfr __at (0x84) DPXL;     /* DPX bits 16-23; reset value 0x01 */
-__sfr __at (0x86) SPH;      /* legacy SP high byte */
+__sfr __at (0x84) DPXL;     /* DPX bits 16-23; reset value 0x00 on STC32G */
+__sfr __at (0x85) SPH;      /* legacy SP high byte */
 __sfr __at (0x87) PCON;
 __sfr __at (0x88) TCON;
 __sfr __at (0x89) TMOD;
@@ -236,15 +236,17 @@ __xdata __at (EAXFR_BASE + 0xfea4) volatile unsigned char TM4PS;
    22-30 MHz clock range. */
 __xdata __at (EAXFR_BASE + 0xfea8) volatile unsigned char ADCTIM;
 
-/* I2C (extended SFR) */
-__xdata __at (EAXFR_BASE + 0xfe80) volatile unsigned char I2CCFG;
-__xdata __at (EAXFR_BASE + 0xfe81) volatile unsigned char I2CMSCR;
-__xdata __at (EAXFR_BASE + 0xfe82) volatile unsigned char I2CMSST;
-__xdata __at (EAXFR_BASE + 0xfe83) volatile unsigned char I2CSLCR;
-__xdata __at (EAXFR_BASE + 0xfe84) volatile unsigned char I2CSLCST;
-__xdata __at (EAXFR_BASE + 0xfe85) volatile unsigned char I2CTXD;
-__xdata __at (EAXFR_BASE + 0xfe86) volatile unsigned char I2CRXD;
-__xdata __at (EAXFR_BASE + 0xfe87) volatile unsigned char I2CMSAUX;
+/* I2C (extended SFR).  Address layout verified against the STC32G data
+ * sheet and COMM/STC32G.H: 9 registers at 0x7EFE80-0x7EFE88. */
+__xdata __at (EAXFR_BASE + 0xfe80) volatile unsigned char I2CCFG;   /* config (ENI2C, MSSL) */
+__xdata __at (EAXFR_BASE + 0xfe81) volatile unsigned char I2CMSCR;  /* master control */
+__xdata __at (EAXFR_BASE + 0xfe82) volatile unsigned char I2CMSST;  /* master status */
+__xdata __at (EAXFR_BASE + 0xfe83) volatile unsigned char I2CSLCR;  /* slave control */
+__xdata __at (EAXFR_BASE + 0xfe84) volatile unsigned char I2CSLST;  /* slave status */
+__xdata __at (EAXFR_BASE + 0xfe85) volatile unsigned char I2CSLADR; /* slave address */
+__xdata __at (EAXFR_BASE + 0xfe86) volatile unsigned char I2CTXD;   /* transmit data */
+__xdata __at (EAXFR_BASE + 0xfe87) volatile unsigned char I2CRXD;   /* receive data */
+__xdata __at (EAXFR_BASE + 0xfe88) volatile unsigned char I2CMSAUX; /* master auxiliary */
 #define I2CCFG_ENI2C    0x80   /* bit 7: I2C enable */
 #define I2CCFG_MSSL     0x40   /* bit 6: master (1) / slave (0) */
 
