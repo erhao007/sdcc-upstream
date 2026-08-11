@@ -741,4 +741,25 @@ __xdata __at (EAXFR_BASE + 0xfaf9) volatile unsigned char DMA_ARB_STA;
 #define WDT_CONTR_IDLE_WDT 0x08  /* keep counting in idle mode */
 #define WDT_CONTR_PS_MASK  0x07  /* prescaler bits [2:0] */
 
+/* -------------------------------------------------------------------------
+   SFR address contract: these macros are the single source of truth for
+   the registers that have historically been placed at the wrong address.
+   The __sfr __at() declarations above MUST match these values; the
+   fw-header-contract regression test uses #if / #error to verify the
+   match at compile time, so a future edit that moves a register triggers
+   an immediate build failure rather than a silent regression.
+   Keep this list limited to registers that have had address bugs or are
+   safety-critical (IAP, interrupts, SPI pin routing).
+   ------------------------------------------------------------------------- */
+#define STC_SFR_ADDR_WDT_CONTR  0xC1
+#define STC_SFR_ADDR_IAP_CONTR  0xC7
+#define STC_SFR_ADDR_IE2        0xAF
+#define STC_SFR_ADDR_SADDR      0xA9
+#define STC_SFR_ADDR_ADC_CONTR  0xBC
+#define STC_SFR_ADDR_ADCCFG     0xDE
+#define STC_SFR_ADDR_SPCTL      0xCE
+#define STC_SFR_ADDR_CANICR     0xF1
+#define STC_SFR_ADDR_USBCON     0xF4
+#define STC_SFR_ADDR_SPH        0x85
+
 #endif /* __STC32G12K128_H__ */
