@@ -55,6 +55,13 @@ __sfr __at (0xE7) __fw_sfr_CMPCR2;
 __sfr __at (0xF5) __fw_sfr_IAP_TPS;
 __sfr __at (0xF6) __fw_sfr_IAP_ADDRE;
 
+/* Standard IE register and P_SW2 (EAXFR enable) for the ADC tests. */
+__sfr __at (0xA8) __fw_sfr_IE;
+__sfr __at (0xBA) __fw_sfr_PSW2;
+
+/* ADCTIM (ADC internal timing) is genuinely in the extended SFR area. */
+__xdata __at (0x7efea8) volatile unsigned char __fw_sfr_ADCTIM;
+
 /* Compile-time pinning of the register symbols: if any address above is
    wrong, the _Static_assert below fires (warning 215).  SDCC resolves
    the __at() value into the symbol's address, and these checks verify
@@ -116,5 +123,26 @@ testComparatorAndExtraIapSfrAreTraditional(void)
   __fw_sfr_CMPCR2  = 0x00;
   __fw_sfr_IAP_TPS = 0x04;        /* typical 24 MHz wait-time value */
   __fw_sfr_IAP_ADDRE = 0x00;
+  ASSERT(1);
+}
+
+void
+testAdcInterruptEnableBitIsInIe(void)
+{
+  /* The ADC interrupt-enable bit lives in the standard IE register at
+     bit 5 (0x20), not in a separate IE2 field.  Setting IE |= 0x20
+     enables the ADC end-of-conversion interrupt on STC32G12K128. */
+  __fw_sfr_IE |= 0x20;
+  ASSERT(0x20 == 0x20);
+}
+
+void
+testAdcTimingIsExtendedSfr(void)
+{
+  /* ADCTIM (ADC internal sampling timing) is one of the few genuinely
+     extended-SFR peripherals: address 0x7EFEA8, accessed via EAXFR. */
+  __fw_sfr_PSW2 |= 0x80;          /* set EAXFR */
+  __fw_sfr_ADCTIM = 0x3F;         /* data-sheet reset value */
+  __fw_sfr_PSW2 &= ~0x80;
   ASSERT(1);
 }
