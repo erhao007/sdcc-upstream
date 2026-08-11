@@ -55,7 +55,8 @@ __sfr __at (0xAA) WKTCL;    /* wake-up timer low byte (power-down wake) */
 __sfr __at (0xAB) WKTCH;    /* wake-up timer high byte + enable */
 __sfr __at (0xAE) TA;       /* timed-access key (write 0x55,0xAA to unlock) */
 __sfr __at (0xA8) IE;       /* interrupt enable */
-__sfr __at (0xA9) IE2;
+__sfr __at (0xA9) SADDR;    /* UART1 slave-address (multiprocessor comms) */
+__sfr __at (0xAF) IE2;      /* interrupt enable 2 (SPI/UART2/Timer2-4/USB) */
 __sfr __at (0xB0) P3;
 __sfr __at (0xB1) P3M1;
 __sfr __at (0xB2) P3M0;
@@ -63,8 +64,11 @@ __sfr __at (0xB3) P4M1;
 __sfr __at (0xB4) P4M0;
 __sfr __at (0xB5) IP2;      /* interrupt priority 2 (SPI/UART2/ext-int4) */
 __sfr __at (0xB6) IP2H;     /* interrupt priority 2 high byte */
-__sfr __at (0xB7) IPH0;     /* interrupt priority high */
+__sfr __at (0xB7) IPH0;     /* interrupt priority high (alias: IPH) */
+__sfr __at (0xB7) IPH;      /* official STC name for IPH0 */
 __sfr __at (0xB8) IPL0;     /* interrupt priority low (IP) */
+__sfr __at (0xB8) IP;       /* official STC name for IPL0 */
+__sfr __at (0xB9) SADEN;    /* UART1 slave-address mask (multiprocessor comms) */
 __sfr __at (0xBA) P_SW2;    /* peripheral switch 2 (EAXFR bit enables xdata SFR access) */
 __sfr __at (0xBB) P_SW3;    /* peripheral switch 3 (CAN pin mapping) */
 __sfr __at (0xC0) P4;
@@ -101,7 +105,10 @@ __sfr __at (0xE8) P6;
 __sfr __at (0xE9) WTST;     /* wait-state control (0 = fastest XRAM access) */
 __sfr __at (0xEA) CKCON;    /* clock control (high-speed XRAM/SFR access) */
 __sfr __at (0xEB) MXAX;     /* extended address MUX (mcs51 legacy pdata paging) */
+__sfr __at (0xEC) USBDAT;   /* USB endpoint data buffer (USB peripheral) */
+__sfr __at (0xED) DMAIR;    /* DMA interrupt flag register */
 __sfr __at (0xEE) IP3H;     /* interrupt priority 3 high byte */
+__sfr __at (0xEF) AUXINTIF; /* auxiliary interrupt flag (INT2/INT3/INT4/COMPCA) */
 __sfr __at (0xF0) B;        /* 8051 B register (mul/div second operand) */
 __sfr __at (0xF8) P7;
 __sfr __at (0xFF) RSTCFG;   /* reset configuration (ENCLKLVL, BOOT/ISP options) */
