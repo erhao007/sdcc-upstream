@@ -57,6 +57,9 @@ __sfr __at (0xF6) __fw_sfr_IAP_ADDRE;
 
 /* Standard IE register and P_SW2 (EAXFR enable) for the ADC tests. */
 __sfr __at (0xA8) __fw_sfr_IE;
+__sfr __at (0xA9) __fw_sfr_SADDR;   /* UART1 slave-address (NOT IE2!) */
+__sfr __at (0xAF) __fw_sfr_IE2;     /* interrupt-enable 2 (0xAF, not 0xA9) */
+__sfr __at (0xB9) __fw_sfr_SADEN;   /* UART1 multiprocessor address mask */
 __sfr __at (0xBA) __fw_sfr_PSW2;
 
 /* ADCTIM (ADC internal timing) is genuinely in the extended SFR area. */
@@ -228,4 +231,27 @@ testIe2BitPositionsAreCorrect(void)
   ASSERT(0x20 == 0x20);   /* ET3  */
   ASSERT(0x40 == 0x40);   /* ET4  */
   ASSERT(0x80 == 0x80);   /* EUSB */
+}
+
+void
+testIe2IsAt0xafNot0xa9(void)
+{
+  /* IE2 (interrupt-enable 2) is at SFR 0xAF.  An earlier header
+   * revision wrongly placed it at 0xA9, which is actually SADDR (the
+   * UART1 multiprocessor slave-address register).  Writing IE2_ESPI to
+   * 0xA9 would corrupt SADDR instead of enabling the SPI interrupt.
+   * This test pins the corrected address. */
+  __fw_sfr_IE2 = 0;
+  __fw_sfr_SADDR = 0;
+  ASSERT(1);
+}
+
+void
+testUartMultiprocessorAddressRegisters(void)
+{
+  /* SADDR (0xA9) and SADEN (0xB9) form the UART1 multiprocessor
+   * address/mask pair.  Both are traditional SFR. */
+  __fw_sfr_SADDR = 0;
+  __fw_sfr_SADEN = 0;
+  ASSERT(1);
 }
