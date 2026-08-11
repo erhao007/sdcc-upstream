@@ -244,6 +244,128 @@ __xdata __at (EAXFR_BASE + 0xfe87) volatile unsigned char I2CMSAUX;
 #define I2CCFG_ENI2C    0x80   /* bit 7: I2C enable */
 #define I2CCFG_MSSL     0x40   /* bit 6: master (1) / slave (0) */
 
+/* -------------------------------------------------------------------------
+   Advanced PWM (PWMA / PWMB), extended SFR.
+   STC32G12K128 has two groups of advanced PWM modelled on the STM32
+   general-purpose timer: each has a 16-bit counter, four capture/
+   compare channels, complementary outputs with dead-time and break
+   input, and an interrupt/DMA request line.  PWMA owns channels 1-4,
+   PWMB owns channels 5-8.  All registers are in the EAXFR space and
+   require P_SW2 |= P_SW2_EAXFR before access.
+
+   The naming follows the STC data sheet (PWMA_CR1, PWMA_CCMR1, ...) so
+   code written against the STC manual compiles unchanged.  Register
+   layout mirrors the STM32 TIM peripheral: CR1/CR2/SMCR are the
+   counter controls, CCMR/CCER configure each channel, CCR holds the
+   compare value, BKR/DTR/OISR gate the outputs and dead-time.
+   ------------------------------------------------------------------------- */
+
+/* PWMA — async-access window (used when the CPU runs faster than the
+ * PWM clock; writes to PWMA_* go through this CFG/ADR/DAT triplet). */
+__xdata __at (EAXFR_BASE + 0xfeb0) volatile unsigned char PWMA_ETRPS;  /* external trigger prescaler */
+__xdata __at (EAXFR_BASE + 0xfeb1) volatile unsigned char PWMA_ENO;    /* output enable per channel */
+__xdata __at (EAXFR_BASE + 0xfeb2) volatile unsigned char PWMA_PS;     /* pin select (PWMx_Pxx routing) */
+__xdata __at (EAXFR_BASE + 0xfeb3) volatile unsigned char PWMA_IOAUX;  /* auxiliary IO control */
+
+/* PWMA core counter + control registers (STM32-TIM-style layout). */
+__xdata __at (EAXFR_BASE + 0xfec0) volatile unsigned char PWMA_CR1;    /* control 1 (enable, edge, ARPE) */
+__xdata __at (EAXFR_BASE + 0xfec1) volatile unsigned char PWMA_CR2;    /* control 2 (update source) */
+__xdata __at (EAXFR_BASE + 0xfec2) volatile unsigned char PWMA_SMCR;   /* slave mode control */
+__xdata __at (EAXFR_BASE + 0xfec3) volatile unsigned char PWMA_ETR;    /* external trigger config */
+__xdata __at (EAXFR_BASE + 0xfec4) volatile unsigned char PWMA_IER;    /* interrupt enable */
+__xdata __at (EAXFR_BASE + 0xfec5) volatile unsigned char PWMA_SR1;    /* status 1 (CC1IF..CC4IF, UIF) */
+__xdata __at (EAXFR_BASE + 0xfec6) volatile unsigned char PWMA_SR2;    /* status 2 (COMIF, BIF) */
+__xdata __at (EAXFR_BASE + 0xfec7) volatile unsigned char PWMA_EGR;    /* event generation */
+__xdata __at (EAXFR_BASE + 0xfec8) volatile unsigned char PWMA_CCMR1;  /* ch1 capture/compare mode */
+__xdata __at (EAXFR_BASE + 0xfec9) volatile unsigned char PWMA_CCMR2;  /* ch2 */
+__xdata __at (EAXFR_BASE + 0xfeca) volatile unsigned char PWMA_CCMR3;  /* ch3 */
+__xdata __at (EAXFR_BASE + 0xfecb) volatile unsigned char PWMA_CCMR4;  /* ch4 */
+__xdata __at (EAXFR_BASE + 0xfecc) volatile unsigned char PWMA_CCER1;  /* ch1-2 enable/polarity */
+__xdata __at (EAXFR_BASE + 0xfecd) volatile unsigned char PWMA_CCER2;  /* ch3-4 enable/polarity */
+__xdata __at (EAXFR_BASE + 0xfece) volatile unsigned char PWMA_CNTRH;  /* counter high byte */
+__xdata __at (EAXFR_BASE + 0xfecf) volatile unsigned char PWMA_CNTRL;  /* counter low byte */
+__xdata __at (EAXFR_BASE + 0xfed0) volatile unsigned char PWMA_PSCRH;  /* prescaler high byte */
+__xdata __at (EAXFR_BASE + 0xfed1) volatile unsigned char PWMA_PSCRL;  /* prescaler low byte */
+__xdata __at (EAXFR_BASE + 0xfed2) volatile unsigned char PWMA_ARRH;   /* auto-reload high (period) */
+__xdata __at (EAXFR_BASE + 0xfed3) volatile unsigned char PWMA_ARRL;   /* auto-reload low */
+__xdata __at (EAXFR_BASE + 0xfed4) volatile unsigned char PWMA_RCR;    /* repetition counter */
+__xdata __at (EAXFR_BASE + 0xfed5) volatile unsigned char PWMA_CCR1H;  /* ch1 compare high (duty) */
+__xdata __at (EAXFR_BASE + 0xfed6) volatile unsigned char PWMA_CCR1L;  /* ch1 compare low */
+__xdata __at (EAXFR_BASE + 0xfed7) volatile unsigned char PWMA_CCR2H;  /* ch2 */
+__xdata __at (EAXFR_BASE + 0xfed8) volatile unsigned char PWMA_CCR2L;
+__xdata __at (EAXFR_BASE + 0xfed9) volatile unsigned char PWMA_CCR3H;  /* ch3 */
+__xdata __at (EAXFR_BASE + 0xfeda) volatile unsigned char PWMA_CCR3L;
+__xdata __at (EAXFR_BASE + 0xfedb) volatile unsigned char PWMA_CCR4H;  /* ch4 */
+__xdata __at (EAXFR_BASE + 0xfedc) volatile unsigned char PWMA_CCR4L;
+__xdata __at (EAXFR_BASE + 0xfedd) volatile unsigned char PWMA_BKR;    /* break input + main output enable */
+__xdata __at (EAXFR_BASE + 0xfede) volatile unsigned char PWMA_DTR;    /* dead-time generator */
+__xdata __at (EAXFR_BASE + 0xfedf) volatile unsigned char PWMA_OISR;   /* idle-state output */
+
+/* PWMA async-access window (for CPU-faster-than-PWM-clock configs). */
+__xdata __at (EAXFR_BASE + 0xfbf0) volatile unsigned char PWMA_CFG;
+__xdata __at (EAXFR_BASE + 0xfbf1) volatile unsigned char PWMA_ADR;
+__xdata __at (EAXFR_BASE + 0xfbf2) volatile unsigned char PWMA_DAT;
+
+/* PWMB — same layout as PWMA, owns channels 5-8. */
+__xdata __at (EAXFR_BASE + 0xfeb4) volatile unsigned char PWMB_ETRPS;
+__xdata __at (EAXFR_BASE + 0xfeb5) volatile unsigned char PWMB_ENO;
+__xdata __at (EAXFR_BASE + 0xfeb6) volatile unsigned char PWMB_PS;
+__xdata __at (EAXFR_BASE + 0xfeb7) volatile unsigned char PWMB_IOAUX;
+__xdata __at (EAXFR_BASE + 0xfee0) volatile unsigned char PWMB_CR1;
+__xdata __at (EAXFR_BASE + 0xfee1) volatile unsigned char PWMB_CR2;
+__xdata __at (EAXFR_BASE + 0xfee2) volatile unsigned char PWMB_SMCR;
+__xdata __at (EAXFR_BASE + 0xfee3) volatile unsigned char PWMB_ETR;
+__xdata __at (EAXFR_BASE + 0xfee4) volatile unsigned char PWMB_IER;
+__xdata __at (EAXFR_BASE + 0xfee5) volatile unsigned char PWMB_SR1;
+__xdata __at (EAXFR_BASE + 0xfee6) volatile unsigned char PWMB_SR2;
+__xdata __at (EAXFR_BASE + 0xfee7) volatile unsigned char PWMB_EGR;
+__xdata __at (EAXFR_BASE + 0xfee8) volatile unsigned char PWMB_CCMR1;
+__xdata __at (EAXFR_BASE + 0xfee9) volatile unsigned char PWMB_CCMR2;
+__xdata __at (EAXFR_BASE + 0xfeea) volatile unsigned char PWMB_CCMR3;
+__xdata __at (EAXFR_BASE + 0xfeeb) volatile unsigned char PWMB_CCMR4;
+__xdata __at (EAXFR_BASE + 0xfeec) volatile unsigned char PWMB_CCER1;
+__xdata __at (EAXFR_BASE + 0xfeed) volatile unsigned char PWMB_CCER2;
+__xdata __at (EAXFR_BASE + 0xfeee) volatile unsigned char PWMB_CNTRH;
+__xdata __at (EAXFR_BASE + 0xfeef) volatile unsigned char PWMB_CNTRL;
+__xdata __at (EAXFR_BASE + 0xfef0) volatile unsigned char PWMB_PSCRH;
+__xdata __at (EAXFR_BASE + 0xfef1) volatile unsigned char PWMB_PSCRL;
+__xdata __at (EAXFR_BASE + 0xfef2) volatile unsigned char PWMB_ARRH;
+__xdata __at (EAXFR_BASE + 0xfef3) volatile unsigned char PWMB_ARRL;
+__xdata __at (EAXFR_BASE + 0xfef4) volatile unsigned char PWMB_RCR;
+__xdata __at (EAXFR_BASE + 0xfef5) volatile unsigned char PWMB_CCR5H;
+__xdata __at (EAXFR_BASE + 0xfef6) volatile unsigned char PWMB_CCR5L;
+__xdata __at (EAXFR_BASE + 0xfef7) volatile unsigned char PWMB_CCR6H;
+__xdata __at (EAXFR_BASE + 0xfef8) volatile unsigned char PWMB_CCR6L;
+__xdata __at (EAXFR_BASE + 0xfef9) volatile unsigned char PWMB_CCR7H;
+__xdata __at (EAXFR_BASE + 0xfefa) volatile unsigned char PWMB_CCR7L;
+__xdata __at (EAXFR_BASE + 0xfefb) volatile unsigned char PWMB_CCR8H;
+__xdata __at (EAXFR_BASE + 0xfefc) volatile unsigned char PWMB_CCR8L;
+__xdata __at (EAXFR_BASE + 0xfefd) volatile unsigned char PWMB_BKR;
+__xdata __at (EAXFR_BASE + 0xfefe) volatile unsigned char PWMB_DTR;
+__xdata __at (EAXFR_BASE + 0xfeff) volatile unsigned char PWMB_OISR;
+__xdata __at (EAXFR_BASE + 0xfbf4) volatile unsigned char PWMB_CFG;
+__xdata __at (EAXFR_BASE + 0xfbf5) volatile unsigned char PWMB_ADR;
+__xdata __at (EAXFR_BASE + 0xfbf6) volatile unsigned char PWMB_DAT;
+
+/* PWMA / PWMB key bit positions (STM32-TIM-compatible semantics). */
+#define PWMA_CR1_CEN    0x01   /* bit 0: counter enable */
+#define PWMA_CR1_ARPE   0x80   /* bit 7: ARR pre-load (shadow) */
+#define PWMA_BKR_MOE    0x80   /* bit 7: main output enable (gates all PWM) */
+#define PWMA_BKR_BKE    0x40   /* bit 6: break input enable */
+#define PWMA_SR1_UIF    0x01   /* bit 0: update interrupt flag */
+#define PWMA_SR1_CC1IF  0x02   /* bit 1: ch1 capture/compare flag */
+#define PWMA_IER_UIE    0x01   /* bit 0: update interrupt enable */
+#define PWMA_IER_CC1IE  0x02   /* bit 1: ch1 interrupt enable */
+/* (PWMB_* bit macros share the same bit positions as PWMA_*.) */
+#define PWMB_CR1_CEN    0x01
+#define PWMB_CR1_ARPE   0x80
+#define PWMB_BKR_MOE    0x80
+#define PWMB_SR1_UIF    0x01
+
+/* PWM interrupt vectors. */
+#define PWMA_VECTOR     26     /* 0x00D3 */
+#define PWMB_VECTOR     27     /* 0x00DB */
+
 /* Timed-access key: certain protected SFRs (WDT_CONTR, IAP_CONTR,
  * P_SWx bits, RSTCFG) can only be written within three machine cycles
  * of writing 0x55 then 0xA5 to TA.  Helper macro for clarity. */
