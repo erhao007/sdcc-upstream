@@ -85,6 +85,12 @@ testTortureExecute (void)
 {
 #ifndef __SDCC_pdk14 // Lack of memory - see RFE #607 for details.
 #ifndef __SDCC_pic16
+#if defined(__SDCC_mcs251)
+  /* MCS-251 overlays a 24-bit pointer and 32-bit intptr_t in this union. */
+  if (sizeof (W) != sizeof (void *))
+    return;
+#endif
+
   union u0 uv[] = {{ .i = 111 }, { .i = 222 }, { .i = 333 }, { .i = 444 }};
   struct s1 s = { 0, {{ .i = 555 }, { .i = 0 }, { .i = 999 }, { .i = 777 }}};
 #if !(defined(__SDCC_pic14) && !defined(__SDCC_PIC14_ENHANCED)) // Pseudo-stack size limit
@@ -98,4 +104,3 @@ testTortureExecute (void)
 #endif
 #endif
 }
-

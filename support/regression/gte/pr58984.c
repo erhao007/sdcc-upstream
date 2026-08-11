@@ -5,10 +5,16 @@ struct T { char f0; int : 6; int f1 : 5; };
 
 int a, *c = &a, e, n, b, m;
 
+#if defined(__SDCC_mcs251) && defined(__SDCC_MODEL_SMALL) && !defined(__SDCC_STACK_AUTO)
+#define LOCAL_F_SIZE 1 /* Only f[0] is used; 36 far pointers do not fit DSEG. */
+#else
+#define LOCAL_F_SIZE 36
+#endif
+
 static int
 foo (struct S p)
 {
-  const unsigned short *f[36];
+  const unsigned short *f[LOCAL_F_SIZE];
   for (; e < 2; e++)
     {
       const unsigned short **i = &f[0];
@@ -25,7 +31,7 @@ foo (struct S p)
 static int
 bar (struct T p)
 {
-  const unsigned short *f[36];
+  const unsigned short *f[LOCAL_F_SIZE];
   for (; e < 2; e++)
     {
       const unsigned short **i = &f[0];

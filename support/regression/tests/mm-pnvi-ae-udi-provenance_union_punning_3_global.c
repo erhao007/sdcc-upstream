@@ -33,6 +33,12 @@ typedef union { uintptr_t ui; int *up; } un;
 void
 testMM(void)
 {
+#if defined(__SDCC_mcs251)
+  /* Writing the 24-bit pointer member does not initialize all 32 bits. */
+  if (sizeof(uintptr_t) != sizeof(int *))
+    return;
+#endif
+
   un u; 
   int *p = &x;
   u.up = p;
@@ -42,4 +48,3 @@ testMM(void)
   ASSERT (x == *p);
   ASSERT (x == *q);
 }
-

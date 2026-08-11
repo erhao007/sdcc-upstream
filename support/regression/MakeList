@@ -262,6 +262,15 @@ EXCLUDE_mcs51-small += \
     gte_pr58277-2 \
 	gte_pr58984 \
 	gte_shiftdi-2
+# mcs251 small non-stack-auto has the same 128-byte DSEG/OSEG budget as
+# mcs51-small, so the same structural-memory tests are excluded here.
+EXCLUDE_mcs251 += \
+	gte_pr58277-2
+# mcs251 small non-stack-auto: long-long/double runtime helpers overflow the
+# 128-byte DSEG/OSEG budget (structural; the same test is excluded for pdk
+# below, see EXCLUDE_ARCH_pdk / tcc_110_average).
+EXCLUDE_mcs251 += \
+	tcc_110_average
 EXCLUDE_mcs51-small-stack-auto += \
 	gte_loop-ivopts-2 \
 	gte_shiftdi-2

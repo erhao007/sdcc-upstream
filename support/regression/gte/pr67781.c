@@ -26,6 +26,11 @@ int pr67781()
 int
 main ()
 {
+  /* The original GCC test requires an at-least-32-bit int target.  SDCC's
+     regression importer does not interpret dg-require-effective-target. */
+  if (sizeof (int) * __CHAR_BIT__ < 32)
+    return 0;
+
   if (sizeof (uint32_t) * __CHAR_BIT__ != 32)
     return 0;
 
