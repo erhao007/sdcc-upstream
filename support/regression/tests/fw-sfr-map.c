@@ -86,6 +86,10 @@ __sfr __at (0xEE) __fw_sfr_IP3H;
 __sfr __at (0xF0) __fw_sfr_B;
 __sfr __at (0xFF) __fw_sfr_RSTCFG;
 
+/* External-interrupt control (INTCLKO + AUXINTIF). */
+__sfr __at (0x8F) __fw_sfr_INTCLKO;
+__sfr __at (0xEF) __fw_sfr_AUXINTIF;
+
 /* Compile-time pinning of the register symbols: if any address above is
    wrong, the _Static_assert below fires (warning 215).  SDCC resolves
    the __at() value into the symbol's address, and these checks verify
@@ -253,5 +257,17 @@ testUartMultiprocessorAddressRegisters(void)
    * address/mask pair.  Both are traditional SFR. */
   __fw_sfr_SADDR = 0;
   __fw_sfr_SADEN = 0;
+  ASSERT(1);
+}
+
+void
+testExtendedExternalInterruptControlRegisters(void)
+{
+  /* INTCLKO (0x8F) enables the extended external interrupts 2/3/4
+   * (EX2/EX3/EX4 = bits 4/5/6) and timer clock outputs.  AUXINTIF
+   * (0xEF) holds the interrupt flags for INT2/3/4.  Both are
+   * traditional SFR; touching them pins the addresses. */
+  __fw_sfr_INTCLKO  = 0;
+  __fw_sfr_AUXINTIF = 0;
   ASSERT(1);
 }
