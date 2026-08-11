@@ -90,6 +90,15 @@ __sfr __at (0xFF) __fw_sfr_RSTCFG;
 __sfr __at (0x8F) __fw_sfr_INTCLKO;
 __sfr __at (0xEF) __fw_sfr_AUXINTIF;
 
+/* Advanced PWM (extended SFR).  PWMA owns channels 1-4, PWMB channels
+ * 5-8; both use the STM32-TIM-style register layout.  Declared here at
+ * their documented flat addresses so a header regression cannot move
+ * them silently. */
+__xdata __at (0x7efec0) volatile unsigned char __fw_pwma_CR1;
+__xdata __at (0x7efedd) volatile unsigned char __fw_pwma_BKR;
+__xdata __at (0x7efee0) volatile unsigned char __fw_pwmb_CR1;
+__xdata __at (0x7efefd) volatile unsigned char __fw_pwmb_BKR;
+
 /* Compile-time pinning of the register symbols: if any address above is
    wrong, the _Static_assert below fires (warning 215).  SDCC resolves
    the __at() value into the symbol's address, and these checks verify
@@ -269,5 +278,22 @@ testExtendedExternalInterruptControlRegisters(void)
    * traditional SFR; touching them pins the addresses. */
   __fw_sfr_INTCLKO  = 0;
   __fw_sfr_AUXINTIF = 0;
+  ASSERT(1);
+}
+
+void
+testAdvancedPwmRegistersAreExtended(void)
+{
+  /* PWMA / PWMB are advanced-PWM groups modelled on the STM32 TIM.
+   * Both live in the extended-SFR area (0x7E0000+): PWMA at 0x7EFExx
+   * (channels 1-4), PWMB at 0x7EFExx (channels 5-8).  Access requires
+   * EAXFR.  Pin the two most safety-critical registers of each group:
+   * CR1 (counter enable) and BKR (main output enable + break input). */
+  __fw_sfr_PSW2 |= 0x80;          /* set EAXFR */
+  __fw_pwma_CR1 = 0;
+  __fw_pwma_BKR = 0;
+  __fw_pwmb_CR1 = 0;
+  __fw_pwmb_BKR = 0;
+  __fw_sfr_PSW2 &= ~0x80;
   ASSERT(1);
 }
