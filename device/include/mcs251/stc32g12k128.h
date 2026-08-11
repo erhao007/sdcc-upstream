@@ -86,56 +86,118 @@ __sfr __at (0xE1) P7M1;
 __sfr __at (0xE2) P7M0;
 __sfr __at (0xF8) P7;
 
-/* Timer pre-scalers and extended SFRs are mapped in xdata space when
-   P_SW2.EAXFR (0x80) is set.  Base 0x7E0000 is the STC32G extended SFR area. */
+/* -------------------------------------------------------------------------
+   STC32G12K128 peripheral SFR map.
+
+   STC32G12K128 keeps the 8051 traditional SFR block (0x80-0xFF) for the
+   commonly used peripherals (ADC, SPI, UART2/3/4, Timer2/3/4, comparator,
+   extra IAP fields).  These are accessed with direct addressing just like
+   P0/TCON/SCON above, NOT through the extended SFR window.
+
+   The extended SFR area (0x7E0000+, "EAXFR space") holds the newer
+   peripherals and pin-configuration registers: I2C, timer pre-scalers,
+   clock control, GPIO pull-up / drive-strength / slew-rate, advanced
+   PWM (PWMA/PWMB), DMA, CAN.  Accessing any of these requires setting
+   P_SW2.EAXFR (P_SW2 |= P_SW2_EAXFR) first.
+   ------------------------------------------------------------------------- */
+
+/* --- ADC (12-bit, traditional SFR) -------------------------------------- */
+__sfr __at (0xBC) ADC_CONTR;  /* ADC control: ADC_POWER/START/FLAG/EPWMT + chan */
+__sfr __at (0xBD) ADC_RES;    /* ADC result high byte (or low, per RESFMT) */
+__sfr __at (0xBE) ADC_RESL;   /* ADC result low byte */
+__sfr __at (0xDE) ADCCFG;     /* ADC config: SPEED[7:5], RESFMT(bit5 align) */
+
+#define ADC_CONTR_ADC_POWER 0x80   /* bit 7: ADC power on */
+#define ADC_CONTR_ADC_START 0x40   /* bit 6: start a conversion */
+#define ADC_CONTR_ADC_FLAG  0x20   /* bit 5: conversion-complete flag */
+#define ADC_CONTR_ADC_EPWMT 0x10   /* bit 4: PWM-trigger conversion enable */
+#define ADC_CONTR_ADC_CHS   0x0F   /* bits [3:0]: analogue channel select */
+
+#define ADCCFG_RESFMT       0x20   /* bit 5: 0=left-justified, 1=right-justified */
+#define ADCCFG_SPEED_MASK   0xE0   /* bits [7:5]: ADC clock = SYSclk/2/(SPEED+1) */
+
+#define ADC_VECTOR          5      /* ADC interrupt vector */
+
+/* --- SPI (traditional SFR) ---------------------------------------------- */
+__sfr __at (0xCD) SPSTAT;     /* SPI status */
+__sfr __at (0xCE) SPCTL;      /* SPI control */
+__sfr __at (0xCF) SPDAT;      /* SPI data */
+
+#define SPSTAT_SPIF 0x80       /* bit 7: SPI transfer-complete flag */
+#define SPSTAT_WCOL 0x40       /* bit 6: write-collision flag */
+#define SPCTL_SSIG  0x80       /* bit 7: SS ignore (master drives /SS in SW) */
+#define SPCTL_SPEN  0x40       /* bit 6: SPI enable */
+#define SPCTL_DORD  0x20       /* bit 5: data order (0=MSB first) */
+#define SPCTL_MSTR  0x10       /* bit 4: master mode */
+#define SPCTL_CPOL  0x08       /* bit 3: clock polarity */
+#define SPCTL_CPHA  0x04       /* bit 2: clock phase */
+#define SPCTL_SPR_MASK 0x03    /* bits [1:0]: clock prescaler */
+#define SPCTL_SPR_4    0x00    /* SYSclk/4   */
+#define SPCTL_SPR_16   0x01    /* SYSclk/16  */
+#define SPCTL_SPR_64   0x02    /* SYSclk/64  */
+#define SPCTL_SPR_128  0x03    /* SYSclk/128 */
+
+/* --- UART2/3/4 (traditional SFR) ---------------------------------------- */
+__sfr __at (0x9A) S2CON;      /* UART2 control */
+__sfr __at (0x9B) S2BUF;      /* UART2 data buffer */
+__sfr __at (0xAC) S3CON;      /* UART3 control */
+__sfr __at (0xAD) S3BUF;      /* UART3 data buffer */
+__sfr __at (0xFD) S4CON;      /* UART4 control */
+__sfr __at (0xFE) S4BUF;      /* UART4 data buffer */
+
+#define S2CON_S2TI  0x02       /* bit 1: UART2 transmit interrupt flag */
+#define S2CON_S2RI  0x01       /* bit 0: UART2 receive interrupt flag */
+#define S2CON_S2SM0 0x80       /* bit 7: mode bit 0 */
+#define S2CON_S2SM1 0x40       /* bit 6: mode bit 1 */
+#define S2CON_S2REN 0x10       /* bit 4: receive enable */
+
+/* --- Timer 2/3/4 (traditional SFR) -------------------------------------- */
+/* Timer2 shares the AUXR2 control bit layout of Timer0/1; Timer3/4 are
+   governed by the combined T4T3M register. */
+__sfr __at (0xD6) T2H;        /* Timer2 high byte */
+__sfr __at (0xD7) T2L;        /* Timer2 low byte */
+__sfr __at (0xD2) T4H;        /* Timer4 high byte */
+__sfr __at (0xD3) T4L;        /* Timer4 low byte */
+__sfr __at (0xD4) T3H;        /* Timer3 high byte */
+__sfr __at (0xD5) T3L;        /* Timer3 low byte */
+__sfr __at (0xDD) T4T3M;      /* Timer4/3 mode: T4R/T4_CT/T4x12/T4CLKO/T3R/... */
+
+#define T4T3M_T4R     0x80     /* bit 7: Timer4 run */
+#define T4T3M_T4_CT   0x40     /* bit 6: Timer4 counter mode */
+#define T4T3M_T4x12   0x20     /* bit 5: Timer4 1T mode */
+#define T4T3M_T4CLKO  0x10     /* bit 4: Timer4 clock output */
+#define T4T3M_T3R     0x08     /* bit 3: Timer3 run */
+#define T4T3M_T3_CT   0x04     /* bit 2: Timer3 counter mode */
+#define T4T3M_T3x12   0x02     /* bit 1: Timer3 1T mode */
+#define T4T3M_T3CLKO  0x01     /* bit 0: Timer3 clock output */
+
+/* --- Comparator (traditional SFR) --------------------------------------- */
+__sfr __at (0xE6) CMPCR1;     /* comparator control 1 */
+__sfr __at (0xE7) CMPCR2;     /* comparator control 2 */
+
+#define CMPCR1_CMPEN  0x80     /* bit 7: comparator enable */
+#define CMPCR1_CMPIF  0x40     /* bit 6: comparator interrupt flag */
+#define CMPCR1_PIE    0x20     /* bit 5: positive-edge interrupt enable */
+#define CMPCR1_NIE    0x10     /* bit 4: negative-edge interrupt enable */
+#define CMPCR1_CMPOE  0x02     /* bit 1: comparator output enable */
+
+/* --- Extra IAP fields (traditional SFR) --------------------------------- */
+__sfr __at (0xF5) IAP_TPS;    /* IAP wait-time (must match SYSclk per data sheet) */
+__sfr __at (0xF6) IAP_ADDRE;  /* IAP address extended (bits 16-23 for >64 KiB) */
+
+/* -------------------------------------------------------------------------
+   Extended SFR area (0x7E0000+).  Set P_SW2 |= P_SW2_EAXFR before access.
+   ------------------------------------------------------------------------- */
 #define EAXFR_BASE 0x7e0000
+
+/* Timer pre-scalers (extended SFR) */
 __xdata __at (EAXFR_BASE + 0xfea0) volatile unsigned char TM0PS;
 __xdata __at (EAXFR_BASE + 0xfea1) volatile unsigned char TM1PS;
 __xdata __at (EAXFR_BASE + 0xfea2) volatile unsigned char TM2PS;
 __xdata __at (EAXFR_BASE + 0xfea3) volatile unsigned char TM3PS;
 __xdata __at (EAXFR_BASE + 0xfea4) volatile unsigned char TM4PS;
-__xdata __at (EAXFR_BASE + 0xfe23) volatile unsigned char T2CR;   /* Timer2 control */
-__xdata __at (EAXFR_BASE + 0xfe24) volatile unsigned char T2CFG;
-__xdata __at (EAXFR_BASE + 0xfe7a) volatile unsigned char T2H;
-__xdata __at (EAXFR_BASE + 0xfe7b) volatile unsigned char T2L;
 
-/* Timer 3/4 (extended, accessed via EAXFR) */
-__xdata __at (EAXFR_BASE + 0xfe40) volatile unsigned char T4CR;
-__xdata __at (EAXFR_BASE + 0xfe41) volatile unsigned char T4CFG;
-__xdata __at (EAXFR_BASE + 0xfe42) volatile unsigned char T3CR;
-__xdata __at (EAXFR_BASE + 0xfe43) volatile unsigned char T3CFG;
-__xdata __at (EAXFR_BASE + 0xfe6a) volatile unsigned char T3H;
-__xdata __at (EAXFR_BASE + 0xfe6b) volatile unsigned char T3L;
-__xdata __at (EAXFR_BASE + 0xfe6c) volatile unsigned char T4H;
-__xdata __at (EAXFR_BASE + 0xfe6d) volatile unsigned char T4L;
-
-/* UART2 (extended SFR via EAXFR) */
-__xdata __at (EAXFR_BASE + 0xfe70) volatile unsigned char S2CON;
-__xdata __at (EAXFR_BASE + 0xfe71) volatile unsigned char S2BUF;
-#define S2CON_S2TI  0x02
-#define S2CON_S2RI  0x01
-#define S2CON_S2SM0 0x80
-#define S2CON_S2SM1 0x40
-#define S2CON_S2REN 0x10
-
-/* UART3 (extended SFR via EAXFR) */
-__xdata __at (EAXFR_BASE + 0xfe74) volatile unsigned char S3CON;
-__xdata __at (EAXFR_BASE + 0xfe75) volatile unsigned char S3BUF;
-
-/* UART4 (extended SFR via EAXFR) */
-__xdata __at (EAXFR_BASE + 0xfe78) volatile unsigned char S4CON;
-__xdata __at (EAXFR_BASE + 0xfe79) volatile unsigned char S4BUF;
-
-/* SPI (extended SFR via EAXFR) */
-__xdata __at (EAXFR_BASE + 0xfee0) volatile unsigned char SPSTAT;
-__xdata __at (EAXFR_BASE + 0xfee1) volatile unsigned char SPCTL;
-__xdata __at (EAXFR_BASE + 0xfee2) volatile unsigned char SPDAT;
-#define SPSTAT_SPIF 0x80
-#define SPSTAT_WCOL 0x40
-#define SPCTL_SSPEN 0x40
-#define SPCTL_MSTR  0x10
-
-/* I2C (extended SFR via EAXFR) */
+/* I2C (extended SFR) */
 __xdata __at (EAXFR_BASE + 0xfe80) volatile unsigned char I2CCFG;
 __xdata __at (EAXFR_BASE + 0xfe81) volatile unsigned char I2CMSCR;
 __xdata __at (EAXFR_BASE + 0xfe82) volatile unsigned char I2CMSST;
@@ -144,18 +206,8 @@ __xdata __at (EAXFR_BASE + 0xfe84) volatile unsigned char I2CSLCST;
 __xdata __at (EAXFR_BASE + 0xfe85) volatile unsigned char I2CTXD;
 __xdata __at (EAXFR_BASE + 0xfe86) volatile unsigned char I2CRXD;
 __xdata __at (EAXFR_BASE + 0xfe87) volatile unsigned char I2CMSAUX;
-#define I2CCFG_ENI2C    0x80
-#define I2CCFG_MSSL     0x40
-
-/* ADC (extended SFR via EAXFR) */
-__xdata __at (EAXFR_BASE + 0xfe00) volatile unsigned char ADC_CONTR;
-__xdata __at (EAXFR_BASE + 0xfe01) volatile unsigned char ADC_CFG;
-__xdata __at (EAXFR_BASE + 0xfe02) volatile unsigned char ADC_DAT;  /* low byte */
-__xdata __at (EAXFR_BASE + 0xfe03) volatile unsigned char ADC_DATL; /* alternative name */
-#define ADC_CONTR_ADC_POWER 0x80
-#define ADC_CONTR_ADC_START  0x40
-#define ADC_CONTR_ADC_FLAG   0x20
-#define ADC_CONTR_ADC_EPAGE  0x0F  /* channel select bits [3:0] */
+#define I2CCFG_ENI2C    0x80   /* bit 7: I2C enable */
+#define I2CCFG_MSSL     0x40   /* bit 6: master (1) / slave (0) */
 
 /* Interrupt enable 2 (IE2 bit definitions) */
 #define IE2_ET2  0x04   /* Timer2 interrupt enable */
@@ -240,14 +292,14 @@ __xdata __at (EAXFR_BASE + 0xfe03) volatile unsigned char ADC_DATL; /* alternati
 #define IAP_CMD_WRITE 0x02
 #define IAP_CMD_ERASE 0x03
 
-/* IAP_CONTR bit fields.  IAPEN enables IAP; the low 3 bits select the
-   EEPROM access wait time (IAP_TPS) which must match the system clock:
-   IAP_TPS = log2(SYSclk_MHz).  See data sheet table for the mapping. */
-#define IAP_CONTR_IAPEN  0x80   /* enable IAP/EEPROM access */
-#define IAP_CONTR_SWBS   0x40   /* boot selection: 0=user Flash, 1=ISP monitor */
-#define IAP_CONTR_SWRST  0x20   /* software reset */
-#define IAP_CONTR_CMD_FAIL 0x10 /* set by hardware if the last IAP command failed */
-#define IAP_CONTR_WT_MASK  0x07 /* wait-time selection bits [2:0] */
+/* IAP_CONTR bit fields (STC32G layout — differs from STC15!).
+   STC32G moved the EEPROM wait-time out of IAP_CONTR into its own
+   register, IAP_TPS (0xF5).  Set IAP_TPS to the system clock in MHz
+   before launching a command (e.g. 24 MHz -> IAP_TPS = 24). */
+#define IAP_CONTR_IAPEN    0x80   /* bit 7: enable IAP/EEPROM access */
+#define IAP_CONTR_SWBS     0x40   /* bit 6: boot select: 0=user Flash, 1=ISP monitor */
+#define IAP_CONTR_SWRST    0x20   /* bit 5: software reset */
+#define IAP_CONTR_CMD_FAIL 0x10   /* bit 4: set by hardware if last IAP command failed */
 
 /* IAP_TRIG sequence: write these two bytes back-to-back to launch the
    command loaded into IAP_CMD/IAP_ADDR/IAP_DATA. */

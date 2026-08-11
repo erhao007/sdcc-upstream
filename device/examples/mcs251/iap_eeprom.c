@@ -25,13 +25,15 @@
  * 512 bytes form one erase page; we use byte offset 0x0040 inside it. */
 #define TEST_EEPROM_ADDR  0x0040
 
-/* IAP_CONTR wait-time field for a ~24 MHz clock (data sheet table:
- * SYSclk=24MHz -> IAP_TPS=4, encoded as the low nibble). */
-#define IAP_TPS_24MHZ     0x04
+/* STC32G moved the EEPROM wait-time into its own register, IAP_TPS (0xF5),
+ * which must be programmed with the system clock in MHz before any command.
+ * For a 24 MHz clock we write 24. */
+#define IAP_TPS_SETUP     24
 
-/* Initial IAP_CONTR value: enable IAP + set the wait time.  We never
- * set SWRST (software reset) or SWBS (boot select) in this example. */
-#define IAP_CONTR_SETUP   (IAP_CONTR_IAPEN | IAP_TPS_24MHZ)
+/* IAP_CONTR setup: enable IAP only.  We never set SWRST (software reset)
+ * or SWBS (boot select) in this example.  Bits 3:0 are reserved on
+ * STC32G (the wait-time no longer lives here, unlike STC15). */
+#define IAP_CONTR_SETUP   IAP_CONTR_IAPEN
 
 /* Launch the IAP command previously loaded into IAP_CMD/IAP_ADDR/IAP_DATA
  * by writing the magic two-byte sequence to IAP_TRIG.  The data sheet
@@ -91,6 +93,11 @@ void main(void)
     /* Configure P0.0 as push-pull output so we can signal success/failure. */
     P0M1 &= ~0x01;
     P0M0 |= 0x01;
+
+    /* Program the EEPROM wait-time to match the system clock.  STC32G
+     * uses a dedicated IAP_TPS register (not the IAP_CONTR low bits
+     * like STC15).  Set this once before any EEPROM command. */
+    IAP_TPS = IAP_TPS_SETUP;
 
     /* 1. Read what is currently at the test address. */
     before = eeprom_read(TEST_EEPROM_ADDR);
