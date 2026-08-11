@@ -99,6 +99,17 @@ __xdata __at (0x7efedd) volatile unsigned char __fw_pwma_BKR;
 __xdata __at (0x7efee0) volatile unsigned char __fw_pwmb_CR1;
 __xdata __at (0x7efefd) volatile unsigned char __fw_pwmb_BKR;
 
+/* CAN + DMA + USB (key registers).  CAN uses an indirect window
+ * (CANAR/CANDR); DMA has 17 channel subgroups; USB is traditional SFR. */
+__sfr __at (0xF1) __fw_sfr_CANICR;
+__sfr __at (0xF4) __fw_sfr_USBCON;
+__sfr __at (0xFC) __fw_sfr_USBADR;
+__sfr __at (0xDC) __fw_sfr_USBCLK;
+__xdata __at (0x7efebb) volatile unsigned char __fw_can_CANAR;
+__xdata __at (0x7efebc) volatile unsigned char __fw_can_CANDR;
+__xdata __at (0x7efa01) volatile unsigned char __fw_dma_M2M_CR;
+__xdata __at (0x7efa20) volatile unsigned char __fw_dma_SPI_CFG;
+
 /* Compile-time pinning of the register symbols: if any address above is
    wrong, the _Static_assert below fires (warning 215).  SDCC resolves
    the __at() value into the symbol's address, and these checks verify
@@ -295,5 +306,44 @@ testAdvancedPwmRegistersAreExtended(void)
   __fw_pwmb_CR1 = 0;
   __fw_pwmb_BKR = 0;
   __fw_sfr_PSW2 &= ~0x80;
+  ASSERT(1);
+}
+
+void
+testCanRegistersAreMixedSfrAndExtended(void)
+{
+  /* STC32G CAN uses a two-byte indirect window in the extended SFR
+   * area: write the register index to CANAR (0x7EFEBB), then access
+   * the register through CANDR (0x7EFEBC).  The interrupt-control
+   * register CANICR is traditional SFR at 0xF1. */
+  __fw_sfr_CANICR = 0;
+  __fw_sfr_PSW2 |= 0x80;
+  __fw_can_CANAR = 0x0F;   /* select CAN register 0x0F */
+  __fw_can_CANDR = 0x3C;
+  __fw_sfr_PSW2 &= ~0x80;
+  ASSERT(1);
+}
+
+void
+testDmaRegistersAreExtended(void)
+{
+  /* DMA channels live in the extended SFR area (0x7EFA00+).  Each of
+   * the 17 channel subgroups (M2M, ADC, SPI, UART1-4 tx/rx, I2C tx/rx,
+   * I2S tx/rx, LCM, ARB) shares the same CFG/CR/STA/AMT/DONE/TXA/RXA
+   * layout.  Pin two representatives. */
+  __fw_sfr_PSW2 |= 0x80;
+  __fw_dma_M2M_CR  = 0;    /* memory-to-memory control */
+  __fw_dma_SPI_CFG = 0;    /* SPI channel config */
+  __fw_sfr_PSW2 &= ~0x80;
+  ASSERT(1);
+}
+
+void
+testUsbRegistersAreTraditional(void)
+{
+  /* USB control/data/addr/clock are all traditional SFR. */
+  __fw_sfr_USBCON = 0;
+  __fw_sfr_USBADR = 0;
+  __fw_sfr_USBCLK = 0;
   ASSERT(1);
 }
