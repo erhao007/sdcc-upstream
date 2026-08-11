@@ -7,9 +7,11 @@
    from any proprietary compiler's header file.
 
    SFR addresses are STC32G12K128-specific; they differ from STC89/12 because
-   STC32G uses the MCS-251 core and a different SFR map.  Only the commonly
-   used peripherals (GPIO, Timer 0/1/2, UART1, interrupts, watchdog) are
-   declared here; extend as needed.
+   STC32G uses the MCS-251 core and a different SFR map.  Covers: GPIO P0-P7
+   (with mode registers), Timer 0-4, UART1-4, SPI, I2C, ADC, PCA, interrupts,
+   watchdog (WDT_CONTR) and IAP/EEPROM (IAP_DATA/ADDRH/ADDRL/CMD/TRIG/CONTR).
+   Extended peripherals live in xdata space at EAXFR_BASE (0x7E0000) and
+   require P_SW2 |= P_SW2_EAXFR before access.
 
    This library is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
@@ -57,6 +59,20 @@ __sfr __at (0xB7) IPH0;     /* interrupt priority high */
 __sfr __at (0xB8) IPL0;     /* interrupt priority low (IP) */
 __sfr __at (0xBA) P_SW2;    /* peripheral switch 2 (EAXFR bit enables xdata SFR access) */
 __sfr __at (0xC0) P4;
+/* Watchdog timer and IAP (In-Application Programming / EEPROM) registers.
+   These occupy the traditional SFR block 0xC1-0xC7 that STC has used
+   consistently since the STC89/STC12/STC15 families; STC32G12K128 keeps
+   the same addresses.  EEPROM access is performed entirely through IAP:
+   load IAP_ADDRH/IAP_ADDRL + IAP_CMD, then write 0x5A followed by 0xA5
+   to IAP_TRIG to launch the command.  See STC32G data sheet chapter
+   "EEPROM/IAP" for the command encoding and timing-control bit field. */
+__sfr __at (0xC1) WDT_CONTR;  /* watchdog control (enable, prescaler, idle-count) */
+__sfr __at (0xC2) IAP_DATA;   /* IAP data (read/write byte) */
+__sfr __at (0xC3) IAP_ADDRH;  /* IAP address high byte */
+__sfr __at (0xC4) IAP_ADDRL;  /* IAP address low byte */
+__sfr __at (0xC5) IAP_CMD;    /* IAP command: 0=idle, 1=read, 2=write, 3=erase */
+__sfr __at (0xC6) IAP_TRIG;   /* IAP trigger: write 0x5A then 0xA5 to execute */
+__sfr __at (0xC7) IAP_CONTR;  /* IAP control (IAPEN enable, SWBS, SWRST, wait time) */
 __sfr __at (0xC8) P5;
 __sfr __at (0xC9) P5M1;
 __sfr __at (0xCA) P5M0;
@@ -213,5 +229,35 @@ __xdata __at (EAXFR_BASE + 0xfe03) volatile unsigned char ADC_DATL; /* alternati
 #define GPIO_MODE_PUSHPULL 0x01
 #define GPIO_MODE_INPUT  0x02
 #define GPIO_MODE_OPENDRAIN 0x03
+
+/* NOP() emits a single CPU cycle (MCS-251 opcode 0x00 = NOP).  Useful as
+   a timing filler or to let an external engine settle after a trigger. */
+#define NOP() __asm NOP __endasm
+
+/* IAP_CMD command codes (STC32G data sheet, EEPROM/IAP chapter) */
+#define IAP_CMD_IDLE  0x00
+#define IAP_CMD_READ  0x01
+#define IAP_CMD_WRITE 0x02
+#define IAP_CMD_ERASE 0x03
+
+/* IAP_CONTR bit fields.  IAPEN enables IAP; the low 3 bits select the
+   EEPROM access wait time (IAP_TPS) which must match the system clock:
+   IAP_TPS = log2(SYSclk_MHz).  See data sheet table for the mapping. */
+#define IAP_CONTR_IAPEN  0x80   /* enable IAP/EEPROM access */
+#define IAP_CONTR_SWBS   0x40   /* boot selection: 0=user Flash, 1=ISP monitor */
+#define IAP_CONTR_SWRST  0x20   /* software reset */
+#define IAP_CONTR_CMD_FAIL 0x10 /* set by hardware if the last IAP command failed */
+#define IAP_CONTR_WT_MASK  0x07 /* wait-time selection bits [2:0] */
+
+/* IAP_TRIG sequence: write these two bytes back-to-back to launch the
+   command loaded into IAP_CMD/IAP_ADDR/IAP_DATA. */
+#define IAP_TRIG_MAGIC1 0x5A
+#define IAP_TRIG_MAGIC2 0xA5
+
+/* WDT_CONTR bit fields */
+#define WDT_CONTR_WDT_EN  0x20   /* watchdog enable */
+#define WDT_CONTR_CLR_WDT 0x10   /* clear watchdog (write 1) */
+#define WDT_CONTR_IDLE_WDT 0x08  /* keep counting in idle mode */
+#define WDT_CONTR_PS_MASK  0x07  /* prescaler bits [2:0] */
 
 #endif /* __STC32G12K128_H__ */
