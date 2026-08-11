@@ -324,6 +324,24 @@ __xdata __at (EAXFR_BASE + 0xfe87) volatile unsigned char I2CMSAUX;
 #define IE_ES  0x10
 #define IE_EA  0x80
 
+/* INTCLKO (0x8F): extended external-interrupt enables + clock output.
+ * EX2/EX3/EX4 enable external interrupts 2/3/4 (separate from the
+ * basic INT0/INT1 in IE).  TxCLKO routes each timer's overflow to a
+ * pin for use as a baud clock or general-purpose clock output. */
+#define INTCLKO_T0CLKO 0x01   /* bit 0: Timer0 clock output enable */
+#define INTCLKO_T1CLKO 0x02   /* bit 1: Timer1 clock output enable */
+#define INTCLKO_T2CLKO 0x04   /* bit 2: Timer2 clock output enable */
+#define INTCLKO_EX2    0x10   /* bit 4: external interrupt 2 enable */
+#define INTCLKO_EX3    0x20   /* bit 5: external interrupt 3 enable */
+#define INTCLKO_EX4    0x40   /* bit 6: external interrupt 4 enable */
+
+/* AUXINTIF (0xEF): interrupt-flag register for the extended external
+ * interrupts (INT2/3/4) and COMPCA.  Hardware sets these flags when
+ * the corresponding trigger fires; software clears them in the ISR. */
+#define AUXINTIF_INT2IF 0x10  /* bit 4: external interrupt 2 flag */
+#define AUXINTIF_INT3IF 0x20  /* bit 5: external interrupt 3 flag */
+#define AUXINTIF_INT4IF 0x40  /* bit 6: external interrupt 4 flag */
+
 /* SCON */
 #define SCON_RI  0x01
 #define SCON_TI  0x02
