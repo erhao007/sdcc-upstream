@@ -116,6 +116,9 @@ __sfr __at (0xDE) ADCCFG;     /* ADC config: SPEED[7:5], RESFMT(bit5 align) */
 #define ADCCFG_RESFMT       0x20   /* bit 5: 0=left-justified, 1=right-justified */
 #define ADCCFG_SPEED_MASK   0xE0   /* bits [7:5]: ADC clock = SYSclk/2/(SPEED+1) */
 
+/* ADC interrupt enable lives in the standard IE register (bit 5). */
+#define IE_EADC             0x20   /* IE.5: ADC interrupt enable (8051 standard) */
+
 #define ADC_VECTOR          5      /* ADC interrupt vector */
 
 /* --- SPI (traditional SFR) ---------------------------------------------- */
@@ -196,6 +199,11 @@ __xdata __at (EAXFR_BASE + 0xfea1) volatile unsigned char TM1PS;
 __xdata __at (EAXFR_BASE + 0xfea2) volatile unsigned char TM2PS;
 __xdata __at (EAXFR_BASE + 0xfea3) volatile unsigned char TM3PS;
 __xdata __at (EAXFR_BASE + 0xfea4) volatile unsigned char TM4PS;
+
+/* ADC internal timing (extended SFR).  Program ADCTIM before enabling
+   ADC_POWER; the data-sheet reset value 0x3F works for the common
+   22-30 MHz clock range. */
+__xdata __at (EAXFR_BASE + 0xfea8) volatile unsigned char ADCTIM;
 
 /* I2C (extended SFR) */
 __xdata __at (EAXFR_BASE + 0xfe80) volatile unsigned char I2CCFG;
