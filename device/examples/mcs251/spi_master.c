@@ -38,21 +38,27 @@
  *   SSIG(0x80) | SPEN(0x40) | MSTR(0x10) | SPR_4(0x00) = 0xD0 */
 #define SPCTL_MASTER_MODE0  (SPCTL_SSIG | SPCTL_SPEN | SPCTL_MSTR)
 
-/* A software chip-select pin (P2.0) for the external slave.  We pulse
- * it low around each transfer.  Any GPIO can be used; adapt to your
- * board wiring. */
+/* A software chip-select pin (P2.0) for the external slave.  /SS is
+ * held low across a whole multi-byte transaction and released at the
+ * end; any GPIO can be used, adapt to your board wiring. */
 #define NSS_PIN  0x01
 
 static void spi_init(void)
 {
+    /* Route SPI to pin group 2 (SPI_S = 01): MOSI=P2.3, MISO=P2.4,
+     * SCLK=P2.5, SS=P2.2.  The reset value SPI_S=00 maps SPI to
+     * P1.3/P1.4/P1.5 instead, so without this write P2.5 will not
+     * output the SPI clock and the slave will never see a transfer. */
+    P_SW1 = (P_SW1 & ~(P_SW1_SPI_S1 | P_SW1_SPI_S0))
+          | P_SW1_SPI_S0;            /* SPI_S = 01 -> P2 group */
+
     /* Drive /SS high (idle) and configure P2.0 as push-pull output. */
     P2 |= NSS_PIN;
     P2M1 &= ~NSS_PIN;
     P2M0 |= NSS_PIN;
 
     /* Configure MOSI (P2.3), SCLK (P2.5) as push-pull; MISO (P2.4) as
-     * input.  The exact pin mapping depends on P_SW1 SPI_S1:S0 bits;
-     * the reset mapping is MOSI=P2.3, MISO=P2.4, SCLK=P2.5. */
+     * input. */
     P2M1 &= ~0x28;  P2M0 |= 0x28;   /* P2.3, P2.5 push-pull */
     P2M1 |= 0x10;   P2M0 &= ~0x10;  /* P2.4 input */
 

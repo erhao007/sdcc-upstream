@@ -10,7 +10,7 @@
  *   ADC_CONTR (0xBC)  control: ADC_POWER / ADC_START / ADC_FLAG / channel
  *   ADC_RES   (0xBD)  result high byte
  *   ADC_RESL  (0xBE)  result low byte
- *   ADCCFG    (0xDE)  RESFMT (bit 5 alignment) + SPEED[7:5]
+ *   ADCCFG    (0xDE)  RESFMT (bit 5 alignment) + SPEED[3:0] (ADC clock)
  *   ADCTIM    (0x7EFEA8, extended)  internal sampling timing
  *
  * Build:

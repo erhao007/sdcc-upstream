@@ -9,7 +9,9 @@
  *
  * Timer0 register summary (all traditional SFR):
  *   TMOD (0x89)  mode select: Timer0 in bits [3:0], Timer1 in [7:4].
- *                bit 0-1 M0/M1 select Timer0 mode (01 = 16-bit timer).
+ *                bit 0-1 M0/M1 select Timer0 mode (00 = 16-bit auto-reload
+ *                on STC32G's 1T core; differs from classic 8051 where
+ *                mode 0 is 13-bit).
  *   TH0/TL0 (0x8C/0x8A)  reload value (16-bit auto-reload).
  *   TCON (0x88)  bit 5 (TF0) overflow flag; bit 4 (TR0) run control.
  *   IE   (0xA8)  bit 1 (ET0) Timer0 interrupt enable; bit 7 (EA) global.
