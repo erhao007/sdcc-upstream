@@ -45,9 +45,15 @@ __sfr __at (0x93) P0M1;
 __sfr __at (0x94) P0M0;
 __sfr __at (0x95) P2M1;
 __sfr __at (0x96) P2M0;
+__sfr __at (0x97) AUXR2;    /* STC auxiliary register 2 (Timer2 control bits) */
 __sfr __at (0x98) SCON;     /* UART1 control */
 __sfr __at (0x99) SBUF;     /* UART1 data buffer */
 __sfr __at (0xA0) P2;
+__sfr __at (0xA1) BUS_SPEED;/* external memory bus speed (for parallel bus) */
+__sfr __at (0xA2) P_SW1;    /* peripheral switch 1 (UART/SPI pin mapping) */
+__sfr __at (0xAA) WKTCL;    /* wake-up timer low byte (power-down wake) */
+__sfr __at (0xAB) WKTCH;    /* wake-up timer high byte + enable */
+__sfr __at (0xAE) TA;       /* timed-access key (write 0x55,0xAA to unlock) */
 __sfr __at (0xA8) IE;       /* interrupt enable */
 __sfr __at (0xA9) IE2;
 __sfr __at (0xB0) P3;
@@ -55,9 +61,12 @@ __sfr __at (0xB1) P3M1;
 __sfr __at (0xB2) P3M0;
 __sfr __at (0xB3) P4M1;
 __sfr __at (0xB4) P4M0;
+__sfr __at (0xB5) IP2;      /* interrupt priority 2 (SPI/UART2/ext-int4) */
+__sfr __at (0xB6) IP2H;     /* interrupt priority 2 high byte */
 __sfr __at (0xB7) IPH0;     /* interrupt priority high */
 __sfr __at (0xB8) IPL0;     /* interrupt priority low (IP) */
 __sfr __at (0xBA) P_SW2;    /* peripheral switch 2 (EAXFR bit enables xdata SFR access) */
+__sfr __at (0xBB) P_SW3;    /* peripheral switch 3 (CAN pin mapping) */
 __sfr __at (0xC0) P4;
 /* Watchdog timer and IAP (In-Application Programming / EEPROM) registers.
    These occupy the traditional SFR block 0xC1-0xC7 that STC has used
@@ -78,13 +87,24 @@ __sfr __at (0xC9) P5M1;
 __sfr __at (0xCA) P5M0;
 __sfr __at (0xCB) P6M1;
 __sfr __at (0xCC) P6M0;
+__sfr __at (0xDF) IP3;      /* interrupt priority 3 (UART3/4) */
 __sfr __at (0xD0) PSW;      /* 251 PSW (CY/AC/F0/RS1/RS0/OV/F1/P) */
 __sfr __at (0xD1) PSW1;     /* 251 PSW1 (bit7=N, bit6=Z, ...) */
 __sfr __at (0xD8) CCON;     /* PCA control (251 bit-addressable) */
-__sfr __at (0xE8) P6;
+__sfr __at (0xE0) ACC;      /* 8051 accumulator (compiler-reserved on mcs251) */
 __sfr __at (0xE1) P7M1;
 __sfr __at (0xE2) P7M0;
+__sfr __at (0xE3) DPS;      /* data-pointer select (0=DPTR0, 1=DPTR1) */
+__sfr __at (0xE4) DPL1;     /* second DPTR low byte */
+__sfr __at (0xE5) DPH1;     /* second DPTR high byte */
+__sfr __at (0xE8) P6;
+__sfr __at (0xE9) WTST;     /* wait-state control (0 = fastest XRAM access) */
+__sfr __at (0xEA) CKCON;    /* clock control (high-speed XRAM/SFR access) */
+__sfr __at (0xEB) MXAX;     /* extended address MUX (mcs51 legacy pdata paging) */
+__sfr __at (0xEE) IP3H;     /* interrupt priority 3 high byte */
+__sfr __at (0xF0) B;        /* 8051 B register (mul/div second operand) */
 __sfr __at (0xF8) P7;
+__sfr __at (0xFF) RSTCFG;   /* reset configuration (ENCLKLVL, BOOT/ISP options) */
 
 /* -------------------------------------------------------------------------
    STC32G12K128 peripheral SFR map.
@@ -217,10 +237,50 @@ __xdata __at (EAXFR_BASE + 0xfe87) volatile unsigned char I2CMSAUX;
 #define I2CCFG_ENI2C    0x80   /* bit 7: I2C enable */
 #define I2CCFG_MSSL     0x40   /* bit 6: master (1) / slave (0) */
 
-/* Interrupt enable 2 (IE2 bit definitions) */
-#define IE2_ET2  0x04   /* Timer2 interrupt enable */
-#define IE2_ESPI 0x40   /* SPI interrupt enable */
-#define IE2_ES2  0x01   /* UART2 interrupt enable */
+/* Timed-access key: certain protected SFRs (WDT_CONTR, IAP_CONTR,
+ * P_SWx bits, RSTCFG) can only be written within three machine cycles
+ * of writing 0x55 then 0xA5 to TA.  Helper macro for clarity. */
+#define TA_UNLOCK()     do { TA = 0x55; TA = 0xAA; } while (0)
+
+/* Interrupt priority registers.  STC32G uses four priority levels via
+ * paired low/high bit registers: level = (H:L) where 00=lowest..11=highest.
+ * IP/IPL0+IPH0 cover the basic 8051 sources; IP2/IP2H the second bank
+ * (SPI, UART2, ext-int4); IP3/IP3H the third bank (UART3/4). */
+#define IP_PX0    0x01   /* IPL0 bit 0: ext int 0 priority low */
+#define IP_PT0    0x02   /* IPL0 bit 1: Timer0 priority low */
+#define IP_PX1    0x04   /* IPL0 bit 2: ext int 1 priority low */
+#define IP_PT1    0x08   /* IPL0 bit 3: Timer1 priority low */
+#define IP_PS     0x10   /* IPL0 bit 4: UART1 priority low */
+#define IP_PADC   0x20   /* IPL0 bit 5: ADC priority low */
+#define IP_PLVD   0x40   /* IPL0 bit 6: low-voltage detect priority low */
+#define IPH0_MASK 0x7F   /* IPH0 mirrors the same bits for the high half */
+#define IP2_PS2   0x01   /* IP2 bit 0: UART2 priority low */
+#define IP2_PSPI  0x02   /* IP2 bit 1: SPI priority low */
+#define IP2_PX4   0x10   /* IP2 bit 4: ext int 4 priority low */
+#define IP3_PS3   0x01   /* IP3 bit 0: UART3 priority low */
+#define IP3_PS4   0x02   /* IP3 bit 1: UART4 priority low */
+
+/* P_SW1 pin-mapping bits for SPI and UART1 routing. */
+#define P_SW1_SPI_S0  0x04   /* P_SW1 bit 2: SPI pin select bit 0 */
+#define P_SW1_SPI_S1  0x08   /* P_SW1 bit 3: SPI pin select bit 1 */
+
+/* P_SW2 pin-mapping bits (EAXFR + UART2/3/4 + I2C routing). */
+#define P_SW2_S2_S    0x01   /* P_SW2 bit 0: UART2 pin select */
+#define P_SW2_S3_S    0x02   /* P_SW2 bit 1: UART3 pin select */
+#define P_SW2_S4_S    0x04   /* P_SW2 bit 2: UART4 pin select */
+#define P_SW2_I2C_S0  0x10   /* P_SW2 bit 4: I2C pin select bit 0 */
+#define P_SW2_I2C_S1  0x20   /* P_SW2 bit 5: I2C pin select bit 1 */
+/* (P_SW2_EAXFR 0x80 is already defined above near P_SW2.) */
+
+/* Interrupt enable 2 (IE2 bit definitions, byte 0xAF) */
+#define IE2_ES2  0x01   /* bit 0: UART2 interrupt enable */
+#define IE2_ESPI 0x02   /* bit 1: SPI interrupt enable */
+#define IE2_ET2  0x04   /* bit 2: Timer2 interrupt enable */
+#define IE2_ES3  0x08   /* bit 3: UART3 interrupt enable */
+#define IE2_ES4  0x10   /* bit 4: UART4 interrupt enable */
+#define IE2_ET3  0x20   /* bit 5: Timer3 interrupt enable */
+#define IE2_ET4  0x40   /* bit 6: Timer4 interrupt enable */
+#define IE2_EUSB 0x80   /* bit 7: USB interrupt enable */
 
 /* Interrupt vector addresses for __interrupt() */
 #define INT0_VECTOR    0    /* External Interrupt 0 */
