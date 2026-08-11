@@ -132,11 +132,15 @@ VAR_QUALIFIER int16_t * VAR_QUALIFIER  pi;
       #define DEFAULT_ADDR_SPACE __far
     #endif
   #elif defined(__SDCC_mcs251)
-    /* mcs251: like mcs51 small, the address-of a default-storage object
-       yields a near (1-byte) pointer, so compare against __near * to
-       keep the test self-consistent (the unqualified int * is a 3-byte
-       generic pointer). */
-    #define DEFAULT_ADDR_SPACE __near
+    /* mcs251: the address-of a default-storage object yields a pointer
+       whose width depends on the model — __near (2 bytes) in small,
+       __xdata (3 bytes) in large.  Compare against the matching space
+       to keep the test self-consistent. */
+    #if defined(__SDCC_MODEL_LARGE)
+      #define DEFAULT_ADDR_SPACE __xdata
+    #else
+      #define DEFAULT_ADDR_SPACE __near
+    #endif
   #elif defined(__SDCC_ds390)
     #define DEFAULT_ADDR_SPACE __far
   #else
