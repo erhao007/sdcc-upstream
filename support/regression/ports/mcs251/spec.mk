@@ -32,7 +32,7 @@ else
   EMU = $(WINE) $(shell if [ -f $(S51A) ]; then echo $(S51A); else echo $(S51B); fi)
 
 ifndef CROSSCOMPILING
-  SDCCFLAGS += --nostdinc -I$(INC_DIR)/mcs51 -I$(top_srcdir)
+  SDCCFLAGS += --nostdinc -I$(INC_DIR)/mcs51 -I$(INC_DIR)/mcs251 -I$(top_srcdir)
   LINKFLAGS += --nostdlib -L$(MCS251_LIBDIR)
 endif
 endif
