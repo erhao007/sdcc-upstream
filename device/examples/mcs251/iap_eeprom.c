@@ -7,9 +7,10 @@
  * to 128 KiB of EEPROM organised in 512-byte pages; a page must be
  * erased before it is reprogrammed.
  *
- * The IAP wait-time field (IAP_CONTR[2:0]) must be set to match the
- * system clock.  See the STC32G data sheet table; for the common
- * 22.1184 MHz / 24 MHz / 30 MHz clock values used below the field is 2.
+ * The IAP wait-time is programmed via the dedicated IAP_TPS register
+ * (0xF5) — NOT the IAP_CONTR[2:0] field used by the older STC15.
+ * IAP_TPS must be set to the system clock in MHz before any command
+ * (e.g. 24 for a 24 MHz clock).  See the STC32G data sheet.
  *
  * Build:
  *   sdcc -mmcs251 iap_eeprom.c

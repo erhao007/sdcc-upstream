@@ -21,8 +21,10 @@
  * Build:
  *   sdcc -mmcs251 timer0_tick.c
  *
- * The uCsim simulator counts timer ticks, so the interrupt fires and
- * the software counter advances; on real STC32G12K128 silicon this
+ * Note: the uCsim mcs251 model (uc251.cc) currently has no Timer or
+ * interrupt model, so the ISR does not fire in simulation — the test
+ * only confirms the firmware runs without crashing.  On real
+ * STC32G12K128 silicon the Timer0 interrupt fires every 1 ms and the
  * example blinks P0.0 at 1 Hz (500 ms half-period).
  */
 

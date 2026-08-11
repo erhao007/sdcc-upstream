@@ -362,20 +362,25 @@ __xdata __at (EAXFR_BASE + 0xfebb) volatile unsigned char CANAR;  /* CAN registe
 __xdata __at (EAXFR_BASE + 0xfebc) volatile unsigned char CANDR;  /* CAN register data */
 
 /* CAN interrupt-control register (traditional SFR 0xF1, declared above
- * as CANICR).  Bit layout:
+ * as CANICR).  Bit layout (verified against COMM/STC32G.H + data sheet
+ * table 16.7 — deepseek review caught that PCANL was on the wrong bit):
+ *   bit 0 PCANL  = CAN1 priority low
  *   bit 1 CANIE  = CAN1 interrupt enable
  *   bit 2 CANIF  = CAN1 interrupt flag (hardware set, software clear)
- *   bit 3 PCANL  = CAN1 priority low
+ *   bit 3 PCANH  = CAN1 priority high
+ *   bit 4 PCAN2L = CAN2 priority low
  *   bit 5 CAN2IE = CAN2 interrupt enable
  *   bit 6 CAN2IF = CAN2 interrupt flag
- *   bit 7 PCAN2L = CAN2 priority low  (bits 4/7 are the low half of
- *                  the 2-bit priority; PCANH/PCAN2H are reserved for
- *                  a future high-half register). */
+ *   bit 7 PCAN2H = CAN2 priority high
+ * Each CAN controller's priority is the 2-bit value {PxCANH:PxCANL}. */
+#define CANICR_PCANL   0x01   /* bit 0: CAN1 priority low */
 #define CANICR_CANIE   0x02   /* bit 1: CAN1 interrupt enable */
 #define CANICR_CANIF   0x04   /* bit 2: CAN1 interrupt flag */
-#define CANICR_PCANL   0x08   /* bit 3: CAN1 priority low */
+#define CANICR_PCANH   0x08   /* bit 3: CAN1 priority high */
+#define CANICR_PCAN2L  0x10   /* bit 4: CAN2 priority low */
 #define CANICR_CAN2IE  0x20   /* bit 5: CAN2 interrupt enable */
 #define CANICR_CAN2IF  0x40   /* bit 6: CAN2 interrupt flag */
+#define CANICR_PCAN2H  0x80   /* bit 7: CAN2 priority high */
 
 /* CAN controller enable / select (AUXR2 bits). */
 #define AUXR2_CANEN    0x02   /* AUXR2 bit 1: CAN1 enable */

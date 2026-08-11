@@ -40,8 +40,10 @@ static void uart_init(void)
 
     /* Timer 1: mode 2 (8-bit auto-reload) as baud generator */
     TMOD = 0x20;
-    /* 115200 @ 22.1184 MHz 1T: reload = 256 - 22118400/4/115200 = 208 = 0xD0 */
-    TH1 = TL1 = 0xD0;
+    /* 115200 @ 22.1184 MHz 1T, SMOD=0:
+     *   reload = 256 - SYSclk/(32*baud) = 256 - 22118400/32/115200 = 250 = 0xFA
+     * (The /4 divisor is for 16-bit auto-reload, not mode 2.) */
+    TH1 = TL1 = 0xFA;
     AUXR |= 0x40;           /* Timer 1 in 1T mode */
     TCON |= TCON_TR1;       /* start Timer 1 */
 
