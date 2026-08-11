@@ -42,9 +42,19 @@
  * register access in between. */
 static void iap_trigger(void)
 {
+    /* The trigger must run with interrupts disabled: an ISR firing
+     * between the two magic writes would leave the IAP engine armed
+     * but unfired, and a later unrelated IAP register access could
+     * accidentally launch the wrong command. */
+    unsigned char ie_save = IE;
+    IE &= ~IE_EA;                 /* disable interrupts (clear EA bit) */
     IAP_TRIG = IAP_TRIG_MAGIC1;   /* 0x5A */
     IAP_TRIG = IAP_TRIG_MAGIC2;   /* 0xA5 */
-    NOP();                        /* allow the engine to settle */
+    NOP();                        /* let the engine settle */
+    NOP();
+    NOP();
+    NOP();
+    IE = ie_save;                 /* restore interrupt state */
 }
 
 /* Read one byte from EEPROM. */
@@ -100,17 +110,33 @@ void main(void)
      * like STC15).  Set this once before any EEPROM command. */
     IAP_TPS = IAP_TPS_SETUP;
 
-    /* 1. Read what is currently at the test address. */
+    /* SAFETY: on STC32G the user-EEPROM area is a separate region that
+     * must first be allocated in the STC-ISP "hardware options" dialog
+     * before the chip is flashed.  Writing outside that region hits the
+     * main program Flash and can brick the firmware.  TEST_EEPROM_ADDR
+     * (0x0040) is inside the first 512-byte EEPROM page — only safe
+     * once that EEPROM area has been configured.
+     *
+     * Read the current value first; only erase+rewrite if it differs
+     * from what we want to store, to avoid unnecessary Flash wear. */
     before = eeprom_read(TEST_EEPROM_ADDR);
 
-    /* 2. Erase the page (erased EEPROM reads as 0xFF). */
-    eeprom_erase_page(TEST_EEPROM_ADDR);
+    /* Write a recognisable pattern, but only after erasing the page.
+     * The erase is conditional: skip it if the location already holds
+     * 0xFF (erased state) — we can program a byte without erasing if
+     * it only clears bits (erased cells read 0xFF, programming drives
+     * them toward 0x00). */
+    if (before != 0x5A)
+    {
+        /* Need to change the byte.  If any bit needs to go 0->1 we
+         * must erase the whole 512-byte page first. */
+        if ((before & 0x5A) != 0x5A)
+            eeprom_erase_page(TEST_EEPROM_ADDR);
+        eeprom_write(TEST_EEPROM_ADDR, 0x5A);
+    }
 
-    /* 3. Write a recognisable pattern byte. */
-    eeprom_write(TEST_EEPROM_ADDR, 0x5A);
-
-    /* 4. Read it back.  On real hardware this is 0x5A; the simulator
-     *    has no EEPROM model so it returns 0. */
+    /* Read it back.  On real hardware this is 0x5A; the simulator
+     * has no EEPROM model so it returns 0. */
     after = eeprom_read(TEST_EEPROM_ADDR);
 
     /* Signal the result on P0.0:

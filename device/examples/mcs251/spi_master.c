@@ -60,22 +60,19 @@ static void spi_init(void)
     SPCTL  = SPCTL_MASTER_MODE0;
 }
 
-/* Exchange one byte with the slave (full duplex).  Returns the byte
- * clocked in from MISO while the argument is clocked out on MOSI. */
+/* Exchange one byte with the slave (full duplex).  Caller owns /SS:
+ * keep it low across a multi-byte command+response sequence, because
+ * many slaves (e.g. W25Q Flash) abort the command the moment /CS goes
+ * high. */
 static unsigned char spi_transfer(unsigned char out)
 {
-    unsigned char in;
-
-    P2 &= ~NSS_PIN;            /* assert /SS (active low) */
     SPSTAT = SPSTAT_SPIF;      /* clear the done flag */
     SPDAT  = out;              /* launch the transfer */
 
     while (!(SPSTAT & SPSTAT_SPIF))
         ;                      /* wait for 8 bits to shift through */
 
-    in = SPDAT;                /* read the byte shifted in */
-    P2 |= NSS_PIN;             /* release /SS */
-    return in;
+    return SPDAT;              /* read the byte shifted in */
 }
 
 void main(void)
@@ -88,12 +85,16 @@ void main(void)
     spi_init();
 
     /* Example: read the JEDEC ID of a W25Q Flash (opcode 0x9F).
-     * The slave returns a 2-byte manufacturer + device ID.  This is a
-     * compile + code-pattern check on uCsim; on real silicon it talks
-     * to the Flash chip on the board. */
-    spi_transfer(0x9F);          /* JEDEC ID command */
+     * /SS must stay asserted across the opcode and the dummy bytes
+     * the master clocks out while the slave returns the ID — a
+     * W25Q terminates the command on the rising edge of /CS, so
+     * splitting this into three separate transactions would read
+     * garbage. */
+    P2 &= ~NSS_PIN;            /* assert /SS for the whole transaction */
+    (void)spi_transfer(0x9F);  /* JEDEC ID command */
     id     = spi_transfer(0x00); /* dummy tx, rx = manufacturer ID */
     status = spi_transfer(0x00); /* dummy tx, rx = device ID */
+    P2 |= NSS_PIN;             /* release /SS */
 
     P0 = (unsigned char)(id ^ status);
 

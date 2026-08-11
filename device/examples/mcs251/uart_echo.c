@@ -48,33 +48,40 @@ static void uart_init(void)
     TCON |= TCON_TR1;       /* start Timer 1 */
 
     SCON = SCON_SM1 | SCON_REN;  /* mode 1 (8-bit UART), RX enabled */
-    SCON |= SCON_TI;             /* allow first TX */
-
-    /* Enable UART1 interrupt */
-    IE |= IE_ES | IE_EA;
+    /* Note: do NOT set TI here.  TI is set by hardware after a transmit
+     * completes; setting it before enabling the UART interrupt would
+     * cause an immediate interrupt storm because the ISR clears RI but
+     * not TI.  The welcome message below uses the blocking send which
+     * waits for TI properly. */
 }
 
-/* Send one byte over UART1 (blocking). */
+/* Send one byte over UART1 (blocking).  Call only with interrupts
+ * disabled around the TI wait, or before IE_ES is enabled. */
 static void uart_send(unsigned char c)
 {
-    while (!(SCON & SCON_TI))
-        ;
     SCON &= ~SCON_TI;
     SBUF = c;
+    while (!(SCON & SCON_TI))
+        ;
 }
 
-/* UART1 interrupt service routine: echo received byte + toggle LED. */
+/* UART1 interrupt service routine: echo received byte + toggle LED.
+ * Must clear BOTH RI and TI: RI on receive, TI gets set by hardware
+ * after uart_send() finishes its transmit.  Clearing TI here is safe
+ * because the blocking send has already observed it. */
 void uart1_isr(void) __interrupt(UART1_VECTOR)
 {
     if (SCON & SCON_RI)
     {
         SCON &= ~SCON_RI;     /* clear RX flag */
         unsigned char c = SBUF;
-        /* Echo the character back */
-        uart_send(c);
-        /* Toggle P0.0 on each byte */
+        SBUF = c;             /* echo immediately (non-blocking) */
         led_state ^= 1;
         P0 = (P0 & 0xFE) | led_state;
+    }
+    if (SCON & SCON_TI)
+    {
+        SCON &= ~SCON_TI;     /* clear TX flag to avoid re-entry */
     }
 }
 
@@ -90,7 +97,8 @@ void main(void)
 
     uart_init();
 
-    /* Send a welcome message */
+    /* Send a welcome message before enabling the UART interrupt, so
+     * the blocking sends don't race the ISR. */
     uart_send('R');
     uart_send('E');
     uart_send('A');
@@ -98,6 +106,11 @@ void main(void)
     uart_send('Y');
     uart_send('\r');
     uart_send('\n');
+
+    /* Enable UART1 + global interrupts only after the welcome banner,
+     * so TI is already clear and the ISR won't fire spuriously. */
+    SCON &= ~SCON_TI;        /* make sure TI is clear before enabling ES */
+    IE |= IE_ES | IE_EA;
 
     /* Main loop: nothing to do, ISR handles everything */
     while (1)

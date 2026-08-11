@@ -53,8 +53,11 @@ void timer0_isr(void) __interrupt(TIMER0_VECTOR)
 /* Initialise Timer0 for 1 ms periodic interrupts at 24 MHz. */
 static void timer0_init(void)
 {
-    /* Timer0: mode 1 (16-bit timer), no gating; Timer1 bits left 0. */
-    TMOD = (TMOD & 0xF0) | 0x01;
+    /* Timer0: STC32G mode 0 (16-bit auto-reload).  Note this differs
+     * from the classic 8051 where mode 0 is 13-bit: on STC's 1T cores
+     * (STC15/STC8H/STC32G) mode 0 is the 16-bit auto-reload mode, so
+     * TH0/TL0 are reloaded from the overflow value automatically. */
+    TMOD = (TMOD & 0xF0) | 0x00;
 
     /* 1T mode: Timer0 counts on the full system clock, not /12. */
     AUXR |= 0x80;                /* T0x12 = 1 */

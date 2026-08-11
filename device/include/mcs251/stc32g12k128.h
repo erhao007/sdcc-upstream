@@ -136,7 +136,7 @@ __sfr __at (0xFF) RSTCFG;   /* reset configuration (ENCLKLVL, BOOT/ISP options) 
 __sfr __at (0xBC) ADC_CONTR;  /* ADC control: ADC_POWER/START/FLAG/EPWMT + chan */
 __sfr __at (0xBD) ADC_RES;    /* ADC result high byte (or low, per RESFMT) */
 __sfr __at (0xBE) ADC_RESL;   /* ADC result low byte */
-__sfr __at (0xDE) ADCCFG;     /* ADC config: SPEED[7:5], RESFMT(bit5 align) */
+__sfr __at (0xDE) ADCCFG;     /* ADC config: SPEED[3:0] clock, RESFMT(bit5 align) */
 
 #define ADC_CONTR_ADC_POWER 0x80   /* bit 7: ADC power on */
 #define ADC_CONTR_ADC_START 0x40   /* bit 6: start a conversion */
@@ -145,7 +145,8 @@ __sfr __at (0xDE) ADCCFG;     /* ADC config: SPEED[7:5], RESFMT(bit5 align) */
 #define ADC_CONTR_ADC_CHS   0x0F   /* bits [3:0]: analogue channel select */
 
 #define ADCCFG_RESFMT       0x20   /* bit 5: 0=left-justified, 1=right-justified */
-#define ADCCFG_SPEED_MASK   0xE0   /* bits [7:5]: ADC clock = SYSclk/2/(SPEED+1) */
+#define ADCCFG_SPEED_MASK   0x0F   /* bits [3:0]: ADC clock = SYSclk / 2 / (SPEED+1)
+                                    * (0 = SYSclk/2, 1 = SYSclk/4, ... 15 = SYSclk/32) */
 
 /* ADC interrupt enable lives in the standard IE register (bit 5). */
 #define IE_EADC             0x20   /* IE.5: ADC interrupt enable (8051 standard) */

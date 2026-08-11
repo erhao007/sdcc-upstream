@@ -29,12 +29,12 @@
 #define ADC_CH_INT_1V19  15      /* internal 1.19 V band-gap reference */
 
 /* ADCCFG value for a ~24 MHz system clock:
- *   RESFMT (bit 5) = 1  -> result right-justified (low 8 bits in ADC_RESL,
- *                          high 4 bits in ADC_RES[3:0])
- *   SPEED[7:5] = 0b001  -> ADC_CLK = SYSclk / 2 / (1+1) = SYSclk/4
- * The SPEED field programs the low 3 bits of (SPEED+1), so 0x2F sets
- * SPEED=1 (ADC clock = SYSclk/4) and RESFMT=right-justified. */
-#define ADCCFG_24MHZ_RIGHT  0x2F
+ *   RESFMT (bit 5)   = 1 -> result right-justified (low 8 bits in
+ *                          ADC_RESL, high 4 bits in ADC_RES[3:0])
+ *   SPEED[3:0] = 0x01 -> ADC_CLK = SYSclk / 2 / (1+1) = SYSclk/4
+ * (SPEED occupies the LOW nibble on STC32G/STC8H; RESFMT is bit 5.
+ * ADC clock = SYSclk / 2 / (SPEED+1).) */
+#define ADCCFG_24MHZ_RIGHT  (ADCCFG_RESFMT | 0x01)   /* 0x21 */
 
 /* Initialise the ADC: power up, set the timing and clock, allow the
  * analogue block to settle.  Channel is selected per-conversion. */
