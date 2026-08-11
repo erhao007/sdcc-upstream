@@ -319,6 +319,11 @@ mcs251LoadFarSymbol (asmop *aop, int offset)
       emitcode ("mov", "dpxl,#(%s >> 16)", name);
     }
   aop->coff = offset;
+  /* This just changed DPX outside loadDptrFromOperand, so the dptrCache
+     (which tracks the last address loadDptrFromOperand set up) is stale.
+     Invalidate it, otherwise a following loadDptrFromOperand can skip a
+     needed mov dptr/mov dpxl reload and store through the wrong address. */
+  _G.dptrCache.valid = false;
 }
 
 /* DJNZ has an 8-bit displacement even in Source mode.  A MCS251 loop body
