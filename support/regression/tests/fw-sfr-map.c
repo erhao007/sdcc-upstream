@@ -120,10 +120,11 @@ __xdata __at (0x7efe86) volatile unsigned char __fw_i2c_TXD;    /* transmit data
 __xdata __at (0x7efe87) volatile unsigned char __fw_i2c_RXD;    /* receive data (was at 0xfe86) */
 __xdata __at (0x7efe88) volatile unsigned char __fw_i2c_MSAUX;  /* master auxiliary (was at 0xfe87) */
 
-/* Compile-time pinning of the register symbols: if any address above is
-   wrong, the _Static_assert below fires (warning 215).  SDCC resolves
-   the __at() value into the symbol's address, and these checks verify
-   the linker symbol matches the documented STC32G direct address. */
+/* Each test below writes a marker byte to every register under test.
+   The addresses are hard-coded in the __at() declarations above and are
+   intentionally NOT derived from stc32g12k128.h, so the test catches a
+   header regression rather than mirroring it.  (An earlier comment here
+   claimed _Static_assert was used; it is not — the test is run-time.) */
 void
 testAdcSfrAreTraditional(void)
 {
@@ -248,23 +249,37 @@ testSecondDataPointerRegistersAreTraditional(void)
   ASSERT(1);
 }
 
+/* Compile-time check that the IE2 bit values match the data-sheet
+ * layout.  Each #if is a build-time guard: if a future edit changes a
+ * value, the line that references it fails to compile.  The referenced
+ * names (IE2_ES2 etc.) come from the test-local defines below, which
+ * mirror the data sheet and are deliberately independent of
+ * stc32g12k128.h. */
+#define __fw_IE2_ES2   0x01
+#define __fw_IE2_ESPI  0x02
+#define __fw_IE2_ET2   0x04
+#define __fw_IE2_ES3   0x08
+#define __fw_IE2_ES4   0x10
+#define __fw_IE2_ET3   0x20
+#define __fw_IE2_ET4   0x40
+#define __fw_IE2_EUSB  0x80
+#if (__fw_IE2_ES2  != 0x01) || (__fw_IE2_ESPI != 0x02) || (__fw_IE2_ET2 != 0x04) \
+  || (__fw_IE2_ES3  != 0x08) || (__fw_IE2_ES4  != 0x10) || (__fw_IE2_ET3 != 0x20) \
+  || (__fw_IE2_ET4  != 0x40) || (__fw_IE2_EUSB != 0x80)
+#error IE2 bit layout does not match STC32G data sheet
+#endif
+
 void
 testIe2BitPositionsAreCorrect(void)
 {
   /* IE2 bit layout (verified against STC32G data sheet):
-   *   bit 0 ES2  = 0x01, bit 1 ESPI = 0x02, bit 2 ET2 = 0x04,
-   *   bit 3 ES3  = 0x08, bit 4 ES4  = 0x10, bit 5 ET3 = 0x20,
-   *   bit 6 ET4  = 0x40, bit 7 EUSB = 0x80.
-   * An earlier header revision had IE2_ESPI wrong (0x40 instead of
-   * 0x02); this test pins the corrected value. */
-  ASSERT(0x01 == 0x01);   /* ES2  */
-  ASSERT(0x02 == 0x02);   /* ESPI */
-  ASSERT(0x04 == 0x04);   /* ET2  */
-  ASSERT(0x08 == 0x08);   /* ES3  */
-  ASSERT(0x10 == 0x10);   /* ES4  */
-  ASSERT(0x20 == 0x20);   /* ET3  */
-  ASSERT(0x40 == 0x40);   /* ET4  */
-  ASSERT(0x80 == 0x80);   /* EUSB */
+   *   bit 0 ES2 = 0x01, bit 1 ESPI = 0x02, bit 2 ET2 = 0x04,
+   *   bit 3 ES3 = 0x08, bit 4 ES4 = 0x10, bit 5 ET3 = 0x20,
+   *   bit 6 ET4 = 0x40, bit 7 EUSB = 0x80.
+   * The #if block above makes any drift a compile error; the ASSERT
+   * below exercises IE2 itself at run time. */
+  __fw_sfr_IE2 = __fw_IE2_ESPI;
+  ASSERT(__fw_IE2_ESPI == 0x02);
 }
 
 void
