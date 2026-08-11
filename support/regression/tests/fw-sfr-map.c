@@ -110,6 +110,16 @@ __xdata __at (0x7efebc) volatile unsigned char __fw_can_CANDR;
 __xdata __at (0x7efa01) volatile unsigned char __fw_dma_M2M_CR;
 __xdata __at (0x7efa20) volatile unsigned char __fw_dma_SPI_CFG;
 
+/* I2C (extended SFR, 9 registers at 0x7EFE80-0x7EFE88).  Declared at
+ * their corrected addresses — an earlier header revision had TXD/RXD/
+ * MSAUX shifted one byte low and was missing I2CSLADR entirely. */
+__sfr __at (0x85) __fw_sfr_SPH;                    /* legacy SP high (was wrongly 0x86) */
+__xdata __at (0x7efe84) volatile unsigned char __fw_i2c_SLST;   /* slave status (was misspelled SLCST) */
+__xdata __at (0x7efe85) volatile unsigned char __fw_i2c_SLADR;  /* slave address (was missing) */
+__xdata __at (0x7efe86) volatile unsigned char __fw_i2c_TXD;    /* transmit data (was at 0xfe85) */
+__xdata __at (0x7efe87) volatile unsigned char __fw_i2c_RXD;    /* receive data (was at 0xfe86) */
+__xdata __at (0x7efe88) volatile unsigned char __fw_i2c_MSAUX;  /* master auxiliary (was at 0xfe87) */
+
 /* Compile-time pinning of the register symbols: if any address above is
    wrong, the _Static_assert below fires (warning 215).  SDCC resolves
    the __at() value into the symbol's address, and these checks verify
@@ -345,5 +355,35 @@ testUsbRegistersAreTraditional(void)
   __fw_sfr_USBCON = 0;
   __fw_sfr_USBADR = 0;
   __fw_sfr_USBCLK = 0;
+  ASSERT(1);
+}
+
+void
+testI2cRegistersAreNotShifted(void)
+{
+  /* I2C has 9 registers at 0x7EFE80-0x7EFE88.  An earlier header
+   * revision shifted TXD/RXD/MSAUX one byte low (starting at 0xfe85
+   * instead of 0xfe86) and dropped I2CSLADR (0xfe85) entirely, so any
+   * I2C firmware wrote the slave address into the TXD slot and TXD
+   * into the RXD slot.  Pin the corrected addresses here.  Also note
+   * I2CSLST (not SLCST). */
+  __fw_sfr_PSW2 |= 0x80;
+  __fw_i2c_SLST  = 0;   /* 0x7EFE84 slave status */
+  __fw_i2c_SLADR = 0;   /* 0x7EFE85 slave address */
+  __fw_i2c_TXD   = 0;   /* 0x7EFE86 transmit data */
+  __fw_i2c_RXD   = 0;   /* 0x7EFE87 receive data */
+  __fw_i2c_MSAUX = 0;   /* 0x7EFE88 master auxiliary */
+  __fw_sfr_PSW2 &= ~0x80;
+  ASSERT(1);
+}
+
+void
+testSphIsAt0x85(void)
+{
+  /* SPH (legacy stack-pointer high byte) is at SFR 0x85 on STC32G,
+   * not 0x86 as an earlier header revision had.  MCS-251 uses SPX for
+   * the real stack so SPH is mostly cosmetic, but pinning the address
+   * stops debug/compatibility code from reading the wrong cell. */
+  __fw_sfr_SPH = 0;
   ASSERT(1);
 }
