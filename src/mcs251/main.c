@@ -416,10 +416,15 @@ _hasNativeMulFor (iCode *ic, sym_link *left, sym_link *right)
   if (getSize (left) == 1 && getSize (right) == 1)
     return true;
 
-  /* Disable native 16x16->32 multiply for now: the mcs251GenUnsignedWordMultiply
-     codegen has a register destruction bug in the opPut/preserveDword interaction
-     that produces incorrect results.  Fall back to __mullong (32x32->32) which
-     is slower but correct. */
+  /* Native 16x16->32 unsigned multiply (MUL WRj,WRk -> DRj).  The backend
+     handler mcs251GenUnsignedWordMultiply() supports exactly the unsigned
+     2-byte * 2-byte -> 4-byte case, so advertise only that; signed or
+     narrower-result products fall back to the __mullong/__mulslong helper. */
+  if (getSize (left) == 2 && getSize (right) == 2 &&
+      getSize (operandType (IC_RESULT (ic))) == 4 &&
+      SPEC_USIGN (getSpec (left)) && SPEC_USIGN (getSpec (right)))
+    return true;
+
   return false;
 }
 
