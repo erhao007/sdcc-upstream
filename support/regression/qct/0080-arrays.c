@@ -3,7 +3,13 @@ int
 foo(int x[100])
 {
 #if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
+#  if defined(__SDCC_STACK_AUTO)
+	/* Under --stack-auto this function is reentrant, and a non-static
+	   storage-classed local is rejected (SDCC error 16). */
+	static __xdata
+#  else
 	__xdata
+#  endif
 #endif
 	int y[100];
 	int *p;
@@ -46,7 +52,13 @@ int
 main()
 {
 #if defined(__SDCC_mcs51) || defined(__SDCC_mcs251)
+#  if defined(__SDCC_STACK_AUTO)
+	/* Under --stack-auto this function is reentrant, and a non-static
+	   storage-classed local is rejected (SDCC error 16). */
+	static __xdata
+#  else
 	__xdata
+#  endif
 #endif
 	int x[100];
 	x[0] = 1000;

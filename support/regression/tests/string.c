@@ -52,7 +52,13 @@ do_teststrcpy (void)
   static char empty[] = "";
   static char string[] = "\1\2\0\3";
 #if defined(__SDCC_mcs251)
+#  if defined(__SDCC_STACK_AUTO)
+  /* Under --stack-auto this function is reentrant, and a non-static
+     storage-classed local is rejected (SDCC error 16). */
+  static __xdata
+#  else
   __xdata
+#  endif
 #endif
   char buf[40] = "abcdefghijklmnopqrstuvwxyz";
 

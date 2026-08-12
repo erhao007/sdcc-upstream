@@ -4,7 +4,14 @@ void foo(float * x);
 int main()
 {
 #if defined(__SDCC_mcs251)
-  __xdata
+  /* Under --stack-auto main() becomes reentrant, and a non-static
+     storage-classed local is rejected (SDCC error 16).  main() runs
+     once, so static is semantically equivalent here. */
+#  if defined(__SDCC_STACK_AUTO)
+    static __xdata
+#  else
+    __xdata
+#  endif
 #endif
   float x[4];
   foo (x);
