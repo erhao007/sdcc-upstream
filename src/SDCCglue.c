@@ -878,7 +878,13 @@ printIvalType (symbol * sym, sym_link * type, initList * ilist, struct dbuf_s *o
     {
       if (!!(val = initPointer (ilist, type, 0)))
         {
-          int i, size = getSize (type), le = port->little_endian, top = (options.model == MODEL_FLAT24) ? 3 : 2;;
+          /* Number of low bytes that carry the (relocatable) address
+             symbol; the rest is zero-padded.  MCS-251 uses flat 24-bit
+             addresses (GPTRSIZE == 3), like MODEL_FLAT24, but selects its
+             own model enum, so the FLAT24 test alone truncates the region
+             byte and produces a wrong (unsigned long) &sym initializer
+             (see bug-2031).  Other ports keep the historic 2-byte span. */
+          int i, size = getSize (type), le = port->little_endian, top = TARGET_IS_MCS251 ? GPTRSIZE : ((options.model == MODEL_FLAT24) ? 3 : 2);
           dbuf_printf (oBuf, "\t.byte ");
           for (i = (le ? 0 : size - 1); le ? (i < size) : (i > -1); i += (le ? 1 : -1))
             {
