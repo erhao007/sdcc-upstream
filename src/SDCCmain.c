@@ -412,6 +412,16 @@ static PORT *_ports[] = {
 static void
 _setPort (const char *name)
 {
+  /* The STC32G / MCS-251 port is published to users under the target name
+     "stc32" (see AGENTS.md: "Target name stc32; architecture name mcs251"),
+     but internally everything -- the PORT struct, the register allocator,
+     the device library / include directories, and the predefined
+     __SDCC_mcs251 macro (derived from port->target) -- is "mcs251".
+     Accept -mstc32 as an alias for -mmcs251 so existing code and the ~146
+     regression guards keyed on __SDCC_mcs251 keep working unchanged. */
+  if (!strcmp (name, "stc32"))
+    name = "mcs251";
+
   size_t maxnamelen = 0;
   for (int i = 0; i < NUM_PORTS; i++)
     {
@@ -430,6 +440,7 @@ _setPort (const char *name)
   wassert (maxnamelen <= INT_MAX);
   for (int i = 0; i < NUM_PORTS; i++)
     fprintf (stderr, "%-*s-m%s\n", (int)(maxnamelen + 4), _ports[i]->target_name, _ports[i]->target);
+  fprintf (stderr, "Note: -mstc32 is an alias for -mmcs251 (same target, same __SDCC_mcs251 macro).\n");
 
   exit (EXIT_FAILURE);
 }
