@@ -92,9 +92,12 @@ mcs251_setjmp_irq_off$:
         inc     dr20
         mov     @dr20,r2
 
-        dec     dr24,#4
-        dec     dr24,#2
-        dec     dr24,#1
+        ; Restore the registers from buf[7..14], where they were saved.
+        ; The ECALL-frame address in DR24 is unrelated to the buffer when the
+        ; jmp_buf is an automatic object on the SPX stack.
+        mov     dr24,dr20
+        inc     dr24,#2
+        inc     dr24,#1
         mov     r0,@dr24
         inc     dr24
         mov     r1,@dr24

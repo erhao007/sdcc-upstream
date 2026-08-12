@@ -3400,6 +3400,41 @@ genPlus (iCode * ic)
                                "add", TRUE))
     goto release;
 
+  /* Preserve both inputs before writing a stack result that shares bytes
+     with either of them.  Spill-slot colouring permits this at an iCode
+     boundary, but the normal low-to-high carry loop is not safe for partial
+     overlap on a big-endian target. */
+  if (mcs251StackAopHasUnreadOverlap (AOP (IC_RESULT (ic)), AOP (leftOp)) ||
+      mcs251StackAopHasUnreadOverlap (AOP (IC_RESULT (ic)), AOP (rightOp)))
+    {
+      bool pushedB = pushB ();
+      int inputOffset;
+
+      for (inputOffset = size - 1; inputOffset >= 0; --inputOffset)
+        {
+          MOVA (opGet (leftOp, inputOffset, FALSE, FALSE));
+          emitpush ("acc");
+          MOVA (opGet (rightOp, inputOffset, FALSE, FALSE));
+          emitpush ("acc");
+        }
+
+      add = "add";
+      for (offset = 0; offset < size; ++offset)
+        {
+          emitpop ("b");
+          emitpop ("acc");
+          emitcode (add, "a,b");
+          if (offset + 1 == size && maskedtopbyte)
+            emitcode ("anl", "a,#!constbyte", topbytemask);
+          opPut (IC_RESULT (ic), "a", offset);
+          add = "addc";
+        }
+
+      popB (pushedB);
+      adjustArithmeticResult (ic);
+      goto release;
+    }
+
   /* if this is an add for an array access
      at a 256 byte boundary */
   if (2 == size && !maskedtopbyte
@@ -3706,6 +3741,7 @@ static void
 genMinus (iCode * ic)
 {
   int size, offset = 0;
+  operand *leftOp, *rightOp;
 
   D (emitcode (";", "genMinus"));
 
@@ -3732,16 +3768,51 @@ genMinus (iCode * ic)
     goto release;
 
   size = getDataSize (IC_RESULT (ic));
+  leftOp = IC_LEFT (ic);
+  rightOp = IC_RIGHT (ic);
 
   if (!maskedtopbyte &&
-      mcs251GenWordArithmetic (IC_LEFT (ic), IC_RIGHT (ic),
+      mcs251GenWordArithmetic (leftOp, rightOp,
                               IC_RESULT (ic), "sub", FALSE))
     goto release;
 
   if (!maskedtopbyte &&
-      mcs251GenDwordArithmetic (IC_LEFT (ic), IC_RIGHT (ic),
+      mcs251GenDwordArithmetic (leftOp, rightOp,
                                IC_RESULT (ic), "sub", FALSE))
     goto release;
+
+  /* Preserve both inputs before writing a stack result that shares bytes
+     with either of them.  Spill-slot colouring permits this at an iCode
+     boundary, but the normal low-to-high borrow loop is not safe for
+     partial overlap on a big-endian target (mirror of the genPlus guard). */
+  if (mcs251StackAopHasUnreadOverlap (AOP (IC_RESULT (ic)), AOP (leftOp)) ||
+      mcs251StackAopHasUnreadOverlap (AOP (IC_RESULT (ic)), AOP (rightOp)))
+    {
+      bool pushedB = pushB ();
+      int inputOffset;
+
+      for (inputOffset = size - 1; inputOffset >= 0; --inputOffset)
+        {
+          MOVA (opGet (leftOp, inputOffset, FALSE, FALSE));
+          emitpush ("acc");
+          MOVA (opGet (rightOp, inputOffset, FALSE, FALSE));
+          emitpush ("acc");
+        }
+
+      emitcode ("clr", "c");
+      for (offset = 0; offset < size; ++offset)
+        {
+          emitpop ("b");
+          emitpop ("acc");
+          emitcode ("subb", "a,b");
+          if (offset + 1 == size && maskedtopbyte)
+            emitcode ("anl", "a,#!constbyte", topbytemask);
+          opPut (IC_RESULT (ic), "a", offset);
+        }
+
+      popB (pushedB);
+      goto release;
+    }
 
   /* if literal, add a,#-lit, else normal subb */
   if (AOP_TYPE (IC_RIGHT (ic)) == AOP_LIT)
@@ -3788,11 +3859,6 @@ genMinus (iCode * ic)
     }
   else
     {
-      operand *leftOp, *rightOp;
-
-      leftOp = IC_LEFT (ic);
-      rightOp = IC_RIGHT (ic);
-
       while (size--)
         {
           bool preserveB = FALSE;

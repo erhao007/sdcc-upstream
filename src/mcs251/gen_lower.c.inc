@@ -1849,6 +1849,36 @@ mcs251ScalarByteOffset (const asmop *aop, int offset)
   return offset;
 }
 
+/* Stack-slot colouring can let an iCode result overlap an input whose live
+   range ends at that iCode.  Byte-at-a-time big-endian arithmetic must detect
+   this: writing a low result byte can otherwise destroy a higher input byte
+   that has not been read yet. */
+static bool
+mcs251StackAopHasUnreadOverlap (const asmop *result, const asmop *input)
+{
+  int resultOffset;
+
+  if (result->type != AOP_MCS251_STK ||
+      input->type != AOP_MCS251_STK)
+    return false;
+
+  for (resultOffset = 0; resultOffset < result->size; ++resultOffset)
+    {
+      int resultAddress = stackoffset (result->aopu.aop_sym) +
+        mcs251ScalarByteOffset (result, resultOffset);
+      int inputOffset;
+
+      for (inputOffset = resultOffset + 1;
+           inputOffset < input->size;
+           ++inputOffset)
+        if (resultAddress == stackoffset (input->aopu.aop_sym) +
+            mcs251ScalarByteOffset (input, inputOffset))
+          return true;
+    }
+
+  return false;
+}
+
 static int
 mcs251PointerByteOffset (sym_link *type, int physicalOffset, int size)
 {
@@ -3116,4 +3146,3 @@ skip_byte:
 
   wassertl_bt (size >= 0, "genCopy() copied more than there is to be copied.");
 }
-
