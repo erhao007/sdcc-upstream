@@ -119,6 +119,11 @@ public:
   int inst_eret251(void);                 // 24-bit return
   int inst_lcall16(t_mem addr);           // PC already advanced
   int inst_ecall24(t_mem addr);
+  // Override the 3-arg virtual (cl_51core::inst_lcall) used by accept_it to
+  // enter an ISR.  The base pushes a 16-bit PC to iram[SP]; MCS-251 ISRs
+  // return via ERET (3-byte pop from spx), so push the full 24-bit PC onto
+  // the SPX/edata stack instead.
+  int inst_lcall(t_mem code, uint addr, bool intr);
   int inst_add_a_imm8(void);
   int inst_addc_a_imm8(void);
   int inst_subb_a_imm8(void);

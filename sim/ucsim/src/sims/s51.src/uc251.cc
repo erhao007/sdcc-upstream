@@ -495,7 +495,18 @@ cl_uc251::inst_ret251(void)
 int
 cl_uc251::inst_reti251(void)
 {
-  return(inst_ret251());
+  int r= inst_ret251();
+  /* Unwind the interrupt level so do_interrupt's priority compare recovers
+     and IE-write re-check works (mirrors cl_51core::instruction_32). */
+  interrupt->was_reti= true;
+  class it_level *il= (class it_level *)(it_levels->top());
+  if (il &&
+      il->level >= 0)
+    {
+      il= (class it_level *)(it_levels->pop());
+      delete il;
+    }
+  return r;
 }
 
 
@@ -511,6 +522,16 @@ cl_uc251::inst_eret251(void)
   spx= (spx - 1) & 0xffff;
   PC= (h << 16) | (m << 8) | l;
   vc.rd+= 3;
+  /* Unwind the interrupt level (see inst_reti251).  mcs251 ISRs return via
+     ERET, so this is the return path exercised by accept_it's 24-bit push. */
+  interrupt->was_reti= true;
+  class it_level *il= (class it_level *)(it_levels->top());
+  if (il &&
+      il->level >= 0)
+    {
+      il= (class it_level *)(it_levels->pop());
+      delete il;
+    }
   return(resGO);
 }
 
@@ -531,6 +552,34 @@ cl_uc251::inst_lcall16(t_mem addr)
 int
 cl_uc251::inst_ecall24(t_mem addr)
 {
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, PC & 0xff);
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, (PC >> 8) & 0xff);
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, (PC >> 16) & 0xff);
+  PC= addr;
+  vc.wr+= 3;
+  return(resGO);
+}
+
+
+/* Override of the 3-arg cl_51core::inst_lcall.  cl_51core::accept_it is the
+   only caller of this form for mcs251 (regular LCALL 0x12 goes through
+   inst_lcall16 in exec_inst), invoked as inst_lcall(0, vector_addr, true) to
+   enter an ISR.  The base pushes a 16-bit PC to iram[SP]; MCS-251 ISRs end
+   in ERET (3-byte pop from spx), so push the full 24-bit return PC onto the
+   SPX/edata stack — matching inst_ecall24 — or the ERET would pop garbage
+   and it_levels would never unwind. */
+int
+cl_uc251::inst_lcall(t_mem code, uint addr, bool intr)
+{
+  if (!addr)
+    {
+      /* Inline-address LCALL (not used by mcs251 codegen): defer to the
+         16-bit base behaviour rather than guess. */
+      return cl_51core::inst_lcall(code, addr, intr);
+    }
   spx= (spx + 1) & 0xffff;
   write_edata(spx, PC & 0xff);
   spx= (spx + 1) & 0xffff;
