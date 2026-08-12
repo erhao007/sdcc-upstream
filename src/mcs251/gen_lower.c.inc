@@ -92,10 +92,18 @@ static struct
      already hold a particular far-symbol address, it can skip the
      redundant mov dptr,#X / mov dpxl,#Y pair.  The cache is invalidated
      at every label (control-flow join) and after any instruction that
-     might modify dptr. */
+     might modify dptr.
+
+     The cached strings come from opGet(), which formats a full operand
+     such as "#((_function_var_scope_10000_12 + 0x0004) >> 16)".  Mangled
+     local-symbol names can easily exceed 40 characters, and the full
+     operand form adds ~20 characters of wrapping, so the buffers must be
+     large enough to hold the longest realistic name; otherwise strncpy
+     silently truncates the trailing ")" and produces malformed asm. */
+#define DPTRCACHE_NAME_MAX 128
   struct {
-    char symbol[64];      /* cached dptr value from opGet() */
-    char dpxlSymbol[64];  /* cached dpxl value from opGet() */
+    char symbol[DPTRCACHE_NAME_MAX];      /* cached dptr value from opGet() */
+    char dpxlSymbol[DPTRCACHE_NAME_MAX];  /* cached dpxl value from opGet() */
     bool valid;
   } dptrCache;
 }
@@ -2352,11 +2360,11 @@ loadDptrFromOperand (operand *op, bool loadBToo)
                  opGet returns a pointer to a static buffer, so we must
                  copy the strings before the next opGet call. */
               const char *dptr_name = opGet (op, 0, TRUE, FALSE);
-              char dptr_buf[64] = {0};
+              char dptr_buf[DPTRCACHE_NAME_MAX] = {0};
               if (dptr_name && dptr_name[0])
                 strncpy (dptr_buf, dptr_name, sizeof(dptr_buf) - 1);
               const char *dpxl_name = opGet (op, 2, FALSE, FALSE);
-              char dpxl_buf[64] = {0};
+              char dpxl_buf[DPTRCACHE_NAME_MAX] = {0};
               if (dpxl_name && dpxl_name[0])
                 strncpy (dpxl_buf, dpxl_name, sizeof(dpxl_buf) - 1);
 
@@ -2383,23 +2391,23 @@ loadDptrFromOperand (operand *op, bool loadBToo)
                 {                  /* Try inc dpx for sequential addresses of the same base.
                      Parse the symbol and offset from both the cached and
                      new dptr strings.  Format: "NAME" or "(NAME + 0xOFF)". */
-                  char cached_base[48] = {0};
+                  char cached_base[DPTRCACHE_NAME_MAX] = {0};
                   unsigned long cached_off = 0;
-                  char new_base[48] = {0};
+                  char new_base[DPTRCACHE_NAME_MAX] = {0};
                   unsigned long new_off = 0;
                   bool cached_parsed = false;
                   bool new_parsed = false;
 
-                  if (sscanf (_G.dptrCache.symbol, "(%47[^+ ] + 0x%lx)", cached_base, &cached_off) == 2)
+                  if (sscanf (_G.dptrCache.symbol, "(%127[^+ ] + 0x%lx)", cached_base, &cached_off) == 2)
                     cached_parsed = true;
-                  else if (sscanf (_G.dptrCache.symbol, "%47s", cached_base) == 1) {
+                  else if (sscanf (_G.dptrCache.symbol, "%127s", cached_base) == 1) {
                     cached_off = 0;
                     cached_parsed = true;
                   }
 
-                  if (sscanf (dptr_buf, "(%47[^+ ] + 0x%lx)", new_base, &new_off) == 2)
+                  if (sscanf (dptr_buf, "(%127[^+ ] + 0x%lx)", new_base, &new_off) == 2)
                     new_parsed = true;
-                  else if (sscanf (dptr_buf, "%47s", new_base) == 1) {
+                  else if (sscanf (dptr_buf, "%127s", new_base) == 1) {
                     new_off = 0;
                     new_parsed = true;
                   }

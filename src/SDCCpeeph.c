@@ -3122,11 +3122,14 @@ bindVar (int key, char **s, hTab ** vtab)
   char vval[MAX_PATTERN_LEN];
   char *vvx;
   char *vv = vval;
+  /* Leave one byte for the trailing NUL written below. */
+  const char *const vval_end = vval + MAX_PATTERN_LEN - 1;
 
   /* first get the value of the variable */
   vvx = *s;
   /* the value is ended by a ',' or space or newline or null or ) */
   while (*vvx &&
+         vv < vval_end &&
          *vvx != ',' &&
          !ISCHARSPACE (*vvx) &&
          *vvx != '\n' &&
@@ -3139,7 +3142,10 @@ bindVar (int key, char **s, hTab ** vtab)
       if (*vvx == '(')
         {
           ubb++;
-          while (ubb)
+          /* Stop at NUL (e.g. an operand with an unbalanced '(') or
+             when vval is full, instead of walking off the end of the
+             source string and overrunning the stack buffer. */
+          while (ubb && *vvx && vv < vval_end)
             {
               *vv++ = *vvx++;
               if (*vvx == '(')
@@ -3148,7 +3154,8 @@ bindVar (int key, char **s, hTab ** vtab)
                 ubb--;
             }
           // include the trailing ')'
-          *vv++ = *vvx++;
+          if (*vvx == ')')
+            *vv++ = *vvx++;
         }
       else
         *vv++ = *vvx++;
