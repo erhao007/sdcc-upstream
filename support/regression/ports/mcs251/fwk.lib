@@ -1,1 +1,4 @@
 T0_isr.rel
+T1_isr.rel
+INT0_isr.rel
+uart1_isr.rel

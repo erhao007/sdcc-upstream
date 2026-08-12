@@ -14,9 +14,15 @@
 void T2_isr (void) __interrupt (5);
 #define MEMSPACE_BUF __idata
 #elif defined(__SDCC_mcs251)
-/* Keep the Timer0 ISR prototype in the module containing main so the MCS-251
-   vector table can reference the handler supplied by the port framework. */
-void T0_isr (void) __interrupt (1);
+/* Keep the ISR prototypes in the module containing main so the MCS-251
+   vector table generates correct ejmp entries (not self-jumps) for every
+   interrupt source the framework provides.  The actual ISR bodies live in
+   the port framework (T0_isr.c etc.) linked via fwk.lib; these prototypes
+   only ensure the vector table is emitted. */
+void T0_isr   (void) __interrupt (1);   /* Timer0  → 0x000B */
+void T1_isr   (void) __interrupt (3);   /* Timer1  → 0x001B */
+void INT0_isr (void) __interrupt (0);   /* INT0    → 0x0003 */
+void uart1_isr(void) __interrupt (4);   /* UART    → 0x0023 */
 /* MCS-251 has only 128 bytes of directly-addressable RAM (DSEG), like mcs51.
    Place the print buffers in XDATA (on-chip xRAM) so they neither consume
    scarce direct-addressing space nor crowd the ISEG/stack window in IRAM. */

@@ -76,5 +76,8 @@ include $(srcdir)/fwk/lib/spec.mk
 SPEC_LIB = $(PORTS_DIR)/mcs251/fwk.lib
 
 FWKLIB += $(PORT_CASES_DIR)/T0_isr$(OBJEXT)
+FWKLIB += $(PORT_CASES_DIR)/T1_isr$(OBJEXT)
+FWKLIB += $(PORT_CASES_DIR)/INT0_isr$(OBJEXT)
+FWKLIB += $(PORT_CASES_DIR)/uart1_isr$(OBJEXT)
 
 _clean:
