@@ -16,7 +16,7 @@
    check inside the body so the test wrapper always finds them).
 
    Note: P_SW2.EAXFR (bit 7 of SFR 0xBA) gates EAXFR access on real hardware.
-   The simulator does not enforce this gate (it routes 0x7E0000+ unconditionally;
+   The simulator enforces this gate: 0x7E0000+ routes to eaxfr only when P_SW2.EAXFR=1;
    disabled-state behaviour is unverified).  The test sets the bit anyway to
    match real firmware practice.
 */
@@ -44,6 +44,34 @@ testEaxfrIsDecoupledFromXram(void)
 
   ASSERT(I2CCFG == 0x5A);               /* EAXFR write reads back */
   ASSERT(fw_eaxfr_low_mirror == 0x00);  /* did NOT alias into xram[0xFE80] */
+
+  P_SW2 &= (unsigned char)~P_SW2_EAXFR;
+#endif
+}
+
+/* P_SW2.EAXFR gates access to the extended-SFR area on real hardware.
+   With the gate clear, a write to 0x7EFE80 must NOT reach the extended-SFR
+   store: it falls through to the xram fallback (xram[0xFE80], exposed here
+   as fw_eaxfr_low_mirror), matching the pre-de-aliasing behaviour and the
+   firmware contract that the peripherals are inaccessible until EAXFR=1. */
+void
+testEaxfrGateBlocksAccessWhenDisabled(void)
+{
+#if defined(__SDCC_mcs251)
+  P_SW2 &= (unsigned char)~P_SW2_EAXFR;   /* gate OFF */
+
+  fw_eaxfr_low_mirror = 0x00;
+  I2CCFG = 0xA5;                          /* should land in xram, not eaxfr */
+
+  ASSERT(fw_eaxfr_low_mirror == 0xA5);    /* write fell through to xram */
+  ASSERT(I2CCFG == 0xA5);                 /* read also sees the xram fallback */
+
+  /* Re-enabling the gate must direct the access to the eaxfr store again
+     (untouched by the gated-off write above). */
+  P_SW2 |= P_SW2_EAXFR;                  /* gate ON */
+  I2CCFG = 0x5A;
+  ASSERT(I2CCFG == 0x5A);                /* eaxfr write reads back */
+  ASSERT(fw_eaxfr_low_mirror == 0xA5);   /* eaxfr write did not leak to xram */
 
   P_SW2 &= (unsigned char)~P_SW2_EAXFR;
 #endif

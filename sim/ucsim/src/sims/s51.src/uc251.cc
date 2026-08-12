@@ -335,8 +335,14 @@ cl_uc251::read_edata(t_addr addr)
     }
   if (addr >= 0x010000 && addr < 0x020000)
     return(xdata->read(addr));   /* XDATA SRAM (de-aliased from the edata window) */
-  if (addr >= 0x7E0000 && addr < 0x7F0000)
-    return(eaxfr->read(addr));   /* extended SFR (I2C/PWM/DMA/CAN) */
+  /* Extended SFR (I2C/PWM/DMA/CAN) is gated by P_SW2.EAXFR (SFR 0xBA
+     bit 7): firmware must set P_SW2 |= 0x80 before accessing it.  When
+     the gate is clear the access does not reach the peripherals and
+     falls through to the xram fallback below.  (Real-hardware
+     disabled-state behaviour is approximated by the existing xram
+     fallback; the enabled state is the verified §12.2a path.) */
+  if (addr >= 0x7E0000 && addr < 0x7F0000 && (sfr->read(0xBA) & 0x80))
+    return(eaxfr->read(addr));
   return(xram->read(addr & 0xffff));
 }
 
@@ -370,7 +376,9 @@ cl_uc251::write_edata(t_addr addr, t_mem v)
     iram->write(addr, v);
   else if (addr >= 0x010000 && addr < 0x020000)
     xdata->write(addr, v);   /* XDATA SRAM (de-aliased from the edata window) */
-  else if (addr >= 0x7E0000 && addr < 0x7F0000)
+  /* Extended SFR writes are gated by P_SW2.EAXFR (SFR 0xBA bit 7), mirroring
+     read_edata: when the gate is clear the write falls through to xram. */
+  else if (addr >= 0x7E0000 && addr < 0x7F0000 && (sfr->read(0xBA) & 0x80))
     eaxfr->write(addr, v);   /* extended SFR (I2C/PWM/DMA/CAN) */
   else
     xram->write(addr & 0xffff, v);
