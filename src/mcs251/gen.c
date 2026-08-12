@@ -9470,6 +9470,15 @@ genFarPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCod
         }
     }
 
+  /* The pointer read above advanced DPX (via "inc dpx" in
+     genUnpackBits or incrementFarPointer) outside loadDptrFromOperand,
+     so the dptrCache -- which still records the base address -- is
+     stale.  Invalidate it, otherwise a following pointer write's
+     loadDptrFromOperand would skip the reload and target a wrong
+     address (bit-field read-modify-write corruption on mcs251
+     --model-large). */
+  _G.dptrCache.valid = false;
+
   if (pi && AOP_TYPE (left) != AOP_IMMD && AOP_TYPE (left) != AOP_STR)
     {
       if (AOP_TYPE (left) == AOP_DPTR)
@@ -9557,6 +9566,15 @@ genCodePointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCo
         }
     }
 
+  /* The pointer read above advanced DPX (via "inc dpx" in
+     genUnpackBits or incrementFarPointer) outside loadDptrFromOperand,
+     so the dptrCache -- which still records the base address -- is
+     stale.  Invalidate it, otherwise a following pointer write's
+     loadDptrFromOperand would skip the reload and target a wrong
+     address (bit-field read-modify-write corruption on mcs251
+     --model-large). */
+  _G.dptrCache.valid = false;
+
   if (pi && AOP_TYPE (left) != AOP_IMMD && AOP_TYPE (left) != AOP_STR)
     {
       if (AOP_TYPE (left) == AOP_DPTR)
@@ -9641,6 +9659,15 @@ genGenPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCod
             }
         }
     }
+
+  /* The pointer read above advanced DPX (via "inc dpx" in
+     genUnpackBits or incrementFarPointer) outside loadDptrFromOperand,
+     so the dptrCache -- which still records the base address -- is
+     stale.  Invalidate it, otherwise a following pointer write's
+     loadDptrFromOperand would skip the reload and target a wrong
+     address (bit-field read-modify-write corruption on mcs251
+     --model-large). */
+  _G.dptrCache.valid = false;
 
   if (pi && AOP_TYPE (left) != AOP_IMMD && AOP_TYPE (left) != AOP_STR)
     {
