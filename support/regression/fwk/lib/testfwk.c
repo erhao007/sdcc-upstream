@@ -14,6 +14,9 @@
 void T2_isr (void) __interrupt (5);
 #define MEMSPACE_BUF __idata
 #elif defined(__SDCC_mcs251)
+/* Keep the Timer0 ISR prototype in the module containing main so the MCS-251
+   vector table can reference the handler supplied by the port framework. */
+void T0_isr (void) __interrupt (1);
 /* MCS-251 has only 128 bytes of directly-addressable RAM (DSEG), like mcs51.
    Place the print buffers in XDATA (on-chip xRAM) so they neither consume
    scarce direct-addressing space nor crowd the ISEG/stack window in IRAM. */
@@ -33,7 +36,22 @@ static int __numFailures = 0;
 #define __mod(num, denom) ((num) % (denom))
 
 void
-__prints (const char *s)
+__prints (TESTFWK_CODE const char *s)
+{
+  char c;
+
+  while ('\0' != (c = *s))
+    {
+      _putchar(c);
+      ++s;
+    }
+}
+
+/* Numeric formatting uses temporary buffers in XDATA on MCS-251.  Keep
+   this helper generic; __prints is deliberately CODE-qualified so the
+   framework's literal strings use MOVC in the large model. */
+void
+__prints_data (const char *s)
 {
   char c;
 
@@ -109,7 +127,7 @@ __printd (int n)
       if (neg)
         _putchar('-');
 
-      __prints(p);
+      __prints_data(p);
     }
 }
 #endif
@@ -134,14 +152,14 @@ __printu (unsigned int n)
           n = __div (n, 10);
         }
 
-      __prints(p);
+      __prints_data(p);
     }
 }
 #endif
 
 #ifndef NO_VARARGS
 void
-__printf (const char *szFormat, ...)
+__printf (TESTFWK_CODE const char *szFormat, ...)
 {
   va_list ap;
   va_start (ap, szFormat);
@@ -154,7 +172,7 @@ __printf (const char *szFormat, ...)
             {
             case 's':
               {
-                char *sz = va_arg (ap, char *);
+                TESTFWK_CODE const char *sz = va_arg (ap, TESTFWK_CODE const char *);
                 __prints(sz);
                 break;
               }
@@ -191,7 +209,7 @@ __printf (const char *szFormat, ...)
 }
 
 void
-__fail (__code const char *szMsg, __code const char *szCond, __code const char *szFile, int line) __reentrant
+__fail (TESTFWK_CODE const char *szMsg, TESTFWK_CODE const char *szCond, TESTFWK_CODE const char *szFile, int line) __reentrant
 {
   __printf("--- FAIL: \"%s\" on %s at %s:%u\n", szMsg, szCond, szFile, line);
   __numFailures++;
@@ -217,7 +235,7 @@ main (void)
 }
 #else
 void
-__fail (__code const char *szMsg, __code const char *szCond, __code const char *szFile, int line) __reentrant
+__fail (TESTFWK_CODE const char *szMsg, TESTFWK_CODE const char *szCond, TESTFWK_CODE const char *szFile, int line) __reentrant
 {
   __prints("--- FAIL: \"");
   __prints(szMsg);
@@ -267,4 +285,3 @@ main (void)
   return 0;
 }
 #endif
-

@@ -60,6 +60,7 @@ public:
   virtual void make_address_spaces(void);
   virtual void make_chips(void);            // chains to inherited, then adds eaxfr_chip
   virtual void make_memories(void);         // chains to inherited, then decode_eaxfr()
+  virtual void decode_rom(void);            // adds the MCS-251 high-ROM decoder
 
   // Disassembly: override the inherited 8051 table decoder with a real
   // MCS-251 Source-mode decoder.  Without this, uCsim decodes MCS-251 bytes
@@ -145,6 +146,11 @@ protected:
   // Used by read_edata's von-Neumann mirror to tell loaded 0xFF data from
   // empty (erased) ROM.  Covers the full 128 KiB ROM window.
   unsigned char rom_loaded[0x20000 / 8];
+
+  // The inherited 8051 model only decodes its 64 KiB ROM chip.  MCS-251
+  // large-model images use the second 64 KiB of the flat code window, so
+  // give that range a real backing chip and decoder as well.
+  class cl_memory_chip *rom_hi_chip;
 
   // EAXFR (extended SFR) region 0x7E0000-0x7EFFFF: extended peripherals
   // (I2C/PWM/DMA/CAN) declared in stc32g12k128.h as __xdata __at(0x7E....).

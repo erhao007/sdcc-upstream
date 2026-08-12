@@ -27,8 +27,11 @@
 	.area GSINIT3 (CODE)
 
 ; DR4 is the source pointer, DPX is the destination pointer, and DR12 is a
-; 24-bit byte count (the fourth byte remains zero).  Native indirect moves
-; and INC operate on the complete flat address, including 64 KiB carries.
+; 24-bit byte count (the fourth byte remains zero).  DR16 is the temporary
+; destination-pointer save.  It must not be DR8: R11 is the ACC alias, and
+; MOVC changes ACC between saving and restoring the destination.  XINIT lives
+; in CODE, while XISEG lives in XDATA; use MOVC for the source so the two flat
+; address spaces remain distinct when both occupy 0x01xxxx.
 __mcs51_genXINIT::
 	mov	dptr,#s_XINIT
 	mov	dpxl,#(s_XINIT >> 16)
@@ -41,7 +44,12 @@ __mcs51_genXINIT::
 	cmp	dr12,#0
 	je	00002$
 00001$:
-	mov	a,@dr4
+	mov	dr16,dpx
+	mov	dpx,dr4
+	clr	a
+	movc	a,@a+dptr
+	mov	dr4,dpx
+	mov	dpx,dr16
 	mov	@dpx,a
 	inc	dr4
 	inc	dpx

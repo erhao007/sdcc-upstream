@@ -45,6 +45,7 @@ cl_uc251::cl_uc251(struct cpu_entry *Itype, class cl_sim *asim):
   spx= 0;
   memset(rfile, 0, sizeof(rfile));
   memset(rom_loaded, 0, sizeof(rom_loaded));
+  rom_hi_chip= NULL;
   /* MCS-251 has a 24-bit program counter (16 MiB linear code space).  */
   PCmask= 0xffffff;
 }
@@ -113,6 +114,10 @@ cl_uc251::make_chips(void)
 {
   cl_uc51r::make_chips();   /* rom/iram/xram/sfr/eram chips (inherited) */
 
+  rom_hi_chip= new cl_chip8("rom_hi_chip", 0x10000, 8, 0xff);
+  rom_hi_chip->init();
+  memchips->add(rom_hi_chip);
+
   eaxfr_chip= new cl_chip8("eaxfr_chip", 0x10000, 8);
   eaxfr_chip->init();
   memchips->add(eaxfr_chip);
@@ -120,6 +125,25 @@ cl_uc251::make_chips(void)
   xdata_chip= new cl_chip8("xdata_chip", 0x10000, 8);
   xdata_chip->init();
   memchips->add(xdata_chip);
+}
+
+/* The inherited 8051 decoder covers only rom_chip[0..0xffff].  The address
+   space was widened to 128 KiB for MCS-251, so decode the upper half into a
+   separate chip.  Without this decoder the HEX loader can download bytes to
+   the address-space cells, but reads from those non-decoded cells return the
+   dummy 0xaa value. */
+void
+cl_uc251::decode_rom(void)
+{
+  class cl_address_decoder *ad;
+
+  cl_uc51r::decode_rom();
+
+  ad= new cl_address_decoder(rom, rom_hi_chip, 0x010000, 0x01ffff, 0);
+  ad->init();
+  ad->set_name("mcs251_hi_rom_decoder");
+  rom->decoders->add(ad);
+  ad->activate(0);
 }
 
 void
@@ -334,7 +358,12 @@ cl_uc251::read_edata(t_addr addr)
       return(xram->read(addr & 0xffff));
     }
   if (addr >= 0x010000 && addr < 0x020000)
-    return(xdata->read(addr));   /* XDATA SRAM (de-aliased from the edata window) */
+    /* @DPX is the MCS-251 data-space access used by ordinary far and
+       generic data pointers.  CODE/CONST in the same numeric range is a
+       separate address space and must be read with MOVC; crtxinit follows
+       that rule explicitly.  Do not infer the space from HEX occupancy:
+       large-model CSEG and XSEG legitimately overlap numerically. */
+    return(xdata->read(addr));
   /* Extended SFR (I2C/PWM/DMA/CAN) is gated by P_SW2.EAXFR (SFR 0xBA
      bit 7): firmware must set P_SW2 |= 0x80 before accessing it.  When
      the gate is clear the access does not reach the peripherals and
@@ -567,10 +596,11 @@ cl_uc251::inst_ecall24(t_mem addr)
 /* Override of the 3-arg cl_51core::inst_lcall.  cl_51core::accept_it is the
    only caller of this form for mcs251 (regular LCALL 0x12 goes through
    inst_lcall16 in exec_inst), invoked as inst_lcall(0, vector_addr, true) to
-   enter an ISR.  The base pushes a 16-bit PC to iram[SP]; MCS-251 ISRs end
-   in ERET (3-byte pop from spx), so push the full 24-bit return PC onto the
-   SPX/edata stack — matching inst_ecall24 — or the ERET would pop garbage
-   and it_levels would never unwind. */
+   enter an ISR.  The base pushes a 16-bit PC to iram[SP]; mcs251 uses the
+   SPX/edata stack, so push there instead.  SDCC mcs251 codegen ends ISRs
+   with RETI (0x32 -> inst_reti251 -> inst_ret251, a 2-byte pop), so the
+   push MUST be 2 bytes to match — a 3-byte push (ERET-style) leaves 1 byte
+   per interrupt and drifts the stack until the framework corrupts. */
 int
 cl_uc251::inst_lcall(t_mem code, uint addr, bool intr)
 {
@@ -584,10 +614,8 @@ cl_uc251::inst_lcall(t_mem code, uint addr, bool intr)
   write_edata(spx, PC & 0xff);
   spx= (spx + 1) & 0xffff;
   write_edata(spx, (PC >> 8) & 0xff);
-  spx= (spx + 1) & 0xffff;
-  write_edata(spx, (PC >> 16) & 0xff);
   PC= addr;
-  vc.wr+= 3;
+  vc.wr+= 2;
   return(resGO);
 }
 
@@ -1236,6 +1264,14 @@ cl_uc251::exec_inst(void)
 
   t_mem code= fetch();
 
+  /* Advance the HW tick counter by one per instruction so the inherited
+     peripherals (cl_timer0 etc.) actually count and can raise interrupts.
+     MCS-251 instructions take 1-3+ real cycles, but a flat 1-tick model is
+     sufficient for interrupt-logic testing (the timer overflows, do_interrupt
+     fires); precise cycle counts are not modelled yet.  Without this,
+     inst_ticks stays 0 and tick_hw(0) never advances the timers. */
+  tick(1);
+
   /* Diagnostic: per-instruction trace to stderr.  Enabled by UC251_TRACE.
      UC251_TRACE=N traces only when PC is in [N, N+0x10000) (a code-range
      filter, hex).  Useful for debugging heisenbugs where source
@@ -1585,7 +1621,10 @@ cl_uc251::exec_inst(void)
       acc->write(rom->read((PC + acc->read()) & 0xffffff));
       return(resGO);
     case 0x93: /* MOVC A,@A+DPTR */
-      acc->write(rom->read(((sfr->read(DPH) << 8) + sfr->read(DPL) + acc->read()) & 0xffffff));
+      /* MCS-251 DPTR is the 24-bit DPX register (DPXL:DPH:DPL).
+         The large model places CONST above 64 KiB, so dropping DPXL makes
+         MOVC fetch an unrelated byte from the low code window. */
+      acc->write(rom->read((get_dr(56) + acc->read()) & 0xffffff));
       return(resGO);
 
     case 0x89: /* EJMP @DRk (low nibble 8) — indirect jump through a DRk */

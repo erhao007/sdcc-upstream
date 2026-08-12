@@ -75,4 +75,6 @@ include $(srcdir)/fwk/lib/spec.mk
 
 SPEC_LIB = $(PORTS_DIR)/mcs251/fwk.lib
 
+FWKLIB += $(PORT_CASES_DIR)/T0_isr$(OBJEXT)
+
 _clean:

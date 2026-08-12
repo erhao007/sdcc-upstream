@@ -1,6 +1,14 @@
 #ifndef __TESTFWK_H
 #define __TESTFWK_H   1
 
+/* MCS-251 code and XDATA share the 0x01xxxx numeric range in large-model
+   images.  Keep framework text explicitly in CODE so its loads use MOVC. */
+#if defined(__SDCC_mcs251)
+#define TESTFWK_CODE __code
+#else
+#define TESTFWK_CODE
+#endif
+
 // suppress warning about double and long double as no target supports them
 #pragma disable_warning 93
 
@@ -40,7 +48,7 @@ extern int __numTests;
 extern const int __numCases;
 
 #ifndef NO_VARARGS
-void __printf(const char *szFormat, ...);
+void __printf(TESTFWK_CODE const char *szFormat, ...);
 #define LOG(_a)     __printf _a
 #else
 #define LOG(_a)     /* hollow log */
@@ -122,8 +130,9 @@ void __printf(const char *szFormat, ...);
 # define __pdata __data
 #endif
 
-void __fail (__code const char *szMsg, __code const char *szCond, __code const char *szFile, int line) __reentrant;
-void __prints (const char *s);
+void __fail (TESTFWK_CODE const char *szMsg, TESTFWK_CODE const char *szCond, TESTFWK_CODE const char *szFile, int line) __reentrant;
+void __prints (TESTFWK_CODE const char *s);
+void __prints_data (const char *s);
 void __printd (int n);
 #ifndef TARGET_VERY_LOW_MEMORY
 void __printu (unsigned int n);
