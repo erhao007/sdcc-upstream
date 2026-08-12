@@ -103,7 +103,10 @@ mcs251_word_register_pressure (unsigned char input)
 unsigned long
 mcs251_unsigned_word_multiply (unsigned int left, unsigned int right)
 {
-  return (unsigned long)left * right;
+  volatile unsigned int left_value = left;
+  volatile unsigned int right_value = right;
+
+  return (unsigned long)left_value * right_value;
 }
 
 #if defined (__SDCC_mcs251)

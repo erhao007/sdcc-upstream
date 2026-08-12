@@ -236,26 +236,15 @@ def main():
         word_multiply = function_body(
             assembly["mcs251"], "mcs251_unsigned_word_multiply"
         )
-        # The SDCC middle end casts both unsigned-int operands to
-        # unsigned-long before the '*', so the multiply reaches the
-        # backend as call __mullong rather than as a '*' iCode that
-        # genMult / mcs251GenUnsignedWordMultiply could intercept.
-        # The MUL WR,WR native-instruction selection requires either a
-        # middle-end narrowing pass or a call-pattern matcher in the
-        # backend.  Until that is implemented we treat this as a known
-        # limitation and skip the assertion, so 'make check' can serve
-        # as a release gate for the rest of the backend.
         if not re.search(
             r"^[ \t]*mul[ \t]+wr(?:0|2|4|6|8|12|14),[ \t]*"
             r"wr(?:0|2|4|6|8|12|14)[ \t]*$",
             word_multiply,
             re.IGNORECASE | re.MULTILINE,
         ):
-            print(
-                "WARNING: MCS251 unsigned 16x16 multiply did not select "
-                "MUL WR,WR (uses __mullong instead).  This is a known "
-                "limitation: the middle end widens both operands to "
-                "unsigned-long before genMult runs."
+            raise AssertionError(
+                "MCS251 unsigned 16x16 multiply did not select MUL WR,WR:"
+                f"\n{word_multiply}"
             )
         if re.search(r"\bmul[ \t]+dr", word_multiply, re.IGNORECASE):
             raise AssertionError(

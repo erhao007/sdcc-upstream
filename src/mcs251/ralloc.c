@@ -198,6 +198,41 @@ allocReg (short type)
   return NULL;
 }
 
+/* The native unsigned 16x16->32 multiply is emitted after allocation and
+   uses R8-R15 as fixed scratch/output registers.  Keep its result out of
+   that register file so the generator's save/restore path cannot overwrite
+   a live result byte. */
+static bool
+isNativeWordMultiplyResult (const symbol *sym)
+{
+  int key;
+
+  if (!sym || sym->nRegs != 4 || !sym->defs)
+    return FALSE;
+
+  for (key = 0; key < sym->defs->size; ++key)
+    {
+      iCode *ic;
+
+      if (!bitVectBitValue (sym->defs, key) ||
+          !(ic = hTabItemWithKey (iCodehTab, key)) ||
+          ic->op != '*' ||
+          !IC_LEFT (ic) || !IC_RIGHT (ic) ||
+          !IC_RESULT (ic) || !IS_SYMOP (IC_RESULT (ic)) ||
+          OP_SYMBOL (IC_RESULT (ic)) != sym ||
+          getSize (operandType (IC_LEFT (ic))) != 2 ||
+          getSize (operandType (IC_RIGHT (ic))) != 2 ||
+          getSize (operandType (IC_RESULT (ic))) != 4 ||
+          !SPEC_USIGN (getSpec (operandType (IC_LEFT (ic)))) ||
+          !SPEC_USIGN (getSpec (operandType (IC_RIGHT (ic)))))
+        continue;
+
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
 /*-----------------------------------------------------------------*/
 /* registerAvailableToSymbol - checks the current allocation stage */
 /*-----------------------------------------------------------------*/
@@ -210,6 +245,9 @@ registerAvailableToSymbol (const reg_info *reg, const symbol *sym)
    * can also hold aligned WR tuples, and R12-R15 can hold DR12, because
    * overlap is represented by the same underlying byte registers.
    */
+  if (isNativeWordMultiplyResult (sym) && reg->offset >= 8)
+    return FALSE;
+
   return sym->nRegs == 1 || reg->rIdx < MCS251_BANK_REG_COUNT ||
          (sym->nRegs == 2 && reg->offset >= 8 && reg->offset <= 15) ||
          (sym->nRegs == 4 && reg->offset >= 12 && reg->offset <= 15) ||
