@@ -446,22 +446,27 @@ void
 cl_uc251::set_nz(t_mem r, int width)
 {
   t_mem msb= (width >= 4) ? 0x80000000u : (width == 2) ? 0x8000 : 0x80;
-  psw1= (r & msb) ? (psw1 | 0x80) : (psw1 & ~0x80);   /* N = sign bit */
-  psw1= (r == 0) ? (psw1 | 0x40) : (psw1 & ~0x40);    /* Z */
+  /* N/Z live in the PSW1 SFR (0xD1) so user code (mov a,PSW1) and the
+     interrupt frame see the same flags the ALU just produced — previously
+     these were kept only in the psw1 member, divorced from the SFR cell. */
+  t_mem p= sfr->read(PSW1);
+  p= (r & msb) ? (p | 0x80) : (p & ~0x80);   /* N = sign bit */
+  p= (r == 0) ? (p | 0x40) : (p & ~0x40);    /* Z */
+  sfr->set(PSW1, p);
 }
 
 
 int
 cl_uc251::get_n(void)
 {
-  return((psw1 & 0x80) ? 1 : 0);
+  return((sfr->read(PSW1) & 0x80) ? 1 : 0);
 }
 
 
 int
 cl_uc251::get_z(void)
 {
-  return((psw1 & 0x40) ? 1 : 0);
+  return((sfr->read(PSW1) & 0x40) ? 1 : 0);
 }
 
 
@@ -533,7 +538,7 @@ cl_uc251::inst_reti251(void)
   t_mem h= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC15-8 (top) */
   t_mem l= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC7-0 */
   t_mem x= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC23-16 */
-  psw1= read_edata_ram(spx) & 0xff;  spx= (spx - 1) & 0xffff;      /* PSW1 */
+  sfr->set(PSW1, read_edata_ram(spx) & 0xff);  spx= (spx - 1) & 0xffff;  /* PSW1 SFR */
   PC= (x << 16) | (h << 8) | l;
   vc.rd+= 4;
   /* Unwind the interrupt level so do_interrupt's priority compare recovers
@@ -627,7 +632,7 @@ cl_uc251::inst_lcall(t_mem code, uint addr, bool intr)
      pop order (PSW1 first/lowest, PC15-8 last/top) so inst_reti251 restores
      PC and PSW1 correctly. */
   spx= (spx + 1) & 0xffff;
-  write_edata(spx, psw1 & 0xff);              /* PSW1 (stack bottom) */
+  write_edata(spx, sfr->read(PSW1) & 0xff);   /* PSW1 SFR (stack bottom) */
   spx= (spx + 1) & 0xffff;
   write_edata(spx, (PC >> 16) & 0xff);        /* PC.23:16 */
   spx= (spx + 1) & 0xffff;
