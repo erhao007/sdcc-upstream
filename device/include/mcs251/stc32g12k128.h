@@ -184,10 +184,12 @@ __sfr __at (0xCF) SPDAT;      /* SPI data */
 #define SPCTL_CPOL  0x08       /* bit 3: clock polarity */
 #define SPCTL_CPHA  0x04       /* bit 2: clock phase */
 #define SPCTL_SPR_MASK 0x03    /* bits [1:0]: clock prescaler */
-#define SPCTL_SPR_4    0x00    /* SYSclk/4   */
-#define SPCTL_SPR_16   0x01    /* SYSclk/16  */
-#define SPCTL_SPR_64   0x02    /* SYSclk/64  */
-#define SPCTL_SPR_128  0x03    /* SYSclk/128 */
+#define SPCTL_SPR_4    0x00    /* SPI input clock /4   (SPR=00) */
+#define SPCTL_SPR_8    0x01    /* SPI input clock /8   (SPR=01) */
+#define SPCTL_SPR_16   0x02    /* SPI input clock /16  (SPR=10) */
+#define SPCTL_SPR_2    0x03    /* SPI input clock /2   (SPR=11) */
+/* Per STC32G datasheet SPCTL (p916). NB: SPR=11 yields /2 (not /32); verify
+ * on silicon if a /2 SCLK is unexpected for your application. */
 
 /* --- UART2/3/4 (traditional SFR) ---------------------------------------- */
 __sfr __at (0x9A) S2CON;      /* UART2 control */

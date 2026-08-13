@@ -18,7 +18,7 @@
  *   bit 4  MSTR   = 1  master mode
  *   bit 3  CPOL   = 0  clock idle low (mode 0); set for mode 2/3
  *   bit 2  CPHA   = 0  sample on first edge (mode 0); set for mode 1/3
- *   bit 1:0 SPR        clock prescaler: 00=/4, 01=/16, 10=/64, 11=/128
+ *   bit 1:0 SPR        clock prescaler: 00=/4, 01=/8, 10=/16, 11=/2
  *
  * The four SPI modes (CPOL/CPHA combinations) are the standard Motorola
  * framing; most Flash chips and sensors use mode 0 (CPOL=0, CPHA=0) or
@@ -34,9 +34,14 @@
 
 #include <stc32g12k128.h>
 
-/* SPCTL value for SPI mode 0, master, MSB-first, /SS ignored, SYSclk/4.
- *   SSIG(0x80) | SPEN(0x40) | MSTR(0x10) | SPR_4(0x00) = 0xD0 */
-#define SPCTL_MASTER_MODE0  (SPCTL_SSIG | SPCTL_SPEN | SPCTL_MSTR)
+/* SPCTL value for SPI mode 3, master, MSB-first, /SS ignored (software CS),
+ * SYSclk/4.  Mode 3 (CPOL=1, CPHA=1) is used instead of mode 0 because the
+ * STC32G datasheet requires SSIG=0 whenever CPHA=0 (the SPCTL register
+ * description states "CPHA=0 ... (must SSIG=0)"); SSIG=1 — driving /SS on any
+ * GPIO in software — is only legal with CPHA=1.  Most slaves (e.g. W25Q Flash,
+ * SD cards, common sensors) accept both mode 0 and mode 3.
+ *   SSIG(0x80) | SPEN(0x40) | MSTR(0x10) | CPOL(0x08) | CPHA(0x04) = 0xDC */
+#define SPCTL_MASTER_MODE3  (SPCTL_SSIG | SPCTL_SPEN | SPCTL_MSTR | SPCTL_CPOL | SPCTL_CPHA)
 
 /* A software chip-select pin (P2.0) for the external slave.  /SS is
  * held low across a whole multi-byte transaction and released at the
@@ -63,7 +68,7 @@ static void spi_init(void)
     P2M1 |= 0x10;   P2M0 &= ~0x10;  /* P2.4 input */
 
     SPSTAT = SPSTAT_SPIF | SPSTAT_WCOL;   /* clear any pending flags */
-    SPCTL  = SPCTL_MASTER_MODE0;
+    SPCTL  = SPCTL_MASTER_MODE3;
 }
 
 /* Exchange one byte with the slave (full duplex).  Caller owns /SS:

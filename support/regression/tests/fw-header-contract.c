@@ -87,8 +87,18 @@
 #if (IAP_CMD_READ != 1) || (IAP_CMD_WRITE != 2) || (IAP_CMD_ERASE != 3)
 #error IAP command code regression
 #endif
-#if (SPCTL_SPEN != 0x40) || (SPCTL_MSTR != 0x10)
-#error SPCTL bit regression
+#if (SPCTL_SSIG != 0x80) || (SPCTL_SPEN != 0x40) || (SPCTL_DORD != 0x20) || \
+    (SPCTL_MSTR != 0x10) || (SPCTL_CPOL != 0x08) || (SPCTL_CPHA != 0x04)
+#error SPCTL bit regression (SSIG/SPEN/DORD/MSTR/CPOL/CPHA)
+#endif
+/* Datasheet SPCTL constraint: CPHA=0 requires SSIG=0 (hardware /SS pin drives
+ * master/slave selection); SSIG=1 — driving /SS on any GPIO in software — is
+ * only legal with CPHA=1.  A mode-0 master therefore cannot use software /SS;
+ * use mode 3 (SPCTL_SSIG|SPEN|MSTR|CPOL|CPHA) when /SS is software-driven. */
+/* SPR[1:0] prescaler encoding (datasheet SPCTL, p916): 00=/4, 01=/8, 10=/16, 11=/2. */
+#if (SPCTL_SPR_4 != 0x00) || (SPCTL_SPR_8 != 0x01) || \
+    (SPCTL_SPR_16 != 0x02) || (SPCTL_SPR_2 != 0x03)
+#error SPCTL SPR prescaler encoding regression
 #endif
 #if (P_SW1_SPI_S0 != 0x04) || (P_SW2_EAXFR != 0x80)
 #error P_SW bit regression
