@@ -524,7 +524,18 @@ cl_uc251::inst_ret251(void)
 int
 cl_uc251::inst_reti251(void)
 {
-  int r= inst_ret251();
+  /* STC32G 4-byte interrupt frame (CONFIG1.INTR=1, datasheet p1701): RETI
+     pops PC15-8, PC7-0, PC23-16, PSW1 and decrements SPX by 4 — the exact
+     reverse of accept_it's push in inst_lcall. NB: inst_ret251 (RET 0x22)
+     stays 2-byte (8051-compatible); only RETI uses the 4-byte frame. The
+     psw1 member currently tracks N/Z (full PSW1 SFR-cell fidelity is a
+     separate sim improvement); push/pop still pair correctly here. */
+  t_mem h= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC15-8 (top) */
+  t_mem l= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC7-0 */
+  t_mem x= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC23-16 */
+  psw1= read_edata_ram(spx) & 0xff;  spx= (spx - 1) & 0xffff;      /* PSW1 */
+  PC= (x << 16) | (h << 8) | l;
+  vc.rd+= 4;
   /* Unwind the interrupt level so do_interrupt's priority compare recovers
      and IE-write re-check works (mirrors cl_51core::instruction_32). */
   interrupt->was_reti= true;
@@ -535,7 +546,7 @@ cl_uc251::inst_reti251(void)
       il= (class it_level *)(it_levels->pop());
       delete il;
     }
-  return r;
+  return(resGO);
 }
 
 
@@ -551,8 +562,10 @@ cl_uc251::inst_eret251(void)
   spx= (spx - 1) & 0xffff;
   PC= (h << 16) | (m << 8) | l;
   vc.rd+= 3;
-  /* Unwind the interrupt level (see inst_reti251).  mcs251 ISRs return via
-     ERET, so this is the return path exercised by accept_it's 24-bit push. */
+  /* Unwind the interrupt level (see inst_reti251).  Ordinary ECALL functions
+     return via ERET (3-byte PC frame); ISRs return via RETI (4-byte frame
+     with PSW1). For non-interrupt ERET this it_levels pop is a no-op
+     (il->level >= 0 guard). */
   interrupt->was_reti= true;
   class it_level *il= (class it_level *)(it_levels->top());
   if (il &&
@@ -596,11 +609,11 @@ cl_uc251::inst_ecall24(t_mem addr)
 /* Override of the 3-arg cl_51core::inst_lcall.  cl_51core::accept_it is the
    only caller of this form for mcs251 (regular LCALL 0x12 goes through
    inst_lcall16 in exec_inst), invoked as inst_lcall(0, vector_addr, true) to
-   enter an ISR.  The base pushes a 16-bit PC to iram[SP]; mcs251 uses the
-   SPX/edata stack, so push there instead.  SDCC mcs251 codegen ends ISRs
-   with RETI (0x32 -> inst_reti251 -> inst_ret251, a 2-byte pop), so the
-   push MUST be 2 bytes to match — a 3-byte push (ERET-style) leaves 1 byte
-   per interrupt and drifts the stack until the framework corrupts. */
+   enter an ISR.  STC32G uses a 4-byte interrupt frame (CONFIG1.INTR=1,
+   datasheet p158/p1701): the hardware pushes PSW1 + PC.23:16/15:8/7:0, and
+   RETI (0x32 -> inst_reti251) pops the same 4 bytes back. SDCC mcs251 codegen
+   ends ISRs with RETI, matching this frame. (ERET 0xAA / inst_eret251 is the
+   3-byte PC return for ordinary ECALL functions — a different frame.) */
 int
 cl_uc251::inst_lcall(t_mem code, uint addr, bool intr)
 {
@@ -610,12 +623,19 @@ cl_uc251::inst_lcall(t_mem code, uint addr, bool intr)
          16-bit base behaviour rather than guess. */
       return cl_51core::inst_lcall(code, addr, intr);
     }
+  /* Push the STC32G 4-byte interrupt frame in the exact reverse of RETI's
+     pop order (PSW1 first/lowest, PC15-8 last/top) so inst_reti251 restores
+     PC and PSW1 correctly. */
   spx= (spx + 1) & 0xffff;
-  write_edata(spx, PC & 0xff);
+  write_edata(spx, psw1 & 0xff);              /* PSW1 (stack bottom) */
   spx= (spx + 1) & 0xffff;
-  write_edata(spx, (PC >> 8) & 0xff);
+  write_edata(spx, (PC >> 16) & 0xff);        /* PC.23:16 */
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, PC & 0xff);                /* PC.7:0 */
+  spx= (spx + 1) & 0xffff;
+  write_edata(spx, (PC >> 8) & 0xff);         /* PC.15:8 (stack top) */
   PC= addr;
-  vc.wr+= 2;
+  vc.wr+= 4;
   return(resGO);
 }
 
