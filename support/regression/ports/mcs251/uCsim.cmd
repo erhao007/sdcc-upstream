@@ -1,5 +1,5 @@
 set error non-classified off
-set error unknown_code off
+set error unknown_code on
 set error memory off
 set error stack off
 set opt selfjump_stop 0
