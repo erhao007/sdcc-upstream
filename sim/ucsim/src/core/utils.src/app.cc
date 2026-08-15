@@ -473,7 +473,7 @@ cl_app::proc_arguments(int argc, char *argv[])
   //bool S_i_done= false, S_o_done= false;
   bool force_colors= false;
   
-  strcpy(opts, "Aqc:C:D:e:p:PX:vVt:s:S:I:a:whHgGEJo:blBR:U:u:_");
+  strcpy(opts, "Amqc:C:D:e:p:PX:vVt:s:S:I:a:whHgGEJo:blBR:U:u:_");
 #ifdef SOCKET_AVAIL
   strcat(opts, "Z:r:k:z:d:");
 #endif

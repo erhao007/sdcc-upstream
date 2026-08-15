@@ -56,6 +56,9 @@ class cl_uc251: public cl_uc89c51r
 public:
   cl_uc251(struct cpu_entry *Itype, class cl_sim *asim);
 
+  // MCS-251 probe/regression mode must stop on unsupported encodings.  Keep
+  // the legacy cl_uc behaviour for the shared mcs51 core.
+  virtual int inst_unknown(t_mem code);
   virtual int exec_inst(void);
   virtual void make_address_spaces(void);
   virtual void make_chips(void);            // chains to inherited, then adds eaxfr_chip
@@ -108,9 +111,11 @@ public:
   // SPX (16-bit stack pointer extension); edata base for @SPX addressing
   t_mem spx;
 
-  // PSW flag helpers (8051-compatible CY/AC/OV; N/Z in PSW1, TODO)
-  void set_flags_add8(t_mem a, t_mem b, t_mem r);
+  // PSW flag helpers (8051-compatible CY/AC/OV; N/Z in PSW1)
+  void set_flags_add8(t_mem a, t_mem b, t_mem carry, t_mem r);
+  void set_flags_sub8(t_mem a, t_mem b, t_mem borrow, t_mem r);
   void set_nz(t_mem r, int width);         // set PSW1 N/Z for width-byte result
+  void set_nz_mul(t_mem r, int width);     // MUL: N reflects nonzero high half
   int  get_n(void);                        // PSW1.7
   int  get_z(void);                        // PSW1.6
 
@@ -136,11 +141,11 @@ public:
                                           //         3=anl,4=orl,5=xrl)
 
   int exec_a5(t_mem fnrn);                // A5-prefixed second byte
+  int exec_a9(t_mem op);                  // A9-prefixed ext. bit ops
   int exec_7e(t_mem sub);                 // 7E-prefixed (MOV imm/direct family)
   int exec_0b(t_mem sub, int dec);        // 0B/1B-prefixed (INC/DEC family)
 
 protected:
-  t_mem psw1;                       // MCS-251 PSW1: bit7=N, bit6=Z (SFR 0xA0)
   t_mem rfile[24];                  // CPU register file R8-R31 (R11 alias of ACC)
   // Bitmap of ROM cells loaded from the hex file (1 bit per ROM byte).
   // Used by read_edata's von-Neumann mirror to tell loaded 0xFF data from
@@ -191,6 +196,7 @@ protected:
   // Per-family sub-decoders (each reads operand bytes via rom->get at fixed
   // offsets from addr; returns the total length including the prefix byte).
   int disass_a5(t_addr addr, chars *out);              // A5 prefix
+  int disass_a9(t_addr addr, chars *out);              // A9 prefix (ext. bit ops)
   int disass_7e(t_addr addr, chars *out);              // 7E prefix (MOV family)
   int disass_7a(t_addr addr, chars *out);              // 7A prefix (store forms)
   int disass_regmove(t_addr addr, int code, chars *out); // 7C/7D/7F

@@ -41,13 +41,23 @@
 cl_uc251::cl_uc251(struct cpu_entry *Itype, class cl_sim *asim):
   cl_uc89c51r(Itype, asim)
 {
-  psw1= 0;
   spx= 0;
   memset(rfile, 0, sizeof(rfile));
   memset(rom_loaded, 0, sizeof(rom_loaded));
   rom_hi_chip= NULL;
   /* MCS-251 has a 24-bit program counter (16 MiB linear code space).  */
   PCmask= 0xffffff;
+}
+
+
+/* MCS-251 Source Mode treats an unsupported encoding as a controlled stop.
+   The base implementation deliberately remains the legacy mcs51 behaviour
+   (report the error and continue when unknown_code is off). */
+int
+cl_uc251::inst_unknown(t_mem code)
+{
+  cl_uc::inst_unknown(code);
+  return(resINV_INST);
 }
 
 
@@ -430,14 +440,31 @@ cl_uc251::write_spx_dis16(t_addr dis, t_mem v)
 
 /* CY/AC/OV per 8051 semantics (N/Z in PSW1) */
 void
-cl_uc251::set_flags_add8(t_mem a, t_mem b, t_mem r)
+cl_uc251::set_flags_add8(t_mem a, t_mem b, t_mem carry, t_mem r)
 {
-  t_mem newC= ((a + b) > 255) ? 0x80 : 0;
-  t_mem newA= ((a & 0x0f) + (b & 0x0f)) & 0xf0;
-  t_mem c6  = ((a & 0x7f) + (b & 0x7f)) & 0x80;
-  bits->set(0xd7, newC);                        // CY
-  SFR_SET_BIT(newC ^ c6, PSW, bmOV);
-  SFR_SET_BIT(newA, PSW, bmAC);
+  a &= 0xff;
+  b &= 0xff;
+  carry &= 1;
+  r &= 0xff;
+  t_mem sum= a + b + carry;
+  bits->set(0xd7, (sum > 0xff) ? 0x80 : 0);     // CY
+  SFR_SET_BIT((((a & 0x0f) + (b & 0x0f) + carry) > 0x0f), PSW, bmAC);
+  SFR_SET_BIT((((~(a ^ b) & (a ^ r)) & 0x80) != 0), PSW, bmOV);
+  set_nz(r, 1);
+}
+
+
+void
+cl_uc251::set_flags_sub8(t_mem a, t_mem b, t_mem borrow, t_mem r)
+{
+  a &= 0xff;
+  b &= 0xff;
+  borrow &= 1;
+  r &= 0xff;
+  t_mem sub= b + borrow;
+  bits->set(0xd7, (a < sub) ? 0x80 : 0);         // CY/borrow
+  SFR_SET_BIT(((a & 0x0f) < ((b & 0x0f) + borrow)), PSW, bmAC);
+  SFR_SET_BIT(((((a ^ b) & (a ^ r)) & 0x80) != 0), PSW, bmOV);
   set_nz(r, 1);
 }
 
@@ -446,12 +473,28 @@ void
 cl_uc251::set_nz(t_mem r, int width)
 {
   t_mem msb= (width >= 4) ? 0x80000000u : (width == 2) ? 0x8000 : 0x80;
+  t_mem mask= (width >= 4) ? 0xffffffffu : (width == 2) ? 0xffff : 0xff;
+  r &= mask;
   /* N/Z live in the PSW1 SFR (0xD1) so user code (mov a,PSW1) and the
      interrupt frame see the same flags the ALU just produced — previously
-     these were kept only in the psw1 member, divorced from the SFR cell. */
+     the old implementation kept them only in a private cache, divorced
+     from the SFR cell. */
   t_mem p= sfr->read(PSW1);
   p= (r & msb) ? (p | 0x80) : (p & ~0x80);   /* N = sign bit */
   p= (r == 0) ? (p | 0x40) : (p & ~0x40);    /* Z */
+  sfr->set(PSW1, p);
+}
+
+
+void
+cl_uc251::set_nz_mul(t_mem r, int width)
+{
+  t_mem mask= (width >= 4) ? 0xffffffffu : 0xffff;
+  t_mem high= (width >= 4) ? 0xffff0000u : 0xff00;
+  r &= mask;
+  t_mem p= sfr->read(PSW1);
+  p= (r & high) ? (p | 0x80) : (p & ~0x80);   /* N = high half != 0 */
+  p= (r == 0) ? (p | 0x40) : (p & ~0x40);     /* Z = full product == 0 */
   sfr->set(PSW1, p);
 }
 
@@ -478,21 +521,19 @@ cl_uc251::inst_alu_a_op8(int op, t_mem b)
   t_mem r;
   switch (op)
     {
-    case 0: r= a + b;               acc->write(r); set_flags_add8(a, b, r); break;
+    case 0: r= a + b;               acc->write(r); set_flags_add8(a, b, 0, r); break;
     case 1: {
       t_mem c= (bits->get(0xd7)) ? 1 : 0;
       r= a + b + c;
       acc->write(r);
-      set_flags_add8(a, b + c, r);
+      set_flags_add8(a, b, c, r);
       break;
     }
     case 2: {
       t_mem c= (bits->get(0xd7)) ? 1 : 0;
       r= a - b - c;
       acc->write(r);
-      bits->set(0xd7, (a < (b + c)) ? 0x80 : 0);
-      SFR_SET_BIT(((a ^ b ^ r) & 0x80) ? 1 : 0, PSW, bmOV);
-      SFR_SET_BIT(((a & 0x0f) < ((b + c) & 0x0f)) ? 1 : 0, PSW, bmAC);
+      set_flags_sub8(a, b, c, r);
       break;
     }
     case 3: r= a & b;               acc->write(r); set_nz(r, 1); break;
@@ -520,7 +561,8 @@ cl_uc251::inst_ret251(void)
   spx= (spx - 1) & 0xffff;
   t_mem l= read_edata_ram(spx);
   spx= (spx - 1) & 0xffff;
-  PC= h * 256 + l;
+  /* UM A-79: PC.15:0 <- stack, PC.23:16 unchanged (region preserved) */
+  PC= (PC & 0xff0000) | ((h * 256 + l) & 0xffff);
   vc.rd+= 2;
   return(resGO);
 }
@@ -532,9 +574,9 @@ cl_uc251::inst_reti251(void)
   /* STC32G 4-byte interrupt frame (CONFIG1.INTR=1, datasheet p1701): RETI
      pops PC15-8, PC7-0, PC23-16, PSW1 and decrements SPX by 4 — the exact
      reverse of accept_it's push in inst_lcall. NB: inst_ret251 (RET 0x22)
-     stays 2-byte (8051-compatible); only RETI uses the 4-byte frame. The
-     psw1 member currently tracks N/Z (full PSW1 SFR-cell fidelity is a
-     separate sim improvement); push/pop still pair correctly here. */
+     stays 2-byte (8051-compatible); only RETI uses the 4-byte frame. N/Z
+     now live in the PSW1 SFR cell (set_nz), so the frame saves/restores
+     the user-visible flags directly. */
   t_mem h= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC15-8 (top) */
   t_mem l= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC7-0 */
   t_mem x= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC23-16 */
@@ -590,7 +632,8 @@ cl_uc251::inst_lcall16(t_mem addr)
   write_edata(spx, PC & 0xff);              // push low byte
   spx= (spx + 1) & 0xffff;
   write_edata(spx, (PC >> 8) & 0xff);       // push high byte
-  PC= addr;
+  /* UM A-78: (PC.15:0) <- addr — the region bits PC.23:16 are preserved */
+  PC= (PC & 0xff0000) | (addr & 0xffff);
   vc.wr+= 2;
   return(resGO);
 }
@@ -662,7 +705,9 @@ cl_uc251::exec_a5(t_mem fnrn)
       if (fnrn >= 0x06)
         {
           /* INC @Ri */
-          write_ri(ri, read_ri(ri) + 1);
+          t_mem r= (read_ri(ri) + 1) & 0xff;
+          write_ri(ri, r);
+          set_nz(r, 1);
           return(resGO);
         }
       /* 0x00-0x05: TODO other A5 sub-instructions */
@@ -671,8 +716,12 @@ cl_uc251::exec_a5(t_mem fnrn)
       /* 0x0A-0x0F: TODO other A5 sub-instructions */
       return(inst_unknown(fnrn));
     case 0x02: /* DEC @Ri */
-      write_ri(ri, read_ri(ri) - 1);
-      return(resGO);
+      {
+        t_mem r= (read_ri(ri) - 1) & 0xff;
+        write_ri(ri, r);
+        set_nz(r, 1);
+        return(resGO);
+      }
     case 0x04: return(inst_alu_a_op8(0, read_ri(ri))); /* ADD A,@Ri */
     case 0x05: return(inst_alu_a_op8(0, get_r8(n)));    /* ADD A,Rn */
     case 0x06: return(inst_alu_a_op8(1, read_ri(ri))); /* ADDC A,@Ri */
@@ -701,6 +750,7 @@ cl_uc251::exec_a5(t_mem fnrn)
 	t_mem rel= fetch();
 	t_mem rv= get_r8(n) - 1;
 	set_r8(n, rv);
+	set_nz(rv, 1);
 	if (rv != 0)
 	  PC= rom->validate_address(PC + (signed char)rel);
 	return(resGO);
@@ -732,8 +782,102 @@ cl_uc251::exec_a5(t_mem fnrn)
 	set_r8(n, t);
 	return(resGO);
       }
+    case 0x18: /* XCH A,@Ri (A5 C6/C7) */
+      {
+	t_mem addr= get_r8(ri);
+	t_mem t= acc->read();
+	acc->write(iram->read(addr));
+	iram->write(addr, t);
+	return(resGO);
+      }
+    case 0x1a: /* XCHD A,@Ri (A5 D6/D7): swap low nibbles */
+      {
+	t_mem addr= get_r8(ri);
+	t_mem a= acc->read(), d= iram->read(addr);
+	acc->write((a & 0xf0) | (d & 0x0f));
+	iram->write(addr, (d & 0xf0) | (a & 0x0f));
+	return(resGO);
+      }
+    case 0x16: /* CJNE @Ri,#data,rel (A5 B6/B7) */
+      {
+	t_mem imm= fetch();
+	t_mem rel= fetch();
+	t_mem rv= iram->read(get_r8(ri));
+	bits->set(0xd7, (rv < imm) ? 0x80 : 0);   /* CY = @Ri < #data */
+	if (rv != imm)
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
     default:
       return(inst_unknown(fnrn));
+    }
+}
+
+
+/* A9-prefixed instructions (Source mode) -------------------------------- */
+/* Extended bit operations over the full dir8 space (any byte 0x00-0xFF,   */
+/* not just the classic 0x20-0x2F/0x80-0xFF bit map).  Layout:             */
+/*   A9 <family|bitnum> <byte-addr> [<rel>]                                */
+/* family = second byte & 0xF8; the bit number occupies the low 3 bits.    */
+/* Branch forms (JBC/JB/JNB) take a fourth, relative target byte.          */
+
+int
+cl_uc251::exec_a9(t_mem op)
+{
+  int bitnum= op & 0x07;
+  t_mem byteaddr= fetch();
+  t_mem mask= 1 << bitnum;
+
+  switch (op & 0xf8)
+    {
+    case 0xc0:                                      /* CLR bit */
+      write_dir8(byteaddr, read_dir8(byteaddr) & ~mask);
+      return(resGO);
+    case 0xd0:                                      /* SETB bit */
+      write_dir8(byteaddr, read_dir8(byteaddr) | mask);
+      return(resGO);
+    case 0xb0:                                      /* CPL bit */
+      write_dir8(byteaddr, read_dir8(byteaddr) ^ mask);
+      return(resGO);
+    case 0x70:                                      /* ORL CY,bit */
+      bits->set(0xd7, (bits->get(0xd7) ||
+		       (read_dir8(byteaddr) & mask)) ? 0x80 : 0);
+      return(resGO);
+    case 0x80:                                      /* ANL CY,bit */
+      bits->set(0xd7, (bits->get(0xd7) &&
+		       (read_dir8(byteaddr) & mask)) ? 0x80 : 0);
+      return(resGO);
+    case 0xe0:                                      /* ORL CY,/bit */
+      bits->set(0xd7, (bits->get(0xd7) ||
+		       !(read_dir8(byteaddr) & mask)) ? 0x80 : 0);
+      return(resGO);
+    case 0xf0:                                      /* ANL CY,/bit */
+      bits->set(0xd7, (bits->get(0xd7) &&
+		       !(read_dir8(byteaddr) & mask)) ? 0x80 : 0);
+      return(resGO);
+    case 0xa0:                                      /* MOV CY,bit */
+      bits->set(0xd7, (read_dir8(byteaddr) & mask) ? 0x80 : 0);
+      return(resGO);
+    case 0x90:                                      /* MOV bit,CY */
+      if (bits->get(0xd7))
+	write_dir8(byteaddr, read_dir8(byteaddr) | mask);
+      else
+	write_dir8(byteaddr, read_dir8(byteaddr) & ~mask);
+      return(resGO);
+    case 0x10:                                      /* JBC bit,rel */
+    case 0x20:                                      /* JB  bit,rel */
+    case 0x30:                                      /* JNB bit,rel */
+      {
+	t_mem rel= fetch();
+	bool set= (read_dir8(byteaddr) & mask) != 0;
+	if (set && (op & 0xf8) == 0x10)             /* JBC clears the bit */
+	  write_dir8(byteaddr, read_dir8(byteaddr) & ~mask);
+	if (set != ((op & 0xf8) == 0x30))           /* JB: set; JNB: clear */
+	  PC= rom->validate_address(PC + (signed char)rel);
+	return(resGO);
+      }
+    default:
+      return(inst_unknown(op));
     }
 }
 
@@ -788,6 +932,29 @@ cl_uc251::exec_7e(t_mem sub)
 	set_r8(dst >> 4, v);
 	return(resGO);
       }
+    case 0x03: /* MOV Rm,dir16 (16-bit address, 1-byte read) */
+      {
+	t_mem a= (fetch() << 8) | fetch();
+	set_r8(reg, read_edata(a));
+	return(resGO);
+      }
+    case 0x07: /* MOV WRj,dir16 (2-byte read, big-endian) */
+      {
+	t_mem a= (fetch() << 8) | fetch();
+	set_wr(reg * 2, (read_edata(a) << 8) | read_edata((a + 1) & 0xffff));
+	return(resGO);
+      }
+    case 0x0f: /* MOV DRk,dir16 (4-byte read, big-endian) */
+      {
+	t_mem a= (fetch() << 8) | fetch();
+	set_dr(reg * 4,
+	       ((unsigned long)read_edata(a) << 24) |
+	       (read_edata((a + 1) & 0xffff) << 16) |
+	       (read_edata((a + 2) & 0xffff) << 8) |
+	       read_edata((a + 3) & 0xffff));
+	return(resGO);
+      }
+
     case 0x08: /* MOV DRk,#0data16 (high 16 bits zero); SPX if reg==15 */
       {
 	t_mem h= fetch(), l= fetch();
@@ -945,6 +1112,57 @@ exec_7a(cl_uc251 *cpu, t_mem sub)
 	cpu->write_edata(cpu->get_dr(reg * 4), v);
 	return(0);
       }
+    case 0x09: /* MOV @WRj,Rm (third byte src<<4) */
+      {
+	t_mem src= cpu->fetch();
+	t_mem v= cpu->get_r8(src >> 4);
+	cpu->write_edata(cpu->get_wr(reg * 2), v);
+	return(0);
+      }
+    case 0x03: /* MOV dir16,Rm (16-bit address, big-endian) */
+      {
+	t_mem a= (cpu->fetch() << 8) | cpu->fetch();
+	cpu->write_edata(a, cpu->get_r8(reg));
+	return(0);
+      }
+    case 0x07: /* MOV dir16,WRj (2 bytes big-endian) */
+      {
+	t_mem a= (cpu->fetch() << 8) | cpu->fetch();
+	t_mem v= cpu->get_wr(reg * 2);
+	cpu->write_edata(a, (v >> 8) & 0xff);
+	cpu->write_edata((a + 1) & 0xffff, v & 0xff);
+	return(0);
+      }
+    case 0x0f: /* MOV dir16,DRk (4 bytes big-endian) */
+      {
+	t_mem a= (cpu->fetch() << 8) | cpu->fetch();
+	t_mem v= cpu->get_dr(reg * 4);
+	cpu->write_edata(a, (v >> 24) & 0xff);
+	cpu->write_edata((a + 1) & 0xffff, (v >> 16) & 0xff);
+	cpu->write_edata((a + 2) & 0xffff, (v >> 8) & 0xff);
+	cpu->write_edata((a + 3) & 0xffff, v & 0xff);
+	return(0);
+      }
+    case 0x0d: /* MOV dir8,DRk: dword store to dir8..dir8+3, mirroring
+		  the 7E xD 4-byte load side */
+      {
+	t_mem addr= cpu->fetch();
+	t_mem v= cpu->get_dr(reg * 4);
+	cpu->write_dir8(addr, (v >> 24) & 0xff);
+	cpu->write_dir8(addr + 1, (v >> 16) & 0xff);
+	cpu->write_dir8(addr + 2, (v >> 8) & 0xff);
+	cpu->write_dir8(addr + 3, v & 0xff);
+	return(0);
+      }
+    case 0x0c: /* MOVH DRk(hi),#data16: high half only, low half unchanged */
+      {
+	t_mem h= cpu->fetch(), l= cpu->fetch();
+	if (reg == 15)
+	  return(1);               /* no MOVH SPX */
+	cpu->set_dr(reg * 4,
+		    ((h << 8) | l) << 16 | (cpu->get_dr(reg * 4) & 0xffff));
+	return(0);
+      }
     default:
       return(1);
     }
@@ -990,6 +1208,19 @@ exec_idx16(cl_uc251 *cpu, int code, t_mem sub)
       cpu->write_edata(a, cpu->get_wr(reg * 2) >> 8);
       cpu->write_edata(a + 1, cpu->get_wr(reg * 2) & 0xff);
       return(0);
+    case 0x49: /* 16-bit load into WRj from @WRj+dis16 (idx = WRj) */
+      {
+	t_addr wa= (cpu->get_wr(idx * 2) + dis) & 0xffff;
+	cpu->set_wr(reg * 2,
+		    (cpu->read_edata(wa) << 8) | cpu->read_edata((wa + 1) & 0xffff));
+	return(0);
+      }
+    case 0x19: /* 8-bit store to @WRj+dis16 from Rm (idx = WRj) */
+      {
+	t_addr wa= (cpu->get_wr(idx * 2) + dis) & 0xffff;
+	cpu->write_edata(wa, cpu->get_r8(reg));
+	return(0);
+      }
     default:
       return(1);
     }
@@ -1015,9 +1246,9 @@ exec_ca(cl_uc251 *cpu, t_mem sub)
       {
 	t_mem h= cpu->fetch(), l= cpu->fetch();
 	cpu->spx= (cpu->spx + 1) & 0xffff;
-	cpu->write_edata(cpu->spx, l);
-	cpu->spx= (cpu->spx + 1) & 0xffff;
 	cpu->write_edata(cpu->spx, h);
+	cpu->spx= (cpu->spx + 1) & 0xffff;
+	cpu->write_edata(cpu->spx, l);
 	return(0);
       }
     case 0x08: /* PUSH Rm */
@@ -1031,16 +1262,16 @@ exec_ca(cl_uc251 *cpu, t_mem sub)
       {
 	t_mem v= cpu->get_wr(reg * 2);
 	cpu->spx= (cpu->spx + 1) & 0xffff;
-	cpu->write_edata(cpu->spx, v & 0xff);
-	cpu->spx= (cpu->spx + 1) & 0xffff;
 	cpu->write_edata(cpu->spx, (v >> 8) & 0xff);
+	cpu->spx= (cpu->spx + 1) & 0xffff;
+	cpu->write_edata(cpu->spx, v & 0xff);
 	return(0);
       }
     case 0x0b: /* PUSH DRk */
       {
 	t_mem v= cpu->get_dr(reg * 4);
 	int i;
-	for (i= 0; i < 4; i++)
+	for (i= 3; i >= 0; i--)
 	  {
 	    cpu->spx= (cpu->spx + 1) & 0xffff;
 	    cpu->write_edata(cpu->spx, (v >> (8 * i)) & 0xff);
@@ -1106,26 +1337,58 @@ exec_alu_rm(cl_uc251 *cpu, int op, t_mem sub)
   int reg= sub >> 4;
   int width;                    /* 0=Rm(8), 1=WRj(16), 2=DRk(32) */
   t_mem src;
+  int dstreg= reg;              /* for @WRj/@DRk the dst comes in byte 3 */
   switch (sub & 0x0f)
     {
     case 0x00: width= 0; src= cpu->fetch(); break;                 /* #data8 */
     case 0x01: width= 0; src= cpu->read_dir8(cpu->fetch()); break; /* dir8 */
     case 0x04: width= 1; src= (cpu->fetch() << 8) | cpu->fetch(); break; /* #data16 */
-    case 0x05: width= 1; src= cpu->read_dir8(cpu->fetch()); break; /* dir8 */
+    case 0x05:                                      /* WRj,dir8: word read at dir8..dir8+1 */
+      {
+	t_mem a= cpu->fetch();
+	width= 1;
+	src= (cpu->read_dir8(a) << 8) | cpu->read_dir8(a + 1);
+	break;
+      }
     case 0x08: width= 2; src= (cpu->fetch() << 8) | cpu->fetch(); break; /* #0data16 */
     case 0x0c: width= 2; src= 0xffff0000u | (cpu->fetch() << 8) | cpu->fetch(); break; /* #1data16 */
-    case 0x0d: width= 2; src= cpu->read_dir8(cpu->fetch()); break; /* dir8 */
-    case 0x09: width= 0; src= cpu->read_edata(cpu->get_wr(reg * 2)); break; /* @WRj */
-    case 0x0b: width= 0; src= cpu->read_edata(cpu->get_dr(reg * 4)); break; /* @DRk */
+    case 0x0d:                                      /* DRk,dir8: dword read at dir8..dir8+3 */
+      {
+	t_mem a= cpu->fetch();
+	width= 2;
+	src= ((t_mem)cpu->read_dir8(a) << 24) |
+	     (cpu->read_dir8(a + 1) << 16) |
+	     (cpu->read_dir8(a + 2) << 8) |
+	     cpu->read_dir8(a + 3);
+	break;
+      }
+    case 0x09:                                  /* Rm,@WRj: 3 bytes, dst in byte 3 */
+      dstreg= cpu->fetch() >> 4;
+      width= 0; src= cpu->read_edata(cpu->get_wr(reg * 2)); break;
+    case 0x0b:                                  /* Rm,@DRk: 3 bytes, dst in byte 3 */
+      dstreg= cpu->fetch() >> 4;
+      width= 0; src= cpu->read_edata(cpu->get_dr(reg * 4)); break;
+    case 0x03:                                  /* Rm,dir16 (16-bit addr, 1 byte r/w) */
+      {
+	t_mem a= (cpu->fetch() << 8) | cpu->fetch();
+	width= 0; src= cpu->read_edata(a); break;
+      }
+    case 0x07:                                  /* WRj,dir16 (2-byte read) */
+      {
+	t_mem a= (cpu->fetch() << 8) | cpu->fetch();
+	width= 1;
+	src= (cpu->read_edata(a) << 8) | cpu->read_edata((a + 1) & 0xffff);
+	break;
+      }
     default: return(1);
     }
   t_mem dst, r;
   if (width == 0)
-    dst= cpu->get_r8(reg);
+    dst= cpu->get_r8(dstreg);
   else if (width == 1)
-    dst= cpu->get_wr(reg * 2);
+    dst= cpu->get_wr(dstreg * 2);
   else
-    dst= cpu->get_dr(reg * 4);
+    dst= cpu->get_dr(dstreg * 4);
   switch (op)
     {
     case 0: r= dst + src; break;       /* ADD */
@@ -1138,22 +1401,36 @@ exec_alu_rm(cl_uc251 *cpu, int op, t_mem sub)
   if (op != 5)
     {
       if (width == 0)
-	cpu->set_r8(reg, r);
+	cpu->set_r8(dstreg, r);
       else if (width == 1)
-	cpu->set_wr(reg * 2, r);
+	cpu->set_wr(dstreg * 2, r);
       else
-	cpu->set_dr(reg * 4, r);
+	cpu->set_dr(dstreg * 4, r);
     }
-  cpu->set_nz(r, (width == 0) ? 1 : (width == 1) ? 2 : 4);
-  /* flags: CY/OV/AC for add/sub/cmp (simplified for 16/32-bit) */
+  /* UM A-13: ORL/ANL/XRL touch N/Z only.  ADD/SUB/CMP additionally set
+     CY/OV (and AC for byte width); AC is not affected by word/dword. */
   if (op == 0 || op == 4 || op == 5)
     {
-      t_mem mask= (width == 0) ? 0xff : (width == 1) ? 0xffff : 0xffffffffu;
-      t_mem cy= (op == 5) ? (dst < src) : (op == 4) ? (dst < src) : ((dst + src) > mask);
+      if (width == 0)
+	{
+	  if (op == 0)
+	    cpu->set_flags_add8(dst, src, 0, r);
+	  else
+	    cpu->set_flags_sub8(dst, src, 0, r);
+	  return(0);
+	}
+      cpu->set_nz(r, (width == 1) ? 2 : 4);
+      t_mem mask= (width == 1) ? 0xffff : 0xffffffffu;
+      t_mem msb= (width == 1) ? 0x8000 : 0x80000000u;
+      bool add= (op == 0);
+      bool cy= add ? (src > (mask - dst)) : (dst < src);
+      bool ov= add ? ((((dst ^ r) & (src ^ r)) & msb) != 0)
+		   : ((((dst ^ src) & (dst ^ r)) & msb) != 0);
       cpu->bits->set(0xd7, cy ? 0x80 : 0);
-      cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~bmOV) |
-		    ((((dst ^ src ^ r) & (mask >> 1) ^ 0) && (op != 2 && op != 3)) ? bmOV : 0));
+      cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~bmOV) | (ov ? bmOV : 0));
     }
+  else
+    cpu->set_nz(r, (width == 0) ? 1 : (width == 1) ? 2 : 4);
   return(0);
 }
 
@@ -1187,8 +1464,15 @@ exec_reg_alu(cl_uc251 *cpu, int code, t_mem sub)
       cpu->set_nz(r, 4);
       if (op < 2)
 	{
-	  cpu->bits->set(0xd7, (op == 0) ? ((a + b) > 0xffffffff) : (a < b));
-	  cpu->sfr->set(PSW, cpu->sfr->get(PSW) & ~bmOV);
+	  /* UM A-13: CY out of bit 31 (compare-based: t_mem wraps at 32
+	     bits); OV = carries into bits 31/30 XOR (sub uses the
+	     (a^b)&(a^r) form); AC untouched by dword ops */
+	  bool add= (op == 0);
+	  bool cy= add ? (b > (0xffffffffu - a)) : (a < b);
+	  bool ov= add ? ((((a ^ r) & (b ^ r)) & 0x80000000u) != 0)
+		       : ((((a ^ b) & (a ^ r)) & 0x80000000u) != 0);
+	  cpu->bits->set(0xd7, cy ? 0x80 : 0);
+	  cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~bmOV) | (ov ? bmOV : 0));
 	}
     }
   else
@@ -1206,10 +1490,14 @@ exec_reg_alu(cl_uc251 *cpu, int code, t_mem sub)
       cpu->set_nz(r, 2);
       if (op < 2)
 	{
-	  t_mem cy= (op == 0) ? ((a + b) > 0xffff) : (a < b);
+	  /* UM A-13: CY out of bit 15; OV = carries into bits 15/14 XOR;
+	     AC is not affected by word ops (left untouched, not cleared) */
+	  bool add= (op == 0);
+	  bool cy= add ? (b > (0xffff - a)) : (a < b);
+	  bool ov= add ? ((((a ^ r) & (b ^ r)) & 0x8000) != 0)
+		       : ((((a ^ b) & (a ^ r)) & 0x8000) != 0);
 	  cpu->bits->set(0xd7, cy ? 0x80 : 0);
-	  cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~(bmOV|bmAC)) |
-			(((a ^ b ^ r) & 0x8000) ? bmOV : 0));
+	  cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~bmOV) | (ov ? bmOV : 0));
 	}
     }
   return(0);
@@ -1243,14 +1531,12 @@ exec_alu_rm_rm(cl_uc251 *cpu, int code, t_mem sub)
     default: r= a ^ b; break;
     }
   cpu->set_r8(d, r);
-  cpu->set_nz(r, 1);
-  if (op < 2)
-    {
-      t_mem cy= (op == 0) ? ((a + b) > 0xff) : (a < b);
-      cpu->bits->set(0xd7, cy ? 0x80 : 0);
-      cpu->sfr->set(PSW, (cpu->sfr->get(PSW) & ~(bmOV|bmAC)) |
-		    (((a ^ b ^ r) & 0x80) ? bmOV : 0));
-    }
+  if (op == 0)
+    cpu->set_flags_add8(a, b, 0, r);
+  else if (op == 1)
+    cpu->set_flags_sub8(a, b, 0, r);
+  else
+    cpu->set_nz(r, 1);
   return(0);
 }
 
@@ -1265,7 +1551,11 @@ cl_uc251::exec_inst(void)
   /* look like valid instructions (MOV R7,A) and loop endlessly.  This  */
   /* checks a sliding window and stops early so the caller can see the  */
   /* jump target.  Enabled by UC251_STOP_ON_RUNAWAY.                    */
-  if (getenv("UC251_STOP_ON_RUNAWAY"))
+  /* Diagnostics: cache the getenv() results once — querying the
+     environment on every instruction dominates run time otherwise
+     (92% of exec_inst samples with the regression suite). */
+  static const char *runaway_env= getenv("UC251_STOP_ON_RUNAWAY");
+  if (runaway_env)
     {
       static t_addr last_good_pc= 0;
       static int runaway_state= 0;   /* 0=tracking, 1=runaway confirmed */
@@ -1302,7 +1592,8 @@ cl_uc251::exec_inst(void)
      filter, hex).  Useful for debugging heisenbugs where source
      instrumentation changes codegen.  Format:
      PC SPX A B DPL DPH R4 R5 R6 R7  <disasm> */
-  if (getenv("UC251_TRACE"))
+  static const char *trace_env= getenv("UC251_TRACE");
+  if (trace_env)
     {
       static const char *tr_range= getenv("UC251_TRACE");
       unsigned long lo= 0, hi= 0xffffffff;
@@ -1323,10 +1614,32 @@ cl_uc251::exec_inst(void)
     case 0x00: /* NOP */
       return(resGO);
 
-    case 0x02: /* LJMP addr16 */
+    case 0x01: case 0x21: case 0x41: case 0x61:    /* AJMP addr11 (page 0-3) */
+    case 0x81: case 0xa1: case 0xc1: case 0xe1:    /* AJMP addr11 (page 4-7) */
+      {
+	/* 8051-compatible 2 KiB page jump; the 251 keeps the legacy
+	   encodings unprefixed in Source mode (as251 S_JMP11 base 0x01).
+	   The 24-bit PC keeps its upper bits: target = (PC & ~0x7ff)|a11. */
+	t_mem l= fetch();
+	PC= (PC & ~((t_addr)0x7ff)) |
+	  ((((code >> 5) & 7) << 8) | l);
+	return(resGO);
+      }
+    case 0x11: case 0x31: case 0x51: case 0x71:    /* ACALL addr11 (page 0-3) */
+    case 0x91: case 0xb1: case 0xd1: case 0xf1:    /* ACALL addr11 (page 4-7) */
+      {
+	/* Same page scheme as AJMP; pushes the 16-bit return address on
+	   the 251 stack (spx), identical frame to LCALL. */
+	t_mem l= fetch();
+	t_mem target= ((PC & ~((t_addr)0x7ff)) |
+		       ((((code >> 5) & 7) << 8) | l));
+	return(inst_lcall16(target));
+      }
+
+    case 0x02: /* LJMP addr16 (UM A-78: PC.15:0 <- addr, PC.23:16 kept) */
       {
 	t_mem h= fetch(), l= fetch();
-	PC= h * 256 + l;
+	PC= (PC & 0xff0000) | ((h * 256 + l) & 0xffff);
 	return(resGO);
       }
     case 0x12: /* LCALL addr16 */
@@ -1362,7 +1675,9 @@ cl_uc251::exec_inst(void)
 	t_mem addr= fetch();
 	t_mem d= read_dir8(addr);
 	t_mem a= acc->read();
-	write_dir8(addr, (code == 0x52) ? (d & a) : (code == 0x42) ? (d | a) : (d ^ a));
+	t_mem r= (code == 0x52) ? (d & a) : (code == 0x42) ? (d | a) : (d ^ a);
+	write_dir8(addr, r);
+	set_nz(r, 1);
 	return(resGO);
       }
     case 0x53: /* ANL dir8,#data */
@@ -1372,41 +1687,67 @@ cl_uc251::exec_inst(void)
 	t_mem addr= fetch();
 	t_mem d= read_dir8(addr);
 	t_mem imm= fetch();
-	write_dir8(addr, (code == 0x53) ? (d & imm) : (code == 0x43) ? (d | imm) : (d ^ imm));
+	t_mem r= (code == 0x53) ? (d & imm) : (code == 0x43) ? (d | imm) : (d ^ imm);
+	write_dir8(addr, r);
+	set_nz(r, 1);
 	return(resGO);
       }
 
-    case 0x04: /* INC A */
-      acc->write(acc->read() + 1);
-      return(resGO);
+    case 0x04: /* INC A (UM A-13: INC affects N,Z — unlike the 8051) */
+      {
+	t_mem r= acc->read() + 1;
+	acc->write(r);
+	set_nz(r & 0xff, 1);
+	return(resGO);
+      }
     case 0x14: /* DEC A */
-      acc->write(acc->read() - 1);
-      return(resGO);
+      {
+	t_mem r= acc->read() - 1;
+	acc->write(r & 0xff);
+	set_nz(r & 0xff, 1);
+	return(resGO);
+      }
     case 0x03: /* RR A (rotate right, CY unchanged) */
-      acc->write(((acc->read() >> 1) | (acc->read() << 7)) & 0xff);
-      return(resGO);
+      {
+	t_mem r= ((acc->read() >> 1) | (acc->read() << 7)) & 0xff;
+	acc->write(r);
+	set_nz(r, 1);
+	return(resGO);
+      }
     case 0x13: /* RRC A (rotate right through carry) */
       {
 	t_mem a= acc->read();
 	t_mem newCY= a & 1;
-	acc->write((a >> 1) | ((bits->get(0xd7)) ? 0x80 : 0));
+	t_mem r= ((a >> 1) | ((bits->get(0xd7)) ? 0x80 : 0)) & 0xff;
+	acc->write(r);
 	bits->set(0xd7, newCY);
+	set_nz(r, 1);
 	return(resGO);
       }
     case 0x23: /* RL A (rotate left, CY unchanged) */
-      acc->write(((acc->read() << 1) | (acc->read() >> 7)) & 0xff);
-      return(resGO);
+      {
+	t_mem r= ((acc->read() << 1) | (acc->read() >> 7)) & 0xff;
+	acc->write(r);
+	set_nz(r, 1);
+	return(resGO);
+      }
     case 0x33: /* RLC A (rotate left through carry) */
       {
 	t_mem a= acc->read();
 	t_mem newCY= (a >> 7) & 1;
-	acc->write((a << 1) | ((bits->get(0xd7)) ? 1 : 0));
+	t_mem r= ((a << 1) | ((bits->get(0xd7)) ? 1 : 0)) & 0xff;
+	acc->write(r);
 	bits->set(0xd7, newCY);
+	set_nz(r, 1);
 	return(resGO);
       }
     case 0xc4: /* SWAP A */
-      acc->write(((acc->read() << 4) | (acc->read() >> 4)) & 0xff);
-      return(resGO);
+	  {
+	    t_mem r= ((acc->read() << 4) | (acc->read() >> 4)) & 0xff;
+	    acc->write(r);
+	    set_nz(r, 1);
+	  }
+	  return(resGO);
     case 0xc5: /* XCH A,dir8 */
       {
 	t_mem addr= fetch();
@@ -1420,22 +1761,30 @@ cl_uc251::exec_inst(void)
       {
 	t_mem addr= fetch();
 	t_mem d= read_dir8(addr);
-	write_dir8(addr, (code == 0x05) ? d + 1 : d - 1);
+	t_mem r= (code == 0x05) ? ((d + 1) & 0xff) : ((d - 1) & 0xff);
+	write_dir8(addr, r);
+	set_nz(r, 1);
 	return(resGO);
       }
-    case 0xa3: /* INC DPTR */
+    case 0xa3: /* INC DPTR (16-bit inc: N,Z per UM A-13 INC rules) */
       {
 	t_mem dptr= (sfr->read(DPH) << 8) + sfr->read(DPL) + 1;
 	sfr->write(DPL, dptr & 0xff);
 	sfr->write(DPH, (dptr >> 8) & 0xff);
+	set_nz(dptr & 0xffff, 2);
 	return(resGO);
       }
 
     case 0xe4: /* CLR A */
       acc->write(0);
+	  set_nz(0, 1);
       return(resGO);
     case 0xf4: /* CPL A */
-      acc->write(acc->read() ^ 0xff);
+	  {
+	    t_mem r= acc->read() ^ 0xff;
+	    acc->write(r);
+	    set_nz(r, 1);
+	  }
       return(resGO);
     case 0xc3: /* CLR CY */
       bits->set(0xd7, 0);
@@ -1449,6 +1798,7 @@ cl_uc251::exec_inst(void)
 	t_mem rel= fetch();
 	t_mem v= read_dir8(addr) - 1;
 	write_dir8(addr, v);
+	set_nz(v, 1);
 	if (v != 0)
 	  PC= rom->validate_address(PC + (signed char)rel);
 	return(resGO);
@@ -1572,7 +1922,7 @@ cl_uc251::exec_inst(void)
 	return(resGO);
       }
 
-    case 0x60: /* JZ rel (simplified: ACC==0; 251 tests Z flag, TODO) */
+    case 0x60: /* JZ rel: STC32G UM 1632 tests ACC==0. */
     case 0x70: /* JNZ rel */
       {
 	t_mem rel= fetch();
@@ -1605,10 +1955,10 @@ cl_uc251::exec_inst(void)
 	set_wr(dst * 2, v);
 	return(resGO);
       }
-    case 0x08: /* JSLE rel (signed <=: N^V || Z) */
+    case 0x08: /* JSLE rel (signed <=: (N^V) || Z) */
     case 0x18: /* JSG rel (signed >: !(N^V) && !Z) */
-    case 0x28: /* JLE rel (signed <=) */
-    case 0x38: /* JG rel (signed >) */
+    case 0x28: /* JLE rel (unsigned <=: Z || CY) — UM A-14 */
+    case 0x38: /* JG rel (unsigned >: !Z && !CY) — UM A-14 */
     case 0x48: /* JSL rel (signed <: N^V) */
     case 0x58: /* JSGE rel (signed >=: !(N^V)) */
     case 0x68: /* JE rel (Z) */
@@ -1618,11 +1968,14 @@ cl_uc251::exec_inst(void)
 	int n= get_n(), z= get_z();
 	int v= (sfr->get(PSW) & bmOV) ? 1 : 0;
 	int nv= n ^ v;
+	int cy= bits->get(0xd7) ? 1 : 0;
 	int cond;
 	switch (code)
 	  {
-	  case 0x08: case 0x28: cond= nv || z; break;          /* <= */
-	  case 0x18: case 0x38: cond= !nv && !z; break;        /* > */
+	  case 0x08: cond= nv || z; break;          /* signed <= */
+	  case 0x28: cond= z || cy; break;          /* unsigned <= */
+	  case 0x18: cond= !nv && !z; break;        /* signed > */
+	  case 0x38: cond= !z && !cy; break;        /* unsigned > */
 	  case 0x48: cond= nv; break;                          /* < */
 	  case 0x58: cond= !nv; break;                         /* >= */
 	  case 0x68: cond= z; break;                           /* == */
@@ -1638,8 +1991,16 @@ cl_uc251::exec_inst(void)
 	PC= rom->validate_address(PC + (signed char)rel);
 	return(resGO);
       }
-    case 0x73: /* JMP @A+DPTR */
-      PC= (acc->read() + (sfr->read(DPH) << 8) + sfr->read(DPL));
+    case 0x73: /* JMP @A+DPTR: PC.15:0 <- (A)+(DPTR) modulo 2^16 (STC32G
+		  manual; Intel UM A-70).  PC.23:16 <- DPXL is PROVISIONAL:
+		  the Intel UM prose ("FF") and its instruction table ("DPXL")
+		  contradict each other and SDCC's genJumpTab cannot serve as
+		  independent normative evidence (same project).  Until the
+		  FE:/FF: board verdict, gen.c guards its jump tables so that
+		  only region-0 dispatch uses this instruction; higher regions
+		  go through EJMP @DRk, which is unambiguous. */
+      PC= ((t_mem)sfr->read(0x84) << 16) |
+	  (((sfr->read(DPH) << 8) + sfr->read(DPL) + acc->read()) & 0xffff);
       return(resGO);
 
     case 0x83: /* MOVC A,@A+PC */
@@ -1652,13 +2013,19 @@ cl_uc251::exec_inst(void)
       acc->write(rom->read((get_dr(56) + acc->read()) & 0xffffff));
       return(resGO);
 
-    case 0x89: /* EJMP @DRk (low nibble 8) — indirect jump through a DRk */
+    case 0x89: /* EJMP @DRk (low nibble 8) / LJMP @WRj (low nibble 4) */
       {
 	t_mem sub= fetch();
 	if ((sub & 0x0f) == 8)
 	  {
 	    int reg= sub >> 4;
 	    PC= get_dr(reg * 4) & 0xffffff;
+	    return(resGO);
+	  }
+	if ((sub & 0x0f) == 4)     /* LJMP @WRj (as251: 0x189 + 0x10<<0) */
+	  {
+	    int reg= sub >> 4;
+	    PC= (PC & 0xff0000) | (get_wr(reg * 2) & 0xffff);
 	    return(resGO);
 	  }
 	return(inst_unknown(0x89));
@@ -1687,6 +2054,30 @@ cl_uc251::exec_inst(void)
 	return(inst_ecall24((b2 << 16) | (b1 << 8) | b0));
       }
 
+    case 0xa9: /* A9-prefixed extended bit operations (Source mode) */
+      return(exec_a9(fetch()));
+
+    case 0xb9: /* TRAP: STC32G UM 1672 defines this opcode as NOP. */
+	  return(resGO);
+
+    case 0xd4: /* DA A: BCD-adjust after ADD/ADDC (8051 semantics) */
+      {
+	t_mem a= acc->read();
+	t_mem psw= sfr->get(PSW);
+	bool cy= (psw & bmCY) != 0, ac= (psw & bmAC) != 0;
+	if (((a & 0x0f) > 9) || ac)
+	  a+= 6;
+	if (cy || (a > 0x99))
+	  {
+	    a+= 0x60;
+	    cy= true;
+	  }
+	acc->write(a & 0xff);
+	bits->set(0xd7, cy ? 0x80 : 0);        /* CY only; AC/OV unchanged */
+	set_nz(a, 1);
+	return(resGO);
+      }
+
     case 0xa5: /* A5-prefixed */
       return(exec_a5(fetch()));
     case 0x7e: /* 7E-prefixed */
@@ -1696,6 +2087,8 @@ cl_uc251::exec_inst(void)
 	return(resGO);
       return(inst_unknown(0x7a));
     case 0x09: /* MOV Rm,@WRj+dis16 (8-bit load) */
+    case 0x49: /* MOV WRj,@WRj+dis16 (16-bit load) */
+    case 0x19: /* MOV @WRj+dis16,Rm (8-bit store) */
     case 0x29: /* MOV Rm,@idx+dis16 (8-bit load) */
     case 0x69: /* MOV WRj,@idx+dis16 (16-bit load) */
     case 0x39: /* MOV @idx+dis16,Rm (8-bit store) */
@@ -1717,17 +2110,40 @@ cl_uc251::exec_inst(void)
 	sfr->write(0xf0, (p >> 8) & 0xff);
 	bits->set(0xd7, 0);                       /* CY=0 */
 	SFR_SET_BIT(p > 255, PSW, bmOV);
+	set_nz_mul(p, 2);
 	return(resGO);
       }
-    case 0xad: /* MUL WRj,WRms: 16x16 -> 32-bit in DRk (WRj:WRj+2, big-endian) */
+    case 0xac: /* MUL Rmd,Rms: 8x8 -> 16 in the word register holding Rmd.
+		  UM A-8/A-101: md even -> Rmd=high, Rmd+1=low;
+		  md odd  -> Rmd-1=high, Rmd=low.  CY=0, OV=1 if >0xFF. */
+      {
+	t_mem sub= fetch();
+	int md= sub >> 4, ms= sub & 0x0f;
+	unsigned int p= get_r8(md) * get_r8(ms);
+	if ((md & 1) == 0)
+	  { set_r8(md, (p >> 8) & 0xff); set_r8(md + 1, p & 0xff); }
+	else
+	  { set_r8(md - 1, (p >> 8) & 0xff); set_r8(md, p & 0xff); }
+	bits->set(0xd7, 0);                       /* CY=0 */
+	SFR_SET_BIT(p > 255, PSW, bmOV);
+	set_nz_mul(p, 2);
+	return(resGO);
+      }
+    case 0xad: /* MUL WRjd,WRjs: 16x16 -> 32-bit product in the dword
+		  register containing WRjd.  UM A-101: jd%4==0 -> WRjd=high
+		  word, WRjd+2=low; jd%4==2 -> WRjd-2=high, WRjd=low.
+		  CY=0, OV=1 if product > 0xFFFF. */
       {
 	t_mem sub= fetch();
 	int d= sub >> 4, s= sub & 0x0f;
-	unsigned int a= get_wr(d * 2), b= get_wr(s * 2);
+	int jd= d * 2;
+	unsigned int a= get_wr(jd), b= get_wr(s * 2);
 	unsigned long p= (unsigned long)a * (unsigned long)b;
-	set_dr(d * 2, p);                        /* DRk: j=d → DR(d/2), byte index d*2 */
+	set_dr((jd & 2) ? jd - 2 : jd, p);
 	bits->set(0xd7, 0);                       /* CY=0 */
-	set_nz(p, 4);
+	sfr->set(PSW, (sfr->get(PSW) & ~bmOV) |
+		      ((p > 0xffff) ? bmOV : 0));
+	set_nz_mul(p, 4);
 	return(resGO);
       }
     case 0x84: /* DIV AB: A/B -> A=quotient, B=remainder */
@@ -1742,23 +2158,57 @@ cl_uc251::exec_inst(void)
 	    psw&= ~bmOV;
 	    acc->write(a / b);
 	    sfr->write(0xf0, a % b);
+	    set_nz((a / b) & 0xff, 1);
 	  }
 	sfr->set(PSW, psw);
 	return(resGO);
       }
-    case 0x8d: /* DIV WRj,WRms: 16/16 -> quotient in WRj, remainder in WRj+2 */
+    case 0x8c: /* DIV Rmd,Rms: quotient/remainder in the word register
+		  holding Rmd.  UM A-8/A-55: md even -> Rmd=remainder,
+		  Rmd+1=quotient; md odd -> Rmd-1=remainder, Rmd=quotient.
+		  CY=0; OV=1 and results undefined on divide-by-zero. */
       {
 	t_mem sub= fetch();
-	int d= sub >> 4, s= sub & 0x0f;
-	unsigned int a= get_wr(d * 2), b= get_wr(s * 2);
+	int md= sub >> 4, ms= sub & 0x0f;
+	t_mem d= get_r8(md), s= get_r8(ms);
 	bits->set(0xd7, 0);                       /* CY=0 */
-	if (b == 0)
-	  sfr->set(PSW, sfr->get(PSW) | bmOV);   /* OV=1 divide-by-zero */
+	if (s == 0)
+	  sfr->set(PSW, sfr->get(PSW) | bmOV);    /* OV=1, results undefined */
 	else
 	  {
 	    sfr->set(PSW, sfr->get(PSW) & ~bmOV);
-	    set_wr(d * 2, a / b);                 /* quotient in WRj */
-	    set_wr(d * 2 + 2, a % b);             /* remainder in WRj+2 */
+	    t_mem q= d / s, r= d % s;
+	    if ((md & 1) == 0)
+	      { set_r8(md, r); set_r8(md + 1, q); }
+	    else
+	      { set_r8(md - 1, r); set_r8(md, q); }
+	    set_nz(q & 0xff, 1);
+	  }
+	return(resGO);
+      }
+    case 0x8d: /* DIV WRjd,WRjs: quotient/remainder in the dword register
+		  containing WRjd.  UM A-55/A-56: jd%4==0 -> WRjd=remainder,
+		  WRjd+2=quotient; jd%4==2 -> WRjd-2=remainder, WRjd=quotient
+		  (worked example: dest WR4, quotient 1122H, remainder 3344H
+		  leaves bytes 4..7 = 33 44 11 22).  CY=0; divide-by-zero sets
+		  OV and leaves the results undefined. */
+      {
+	t_mem sub= fetch();
+	int d= sub >> 4, s= sub & 0x0f;
+	int jd= d * 2;
+	unsigned int a= get_wr(jd), b= get_wr(s * 2);
+	bits->set(0xd7, 0);                       /* CY=0 */
+	if (b == 0)
+	  sfr->set(PSW, sfr->get(PSW) | bmOV);    /* OV=1, results undefined */
+	else
+	  {
+	    sfr->set(PSW, sfr->get(PSW) & ~bmOV);
+	    unsigned int q= a / b, r= a % b;
+	    if ((jd & 2) == 0)
+	      { set_wr(jd, r); set_wr(jd + 2, q); }
+	    else
+	      { set_wr(jd - 2, r); set_wr(jd, q); }
+	    set_nz(q, 2);
 	  }
 	return(resGO);
       }
@@ -1856,10 +2306,69 @@ cl_uc251::exec_inst(void)
 	t_mem dst= get_r8(sub >> 4);
 	t_mem src= get_r8(sub & 0x0f);
 	t_mem r= dst - src;                 /* compare: flags only, no write */
-	set_nz(r, 1);
-	bits->set(0xd7, (dst < src) ? 0x80 : 0);   /* CY = dst < src */
+	set_flags_sub8(dst, src, 0, r);
+	return(resGO);
+      }
+
+    case 0xbd: /* CMP WRjd,WRjs (16-bit compare, flags only) */
+      {
+	t_mem sub= fetch();
+	t_mem dst= get_wr((sub >> 4) * 2);
+	t_mem src= get_wr((sub & 0x0f) * 2);
+	t_mem r= dst - src;
+	set_nz(r, 2);
+	bits->set(0xd7, (dst < src) ? 0x80 : 0);
 	sfr->set(PSW, (sfr->get(PSW) & ~bmOV) |
-		      ((((dst ^ src ^ r) & 0x7f)) ? bmOV : 0));
+		      (((((dst ^ src) & (dst ^ r)) & 0x8000) != 0) ? bmOV : 0));
+	return(resGO);
+      }
+    case 0xbf: /* CMP DRkd,DRks (32-bit compare, flags only) */
+      {
+	t_mem sub= fetch();
+	t_mem dst= get_dr((sub >> 4) * 4);
+	t_mem src= get_dr((sub & 0x0f) * 4);
+	t_mem r= dst - src;
+	set_nz(r, 4);
+	bits->set(0xd7, (dst < src) ? 0x80 : 0);
+	sfr->set(PSW, (sfr->get(PSW) & ~bmOV) |
+		      (((((dst ^ src) & (dst ^ r)) & 0x80000000u) != 0) ? bmOV : 0));
+	return(resGO);
+      }
+
+    case 0x0e: /* SRA Rm/WRj/A (arithmetic shift right, keeps sign) */
+    case 0x1e: /* SRL Rm/WRj/A (logical shift right, fills zero) */
+    case 0x3e: /* SLL Rm/WRj/A (shift left) */
+      {
+	/* second byte: reg<<4 | type (0=Rm, 4=WRj, B0=A form) */
+	t_mem sub= fetch();
+	t_mem v, cy;
+	int bytes;
+	if (sub == 0xb0)
+	  { v= acc->read(); bytes= 1; }
+	else if ((sub & 0x0f) == 0x00)
+	  { int m= sub >> 4; v= get_r8(m); bytes= 1; }
+	else if ((sub & 0x0f) == 0x04)
+	  { int j= sub >> 4; v= get_wr(j * 2); bytes= 2; }
+	else
+	  return(inst_unknown(code));
+	t_mem mask= (bytes == 1) ? 0xff : 0xffff;
+	t_mem sign= (bytes == 1) ? 0x80 : 0x8000;
+	cy= (code == 0x3e) ? ((v & sign) != 0)    /* SLL: CY = original MSB (UM A-120) */
+	                   : (v & 1);              /* right shifts: CY = LSB */
+	if (code == 0x0e)
+	  v= ((v >> 1) | (v & sign)) & mask;    /* SRA */
+	else if (code == 0x1e)
+	  v= (v >> 1) & mask;                   /* SRL */
+	else
+	  v= (v << 1) & mask;                   /* SLL */
+	if (sub == 0xb0)
+	  acc->write(v);
+	else if ((sub & 0x0f) == 0x00)
+	  set_r8(sub >> 4, v);
+	else
+	  set_wr((sub >> 4) * 2, v);
+	bits->set(0xd7, cy ? 0x80 : 0);
+	set_nz(v, bytes);
 	return(resGO);
       }
 
@@ -1997,6 +2506,32 @@ cl_uc251::disass_a5(t_addr addr, chars *out)
     case 0x12: opname= "SUBB"; break;
     case 0x13: opname= "SUBB"; break;
     case 0x19: form= "XCH"; break;          /* XCH A,Rn */
+    case 0x18:                               /* XCH A,@Ri (A5 C6/C7) */
+      if (out)
+        {
+          out->append("XCH"); mne_sep(out);
+          out->append("A,"); riname(ri, out);
+        }
+      return 2;
+    case 0x1a:                               /* XCHD A,@Ri (A5 D6/D7) */
+      if (out)
+        {
+          out->append("XCHD"); mne_sep(out);
+          out->append("A,"); riname(ri, out);
+        }
+      return 2;
+    case 0x16:                               /* CJNE @Ri,#data,rel (A5 B6/B7) */
+      len= 4;
+      if (out)
+        {
+          t_addr target= (addr + len + (i32_t)(i8_t)rom->get(addr + 3)) & 0xffffff;
+          out->append("CJNE"); mne_sep(out);
+          riname(ri, out); out->append(",#");
+          out->appendf("0x%02x,", (unsigned)rom->get(addr + 2));
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return len;
     case 0x1c: form= "MOV"; break;          /* MOV A,@Ri (src=@Ri) */
     case 0x1d: form= "MOVRN"; break;        /* MOV A,Rn */
     case 0x1e: form= "MOVRI"; break;        /* MOV @Ri,A */
@@ -2113,6 +2648,59 @@ cl_uc251::disass_a5(t_addr addr, chars *out)
 }
 
 
+/* A9 <family|bitnum> <byte-addr> [<rel>]: extended bit ops over the full */
+/* dir8 space.  Mirrors exec_a9.                                          */
+int
+cl_uc251::disass_a9(t_addr addr, chars *out)
+{
+  t_mem op= rom->get(addr + 1);
+  int bitnum= op & 0x07;
+  t_mem byteaddr= rom->get(addr + 2);
+  const char *mne= NULL;
+  const char *lhs= NULL;        /* "CY," prefix (boolean CY ops) */
+  int len= 3;
+  bool branch= false;
+
+  switch (op & 0xf8)
+    {
+    case 0xc0: mne= "CLR";  break;
+    case 0xd0: mne= "SETB"; break;
+    case 0xb0: mne= "CPL";  break;
+    case 0x70: mne= "ORL";  lhs= "CY,";   break;
+    case 0x80: mne= "ANL";  lhs= "CY,";   break;
+    case 0xe0: mne= "ORL";  lhs= "CY,/";  break;
+    case 0xf0: mne= "ANL";  lhs= "CY,/";  break;
+    case 0xa0: mne= "MOV";  lhs= "CY,";   break;
+    case 0x90: mne= "MOV";  break;              /* MOV bit,CY */
+    case 0x10: mne= "JBC";  branch= true; break;
+    case 0x20: mne= "JB";   branch= true; break;
+    case 0x30: mne= "JNB";  branch= true; break;
+    default:
+      if (out)
+        out->appendf(".db 0x%02x", (unsigned)rom->get(addr));
+      return 1;
+    }
+  if (branch)
+    len= 4;
+  if (out)
+    {
+      out->append(mne); mne_sep(out);
+      if (lhs)
+        out->append(lhs);
+      out->appendf("0x%02x.%d", (unsigned)byteaddr, bitnum);
+      if (branch)
+        {
+          t_addr target= (addr + len + (i32_t)(i8_t)rom->get(addr + 3)) & 0xffffff;
+          out->append(",");
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      else if ((op & 0xf8) == 0x90)
+        out->append(",CY");
+    }
+  return len;
+}
+
 /* 7E <reg><type>: MOV Rm/WRj/DRk immediate/direct family.  Mirrors exec_7e. */
 int
 cl_uc251::disass_7e(t_addr addr, chars *out)
@@ -2198,6 +2786,33 @@ cl_uc251::disass_7e(t_addr addr, chars *out)
           drname(reg, out);
         }
       return 3;
+    case 0x03:        /* MOV Rm,dir16 (4 bytes) */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          rname(reg, out); out->append(",");
+          out->appendf("0x%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+        }
+      return 4;
+    case 0x07:        /* MOV WRj,dir16 (4 bytes) */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          wrname(reg, out); out->append(",");
+          out->appendf("0x%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+        }
+      return 4;
+    case 0x0f:        /* MOV DRk,dir16 (4 bytes) */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          drname(reg, out); out->append(",");
+          out->appendf("0x%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+        }
+      return 4;
     default: break;   /* unimplemented 7E type */
     }
   if (out)
@@ -2239,6 +2854,59 @@ cl_uc251::disass_7a(t_addr addr, chars *out)
           rname(src, out);
         }
       return 3;
+    case 0x09:        /* MOV @WRj,Rm (third byte: src<<4) */
+      if (out)
+        {
+          int src= rom->get(addr + 2) >> 4;
+          out->append("MOV"); mne_sep(out);
+          out->append("@"); wrname(reg, out); out->append(",");
+          rname(src, out);
+        }
+      return 3;
+    case 0x03:        /* MOV dir16,Rm */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          out->appendf("0x%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+          out->append(","); rname(reg, out);
+        }
+      return 4;
+    case 0x07:        /* MOV dir16,WRj */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          out->appendf("0x%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+          out->append(","); wrname(reg, out);
+        }
+      return 4;
+    case 0x0f:        /* MOV dir16,DRk */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          out->appendf("0x%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+          out->append(","); drname(reg, out);
+        }
+      return 4;
+    case 0x0d:        /* MOV dir8,DRk (low byte) */
+      if (out)
+        {
+          out->append("MOV"); mne_sep(out);
+          dir8_out(this, rom->get(addr + 2), out);
+          out->append(","); drname(reg, out);
+        }
+      return 3;
+    case 0x0c:        /* MOVH DRk(hi),#data16 */
+      if (out)
+        {
+          out->append("MOVH"); mne_sep(out);
+          drname(reg, out); out->append(",#");
+          out->appendf("0x%04x",
+                       (unsigned)(rom->get(addr + 2) * 256 + rom->get(addr + 3)));
+        }
+      return 4;
     default: break;
     }
   if (out)
@@ -2344,6 +3012,15 @@ cl_uc251::disass_idx16(t_addr addr, int code, chars *out)
         case 0x09:       /* MOV Rm,@WRj+dis16 (WRj base) */
           rname(reg, out); out->append(",@");
           wrname(idx, out); out->appendf("+0x%04x", dis);
+          break;
+        case 0x49:       /* MOV WRj,@WRj+dis16 (WRj base) */
+          wrname(reg, out); out->append(",@");
+          wrname(idx, out); out->appendf("+0x%04x", dis);
+          break;
+        case 0x19:       /* MOV @WRj+dis16,Rm (WRj base) */
+          out->append("@");
+          wrname(idx, out); out->appendf("+0x%04x,", dis);
+          rname(reg, out);
           break;
         case 0x29:       /* MOV Rm,@DRk/SPX+dis16 */
           rname(reg, out); out->append(",@");
@@ -2458,8 +3135,10 @@ cl_uc251::disass_alu_rm(t_addr addr, int op, chars *out)
     case 0x08: width= 2; len= 4; break;   /* #0data16*/
     case 0x0c: width= 2; len= 4; break;   /* #1data16*/
     case 0x0d: width= 2; len= 3; break;   /* dir8    */
-    case 0x09: width= 0; len= 2; break;   /* @WRj    */
-    case 0x0b: width= 0; len= 2; break;   /* @DRk    */
+    case 0x09: width= 0; len= 3; break;   /* @WRj (dst in byte 3) */
+    case 0x0b: width= 0; len= 3; break;   /* @DRk (dst in byte 3) */
+    case 0x03: width= 0; len= 4; break;   /* dir16   */
+    case 0x07: width= 1; len= 4; break;   /* dir16   */
     default:
       if (out)
         out->appendf(".db 0x%02x", (unsigned)rom->get(addr));
@@ -2468,9 +3147,20 @@ cl_uc251::disass_alu_rm(t_addr addr, int op, chars *out)
   if (out)
     {
       out->append(name[op]); mne_sep(out);
-      if (width == 0)      rname(reg, out);
-      else if (width == 1) wrname(reg, out);
-      else                 drname(reg, out);
+      /* @WRj/@DRj sources encode the source register in the sub byte and
+         the destination register in the third byte */
+      if ((sub & 0x0f) == 0x09 || (sub & 0x0f) == 0x0b)
+        {
+          if (width == 0)      rname(rom->get(addr + 2) >> 4, out);
+          else if (width == 1) wrname(rom->get(addr + 2) >> 4, out);
+          else                 drname(rom->get(addr + 2) >> 4, out);
+        }
+      else
+        {
+          if (width == 0)      rname(reg, out);
+          else if (width == 1) wrname(reg, out);
+          else                 drname(reg, out);
+        }
       out->append(",");
       switch (sub & 0x0f)
         {
@@ -2486,6 +3176,10 @@ cl_uc251::disass_alu_rm(t_addr addr, int op, chars *out)
         case 0x0d: dir8_out(this, rom->get(addr + 2), out); break;
         case 0x09: out->append("@"); wrname(reg, out); break;
         case 0x0b: out->append("@"); drname(reg, out); break;
+        case 0x03: out->appendf("0x%04x",
+                                (unsigned)(rom->get(addr+2)*256 + rom->get(addr+3))); break;
+        case 0x07: out->appendf("0x%04x",
+                                (unsigned)(rom->get(addr+2)*256 + rom->get(addr+3))); break;
         }
     }
   return len;
@@ -2500,6 +3194,21 @@ cl_uc251::disass_251(t_addr addr, chars *out)
   switch (code)
     {
     case 0x00: if (out) out->append("NOP"); return 1;
+
+    case 0x01: case 0x21: case 0x41: case 0x61:    /* AJMP addr11 (p0-3) */
+    case 0x81: case 0xa1: case 0xc1: case 0xe1:    /* AJMP addr11 (p4-7) */
+    case 0x11: case 0x31: case 0x51: case 0x71:    /* ACALL addr11 (p0-3) */
+    case 0x91: case 0xb1: case 0xd1: case 0xf1:    /* ACALL addr11 (p4-7) */
+      if (out)
+        {
+          bool is_call= (code & 0x10) != 0;
+          t_addr target= ((addr + 2) & ~((t_addr)0x7ff)) |
+            ((((code >> 5) & 7) << 8) | rom->get(addr + 1));
+          out->append(is_call ? "ACALL" : "AJMP"); mne_sep(out);
+          out->appendf(rom->addr_format, target);
+          addr_name(target, rom, out);
+        }
+      return 2;
 
     case 0x02:        /* LJMP addr16 */
       if (out)
@@ -2555,6 +3264,38 @@ cl_uc251::disass_251(t_addr addr, chars *out)
     case 0x23: if (out) { out->append("RL");  mne_sep(out); out->append("A"); } return 1;
     case 0x33: if (out) { out->append("RLC"); mne_sep(out); out->append("A"); } return 1;
     case 0xc4: if (out) { out->append("SWAP"); mne_sep(out); out->append("A"); } return 1;
+    case 0xd4: if (out) { out->append("DA");   mne_sep(out); out->append("A"); } return 1;
+    case 0xb9: if (out) { out->append("TRAP"); } return 1;
+
+    case 0xbd:        /* CMP WRjd,WRjs */
+    case 0xbf:        /* CMP DRkd,DRks */
+      if (out)
+        {
+          t_mem sub= rom->get(addr + 1);
+          out->append("CMP"); mne_sep(out);
+          if (code == 0xbd) { wrname(sub >> 4, out); out->append(","); wrname(sub & 0x0f, out); }
+          else              { drname(sub >> 4, out); out->append(","); drname(sub & 0x0f, out); }
+        }
+      return 2;
+
+    case 0x0e:        /* SRA Rm/WRj/A */
+    case 0x1e:        /* SRL Rm/WRj/A */
+    case 0x3e:        /* SLL Rm/WRj/A */
+      {
+        t_mem sub= rom->get(addr + 1);
+        if (out)
+          {
+            out->append(code == 0x0e ? "SRA" : code == 0x1e ? "SRL" : "SLL");
+            mne_sep(out);
+            if (sub == 0xb0)
+              out->append("A");
+            else if ((sub & 0x0f) == 0x00)
+              rname(sub >> 4, out);
+            else
+              wrname(sub >> 4, out);
+          }
+        return 2;
+      }
     case 0xc5: if (out) { out->append("XCH"); mne_sep(out); out->append("A,"); dir8_out(this, rom->get(addr+1), out); } return 2;
     case 0x05: if (out) { out->append("INC"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); } return 2;
     case 0x15: if (out) { out->append("DEC"); mne_sep(out); dir8_out(this, rom->get(addr+1), out); } return 2;
@@ -2710,7 +3451,7 @@ cl_uc251::disass_251(t_addr addr, chars *out)
     case 0x83: if (out) { out->append("MOVC"); mne_sep(out); out->append("A,@A+PC"); } return 1;
     case 0x93: if (out) { out->append("MOVC"); mne_sep(out); out->append("A,@A+DPTR"); } return 1;
 
-    case 0x89:        /* EJMP @DRk (low nibble must be 8) */
+    case 0x89:        /* EJMP @DRk (low nibble 8) / LJMP @WRj (low nibble 4) */
       {
         t_mem sub= rom->get(addr+1);
         if ((sub & 0x0f) == 8)
@@ -2719,6 +3460,15 @@ cl_uc251::disass_251(t_addr addr, chars *out)
               {
                 out->append("EJMP"); mne_sep(out);
                 out->append("@"); drname(sub >> 4, out);
+              }
+            return 2;
+          }
+        if ((sub & 0x0f) == 4)
+          {
+            if (out)
+              {
+                out->append("LJMP"); mne_sep(out);
+                out->append("@"); wrname(sub >> 4, out);
               }
             return 2;
           }
@@ -2762,9 +3512,12 @@ cl_uc251::disass_251(t_addr addr, chars *out)
       return 4;
 
     case 0xa5: return disass_a5(addr, out);
+    case 0xa9: return disass_a9(addr, out);
     case 0x7e: return disass_7e(addr, out);
     case 0x7a: return disass_7a(addr, out);
     case 0x09:
+    case 0x49:
+    case 0x19:
     case 0x29:
     case 0x69:
     case 0x39:
@@ -2774,7 +3527,25 @@ cl_uc251::disass_251(t_addr addr, chars *out)
     case 0x1b: return disass_0b(addr, 1, out);
 
     case 0xa4: if (out) { out->append("MUL"); mne_sep(out); out->append("AB"); } return 1;
+    case 0xac:        /* MUL Rmd,Rms */
+      if (out)
+        {
+          t_mem sub= rom->get(addr + 1);
+          out->append("MUL"); mne_sep(out);
+          rname(sub >> 4, out); out->append(",");
+          rname(sub & 0x0f, out);
+        }
+      return 2;
     case 0x84: if (out) { out->append("DIV"); mne_sep(out); out->append("AB"); } return 1;
+    case 0x8c:        /* DIV Rmd,Rms */
+      if (out)
+        {
+          t_mem sub= rom->get(addr + 1);
+          out->append("DIV"); mne_sep(out);
+          rname(sub >> 4, out); out->append(",");
+          rname(sub & 0x0f, out);
+        }
+      return 2;
     case 0xad:        /* MUL WRj,WRms (16x16 -> 32) */
       {
         t_mem sub= rom->get(addr+1);

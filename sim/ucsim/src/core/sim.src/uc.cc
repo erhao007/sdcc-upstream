@@ -3869,7 +3869,10 @@ cl_error_unknown_code::cl_error_unknown_code(class cl_uc *the_uc)
 void
 cl_error_unknown_code::print(class cl_commander_base *c)
 {
-  c->dd_printf("%s: unknown instruction code at ", (char*)get_type_name());
+  /* No (char*) cast here: on arm64-apple va_list is char*, so a cast
+     second argument would exactly match dd_printf(const char*, va_list)
+     and pass a string pointer where vasprintf reads a va_list. */
+  c->dd_printf("%s: unknown instruction code at ", get_type_name());
   if (uc->rom)
     {
       c->dd_printf(uc->rom->addr_format, PC);

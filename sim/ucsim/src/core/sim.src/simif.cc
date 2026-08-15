@@ -348,6 +348,10 @@ cl_sif_print::produce_answer(void)
     {
       //printf("** SIF_PRINT 0x%02x,'%c'\n", cm, cm);
       putchar(cm);
+      /* Always flush: interactive pipes (IDE hosts reading char-by-char)
+         are not ttys either, and buffering until exit can deadlock a
+         host waiting on simulator output.  The per-character write cost
+         is acceptable now that the exec_inst getenv() storm is cached. */
       fflush(stdout);
     }
   if (sif)

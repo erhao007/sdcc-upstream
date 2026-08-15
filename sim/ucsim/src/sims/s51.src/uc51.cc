@@ -1707,6 +1707,10 @@ cl_51core::do_inst(void)
       pre_inst();
       PCsave= PC;
       result= exec_inst();
+      if (result == resINV_INST)
+	/* backup to start of instruction, as cl_uc::do_inst does, so an
+	   strict MCS-251 unknown opcode leaves the PC on the instruction start */
+	PC= PCsave;
       post_inst();
     }
   else
@@ -1782,6 +1786,10 @@ cl_51core::do_emu(void)
 int
 cl_51core::sim_stop_result(void)
 {
+  if (result == resINV_INST)
+    /* MCS-251 is the only current 51-core subclass that returns
+       resINV_INST; preserve the legacy mcs51 unknown_code-off path. */
+    return resINV_INST;
   return (sfr->get(DPH) << 8) | sfr->get(DPL);
 }
 
