@@ -10834,7 +10834,7 @@ static void
 genJumpTab (iCode * ic)
 {
   operand *cond = IC_JTCOND (ic);
-  symbol *jtab, *jtablo, *jtabhi, *jtabext;
+  symbol *jtab, *jtablo, *jtabhi, *jtabext, *gtab;
   unsigned int count;
   const char *l;
 
@@ -10868,8 +10868,54 @@ genJumpTab (iCode * ic)
       freeAsmop (cond, NULL, ic, TRUE);
 
       jtab = newiTempLabel (NULL);
+      /* The region semantics of JMP @A+DPTR are PROVISIONAL: the Intel
+         UM prose (FF:) and instruction table (DPXL) contradict each
+         other, the STC32G manual only pins the 16-bit modular add, and
+         this compiler cannot serve as independent normative evidence.
+         Region-0 tables are safe under every non-FF reading, so guard
+         the fast path on DPXL at run time; non-zero regions rebuild
+         the target and dispatch via EJMP @DRk.  CAVEAT: the rebuild
+         itself uses MOVC @A+DPTR, whose region behaviour carries the
+         same provisional status (Intel prose: FF: only; this model and
+         large-model CONST placement rely on the DPX region) — so the
+         guard makes the small-table dispatch independent of the JMP
+         high-byte question, NOT unconditionally safe in every region.
+         Revisit both after the FE:/FF: board verdict. */
+      gtab = newiTempLabel (NULL);
       emitcode ("mov", "dptr,#!tlabel", labelKey2num (jtab->key));
       emitcode ("mov", "dpxl,#(!tlabel >> 16)", labelKey2num (jtab->key));
+      emitcode ("mov", "b,a");
+      emitcode ("mov", "a,dpxl");
+      emitcode ("jz", "!tlabel", labelKey2num (gtab->key));
+      /* slow path (region != 0): selector sits in B, DPX addresses the
+         4-byte EJMP entries.  R24-R27 are NOT individually addressable
+         as byte registers, so assemble the target through DPL/DPH/DPXL
+         and copy it with "mov dr28,dpx" — the same construction the
+         large-table path below uses.  NB: MOVC's region behaviour is
+         itself provisional in the same way as JMP @A+DPTR (the Intel
+         prose says MOVC reads FF:, while this model and the large-model
+         CONST placement above 64 KiB rely on the DPX region); the
+         FE:/FF: board verdict covers both. */
+      emitcode ("mov", "a,b");
+      emitcode ("inc", "a");
+      emitcode ("movc", "a,@a+dptr");       /* target byte 2 (hi) */
+      emitcode ("push", "acc");
+      emitcode ("mov", "a,b");
+      emitcode ("add", "a,#2");
+      emitcode ("movc", "a,@a+dptr");       /* target byte 1 (mid) */
+      emitcode ("push", "acc");
+      emitcode ("mov", "a,b");
+      emitcode ("add", "a,#3");
+      emitcode ("movc", "a,@a+dptr");       /* target byte 0 (lo) */
+      emitcode ("mov", "dpl,a");             /* low byte */
+      emitcode ("pop", "acc");              /* mid */
+      emitcode ("mov", "dph,a");
+      emitcode ("pop", "acc");              /* hi */
+      emitcode ("mov", "dpxl,a");
+      emitcode ("mov", "dr28,dpx");
+      emitcode ("ejmp", "@dr28");
+      emitLabel (gtab);
+      emitcode ("mov", "a,b");           /* restore scaled selector */
       emitcode ("jmp", "@a+dptr");
       emitLabel (jtab);
       /* now generate the jump labels */

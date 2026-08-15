@@ -33,6 +33,7 @@ def compile_source(sdcc, source, port, output, extra_flags=(), assemble=False):
             f"command failed ({completed.returncode}): "
             f"{' '.join(command)}\n{completed.stdout}"
         )
+    return output
 
 
 def function_body(assembly, name):
@@ -115,6 +116,41 @@ def main():
                     function_body(assembly, function),
                     f"{configuration}:{function}",
                 )
+
+        # Small-table path (count <= 7): the region guard must assemble
+        # (-c) under default, --opt-code-speed, and the FF: high-region
+        # code layout, and the emitted slow path must use the legal
+        # DPL/DPH/DPXL + "mov dr28,dpx" construction (never R24-R27).
+        guard_source = source.parent / "small-switch-guard.c"
+        for label, extra in (
+            ("small-default", ()),
+            ("small-speed", ("--opt-code-speed",)),
+            (
+                "small-ff-region",
+                ("--model-large", "--opt-code-speed", "--code-loc", "0xff0000"),
+            ),
+        ):
+            rel = workspace / f"{label}.rel"
+            compile_source(
+                sdcc, guard_source, "mcs251", rel, extra, assemble=True
+            )
+            asm = compile_source(
+                sdcc, guard_source, "mcs251",
+                workspace / f"{label}.asm", extra, assemble=False,
+            )
+            if asm:
+                body = function_body(asm.read_text(), "mcs251_small_switch")
+                if re.search(r"\br2[4-7]\b", body, re.IGNORECASE):
+                    raise AssertionError(
+                        f"{label}: guard slow path uses R24-R27 directly"
+                    )
+                if not re.search(
+                    r"^[ \t]*mov[ \t]+dr28,dpx[ \t]*$",
+                    body, re.IGNORECASE | re.MULTILINE,
+                ):
+                    raise AssertionError(
+                        f"{label}: slow path missing 'mov dr28,dpx'"
+                    )
 
 
 if __name__ == "__main__":
