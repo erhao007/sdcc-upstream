@@ -148,6 +148,10 @@ check: all
 	$(PYTHON) $(srcdir)/tests/check-wide-shift-jump-table.py \
 		--sdcc $(top_builddir)/bin/sdcc \
 		--source $(srcdir)/tests/large-switch.c
+	$(PYTHON) $(srcdir)/tests/check-small-switch-run.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--s51 $(top_builddir)/sim/ucsim/src/sims/s51.src/ucsim_51 \
+		--source $(srcdir)/tests/small-switch-run.c
 	$(PYTHON) $(srcdir)/tests/check-endianness.py \
 		--sdcc $(top_builddir)/bin/sdcc \
 		--source $(srcdir)/tests/endianness-layout.c \

@@ -1169,21 +1169,27 @@ exec_7a(cl_uc251 *cpu, t_mem sub)
 }
 
 
-/* Indexed MOV with 16-bit displacement (little-endian), SPX/DRk base:   */
-/* 0x29 = 8-bit load, 0x69 = 16-bit load, 0x39 = 8-bit store,            */
-/* 0x59 = 16-bit store.  second byte: (reg<<4)|indexed-reg (0x0f=SPX).   */
+/* Indexed MOV with 16-bit displacement (big-endian).  Second byte:      */
+/* (reg<<4)|indexed-reg.  WRj-base family: 0x09/0x49/0x19/0x59 (idx     */
+/* nibble = WR byte index / 2).  DRk-base family: 0x29/0x69/0x39/0x79   */
+/* (idx nibble = DR byte index / 4; 0x0f = SPX, 16-bit stack space).    */
 static int
 exec_idx16(cl_uc251 *cpu, int code, t_mem sub)
 {
   int reg= sub >> 4;
   int idx= sub & 0x0f;
   t_addr dis= (cpu->fetch() << 8) | cpu->fetch();  /* big-endian displacement */
-  t_addr base= (idx == 15) ? cpu->spx : cpu->get_dr(idx * 4);
-  t_addr a= (base + dis) & 0xffff;
+  /* DRk-based forms are @DRk+dis24: the effective address is computed
+     in the 24-bit space (a DRk pointing at the XDATA bank must not be
+     folded back into the 64 KiB edata window).  The SPX base keeps the
+     16-bit stack address space. */
+  t_addr a= (idx == 15)
+    ? (cpu->spx + dis) & 0xffff
+    : (cpu->get_dr(idx * 4) + dis) & 0xffffff;
   switch (code)
     {
     case 0x09: /* 8-bit load from @WRj+dis16 into Rm (high nibble) */
-      cpu->set_r8(reg, cpu->read_edata(cpu->get_wr(idx * 2) + dis));
+      cpu->set_r8(reg, cpu->read_edata((cpu->get_wr(idx * 2) + dis) & 0xffff));
       return(0);
     case 0x29: /* 8-bit load into Rm (reg<<4) */
       /* SPX-relative loads (@spx±dis) read the real stack RAM (no
@@ -1200,10 +1206,13 @@ exec_idx16(cl_uc251 *cpu, int code, t_mem sub)
     case 0x39: /* 8-bit store from Rm (reg<<4) */
       cpu->write_edata(a, cpu->get_r8(reg));
       return(0);
-    case 0x59: /* 16-bit store from WRj */
-      cpu->write_edata(a, cpu->get_wr(reg * 2) >> 8);
-      cpu->write_edata(a + 1, cpu->get_wr(reg * 2) & 0xff);
-      return(0);
+    case 0x59: /* 16-bit store to @WRj+dis16 from WRj (idx = WRj) */
+      {
+        t_addr wa= (cpu->get_wr(idx * 2) + dis) & 0xffff;
+        cpu->write_edata(wa, cpu->get_wr(reg * 2) >> 8);
+        cpu->write_edata((wa + 1) & 0xffff, cpu->get_wr(reg * 2) & 0xff);
+        return(0);
+      }
     case 0x79: /* 16-bit store from WRj (high nibble = src WRj) */
       cpu->write_edata(a, cpu->get_wr(reg * 2) >> 8);
       cpu->write_edata(a + 1, cpu->get_wr(reg * 2) & 0xff);
@@ -2991,10 +3000,10 @@ cl_uc251::disass_0b(t_addr addr, int dec, chars *out)
 }
 
 
-/* 09/29/39/59/69/79: indexed MOV with 16-bit displacement.  Mirrors
-   exec_idx16.  Encoding: sub=(reg<<4)|idx (idx 15 = SPX base for DRk forms);
-   then 2 big-endian displacement bytes.  Note: 0x09 uses WRj base
-   (WR(idx*2)); the others use DRk base (DR(idx*4)) or SPX if idx==15. */
+/* 09/19/29/39/49/59/69/79: indexed MOV with 16-bit displacement.
+   Mirrors exec_idx16.  Encoding: sub=(reg<<4)|idx, then 2 big-endian
+   displacement bytes.  0x09/0x49/0x19/0x59 use the WRj base
+   (WR(idx*2)); 0x29/0x69/0x39/0x79 use DR(idx*4) or SPX if idx==15. */
 int
 cl_uc251::disass_idx16(t_addr addr, int code, chars *out)
 {
@@ -3038,7 +3047,12 @@ cl_uc251::disass_idx16(t_addr addr, int code, chars *out)
           out->appendf("+0x%04x,", dis);
           rname(reg, out);
           break;
-        default:         /* 0x59 / 0x79: MOV @DRk/SPX+dis16,WRj */
+        case 0x59:       /* MOV @WRj+dis16,WRj (WRj base) */
+          out->append("@");
+          wrname(idx, out); out->appendf("+0x%04x,", dis);
+          wrname(reg, out);
+          break;
+        case 0x79:       /* MOV @DRk/SPX+dis16,WRj */
           out->append("@");
           if (spx) out->append("SPX"); else drname(idx, out);
           out->appendf("+0x%04x,", dis);
