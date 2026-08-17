@@ -64,7 +64,7 @@
 #define print_zero_flag PSW.5
 
 
-#if !defined(__SDCC_mcs51) || defined(__SDCC_USE_XSTACK) || defined(_SDCC_NO_ASM_LIB_FUNCS)
+#if (!defined(__SDCC_mcs51) || defined(__SDCC_USE_XSTACK) || defined(_SDCC_NO_ASM_LIB_FUNCS)) && !defined(__SDCC_mcs251)
   /* Does printf_tiny really work on ds390 and ds400?
      If it does, enable them in the line above */
   #if defined(__SDCC_USE_XSTACK)
@@ -75,6 +75,85 @@
   /* Disable "ISO C forbids an empty source file" warning message */
   #pragma disable_warning 190
 #else /* defines are compatible with printf_tiny */
+
+#if defined(__SDCC_mcs251)
+
+/* MCS-251 uses the extended stack, so the 8051 R0/stack assembly below is
+ * not an ABI-compatible implementation.  Keep the same five-format contract
+ * with a small C path instead of silently omitting printf_tiny from the
+ * target library. */
+#include <stdarg.h>
+#include <stdio.h>
+
+static void
+printf_tiny_put_unsigned(unsigned int value, unsigned char radix) __reentrant
+{
+  char digits[5];
+  unsigned char count = 0;
+
+  do
+    {
+      unsigned char digit = (unsigned char)(value % radix);
+      digits[count++] = (char)(digit < 10 ? ('0' + digit) : ('a' + digit - 10));
+      value /= radix;
+    }
+  while (value);
+
+  while (count)
+    putchar((unsigned char)digits[--count]);
+}
+
+static void
+printf_tiny_put_signed(int value) __reentrant
+{
+  unsigned int magnitude;
+
+  if (value < 0)
+    {
+      putchar('-');
+      magnitude = (unsigned int)(0u - (unsigned int)value);
+    }
+  else
+    magnitude = (unsigned int)value;
+  printf_tiny_put_unsigned(magnitude, 10u);
+}
+
+static void
+printf_tiny_put_string(const char *value) __reentrant
+{
+  while (*value)
+    putchar((unsigned char)*value++);
+}
+
+void
+printf_tiny(__code const char *fmt, ...) __reentrant
+{
+  va_list ap;
+
+  va_start(ap, fmt);
+  while (*fmt)
+    {
+      if (*fmt != '%')
+        putchar((unsigned char)*fmt++);
+      else
+        {
+          ++fmt;
+          switch (*fmt++)
+            {
+            case 'c': putchar((unsigned char)va_arg(ap, int)); break;
+            case 'd': printf_tiny_put_signed(va_arg(ap, int)); break;
+            case 'u': printf_tiny_put_unsigned(va_arg(ap, unsigned int), 10u); break;
+            case 'x': printf_tiny_put_unsigned(va_arg(ap, unsigned int), 16u); break;
+            case 's': printf_tiny_put_string(va_arg(ap, char *)); break;
+            case '%': putchar('%'); break;
+            default: putchar('%'); break;
+            }
+        }
+    }
+  va_end(ap);
+}
+
+#else
 
 
 
@@ -297,5 +376,7 @@ printf_end:
 	__endasm;
 }
 
+
+#endif /* __SDCC_mcs251 */
 
 #endif /* defines compatible with printf_tiny */
