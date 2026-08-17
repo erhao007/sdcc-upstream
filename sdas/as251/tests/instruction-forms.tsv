@@ -183,8 +183,8 @@ mov_idx_wr_wr	mov	@WRj+dis16,WRj	mov @wr6+0x1234,wr4	59 23 12 34	a5 59 23 12 34	
 mov_idx_dr_rm	mov	@DRk+dis24,Rm	mov @dr16+0x1234,r10	39 a4 12 34	a5 39 a4 12 34	-	Intel A-8/A-14/A-24
 mov_idx_dr_wr	mov	@DRk+dis24,WRj	mov @dr16+0x1234,wr4	79 24 12 34	a5 79 24 12 34	-	Intel A-8/A-14/A-24
 movh_dr_imm16	movh	DRk(hi),#data16	movh dr12,#0x1234	7a 3c 12 34	a5 7a 3c 12 34	-	Intel A-8/A-24
-movs_wr_rm	movs	WRj,Rm	movs wr4,r3	1a 23	a5 1a 23	N,Z	Intel A-14/A-24
-movz_wr_rm	movz	WRj,Rm	movz wr4,r3	0a 23	a5 0a 23	N,Z	Intel A-14/A-24
+movs_wr_rm	movs	WRj,Rm	movs wr4,r3	1a 23	a5 1a 23	-	Intel A-14/A-24; flags per Intel A-102/A-105 and STC32G 1650/1651
+movz_wr_rm	movz	WRj,Rm	movz wr4,r3	0a 23	a5 0a 23	-	Intel A-14/A-24; flags per Intel A-102/A-105 and STC32G 1650/1651
 movc_a_at_a_dptr	movc	A,@A+DPTR	movc a,@a+dptr	93	93	-	Intel A-24
 movc_a_at_a_pc	movc	A,@A+PC	movc a,@a+pc	83	83	-	Intel A-24
 movx_a_at_ri	movx	A,@Ri	movx a,@r1	e3	e3	-	Intel A-6/A-24

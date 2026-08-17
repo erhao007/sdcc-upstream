@@ -317,9 +317,11 @@ add("movh_dr_imm16", "movh", "DRk(hi),#data16",
     "movh dr12,#0x1234", (0x7a, 0x3c, 0x12, 0x34), native=True,
     reference="Intel A-8/A-24")
 add("movs_wr_rm", "movs", "WRj,Rm", "movs wr4,r3", (0x1a, 0x23),
-    native=True, flags=NZ, reference="Intel A-14/A-24")
+    native=True,
+    reference="Intel A-14/A-24; flags per Intel A-102/A-105 and STC32G 1650/1651")
 add("movz_wr_rm", "movz", "WRj,Rm", "movz wr4,r3", (0x0a, 0x23),
-    native=True, flags=NZ, reference="Intel A-14/A-24")
+    native=True,
+    reference="Intel A-14/A-24; flags per Intel A-102/A-105 and STC32G 1650/1651")
 add("movc_a_at_a_dptr", "movc", "A,@A+DPTR", "movc a,@a+dptr",
     (0x93,), reference="Intel A-24")
 add("movc_a_at_a_pc", "movc", "A,@A+PC", "movc a,@a+pc", (0x83,),

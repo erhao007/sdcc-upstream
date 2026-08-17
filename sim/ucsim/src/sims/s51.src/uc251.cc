@@ -162,6 +162,36 @@ cl_uc251::make_memories(void)
   cl_uc89c51r::make_memories();   /* default address spaces + chips + decode_* */
   decode_eaxfr();
   decode_xdata();
+  /* PSW1 view operator: mirrors CY/AC/RS/OV with PSW, keeps N/Z local */
+  MCELL *psw1c= sfr->get_cell(PSW1);
+  class cl_psw1_op *psw1op= new cl_psw1_op(psw1c, sfr);
+  psw1c->append_operator(psw1op);
+}
+
+
+/* PSW1 shared-bit mask (CY|AC|RS1:RS0|OV — identical bit positions in
+   PSW and PSW1) and the PSW1-only local mask (N|Z). */
+#define PSW1_SHARED 0xdc
+#define PSW1_LOCAL  0x22
+
+cl_psw1_op::cl_psw1_op(class cl_memory_cell *acell,
+                        class cl_address_space *the_sfr):
+  cl_memory_operator(acell)
+{
+  sfr= the_sfr;
+}
+
+t_mem
+cl_psw1_op::read(void)
+{
+  return((sfr->get(PSW) & PSW1_SHARED) | (cell->get() & PSW1_LOCAL));
+}
+
+t_mem
+cl_psw1_op::write(t_mem val)
+{
+  sfr->write(PSW, (sfr->get(PSW) & ~PSW1_SHARED) | (val & PSW1_SHARED));
+  return(val & PSW1_LOCAL);
 }
 
 void
@@ -479,9 +509,12 @@ cl_uc251::set_nz(t_mem r, int width)
      interrupt frame see the same flags the ALU just produced — previously
      the old implementation kept them only in a private cache, divorced
      from the SFR cell. */
-  t_mem p= sfr->read(PSW1);
-  p= (r & msb) ? (p | 0x80) : (p & ~0x80);   /* N = sign bit */
-  p= (r == 0) ? (p | 0x40) : (p & ~0x40);    /* Z */
+  /* PSW1 layout (STC32G p.553): N = bit5, Z = bit1; the shared CY/AC/
+     RS/OV bits (0xDC) are owned by the PSW cell and composed on read,
+     so update the raw cell only */
+  t_mem p= sfr->get(PSW1);
+  p= (r & msb) ? (p | 0x20) : (p & ~0x20);   /* N = sign bit */
+  p= (r == 0) ? (p | 0x02) : (p & ~0x02);    /* Z */
   sfr->set(PSW1, p);
 }
 
@@ -492,9 +525,9 @@ cl_uc251::set_nz_mul(t_mem r, int width)
   t_mem mask= (width >= 4) ? 0xffffffffu : 0xffff;
   t_mem high= (width >= 4) ? 0xffff0000u : 0xff00;
   r &= mask;
-  t_mem p= sfr->read(PSW1);
-  p= (r & high) ? (p | 0x80) : (p & ~0x80);   /* N = high half != 0 */
-  p= (r == 0) ? (p | 0x40) : (p & ~0x40);     /* Z = full product == 0 */
+  t_mem p= sfr->get(PSW1);
+  p= (r & high) ? (p | 0x20) : (p & ~0x20);   /* N = high half != 0 */
+  p= (r == 0) ? (p | 0x02) : (p & ~0x02);     /* Z = full product == 0 */
   sfr->set(PSW1, p);
 }
 
@@ -502,14 +535,14 @@ cl_uc251::set_nz_mul(t_mem r, int width)
 int
 cl_uc251::get_n(void)
 {
-  return((sfr->read(PSW1) & 0x80) ? 1 : 0);
+  return((sfr->read(PSW1) & 0x20) ? 1 : 0);
 }
 
 
 int
 cl_uc251::get_z(void)
 {
-  return((sfr->read(PSW1) & 0x40) ? 1 : 0);
+  return((sfr->read(PSW1) & 0x02) ? 1 : 0);
 }
 
 
@@ -580,7 +613,9 @@ cl_uc251::inst_reti251(void)
   t_mem h= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC15-8 (top) */
   t_mem l= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC7-0 */
   t_mem x= read_edata_ram(spx);  spx= (spx - 1) & 0xffff;          /* PC23-16 */
-  sfr->set(PSW1, read_edata_ram(spx) & 0xff);  spx= (spx - 1) & 0xffff;  /* PSW1 SFR */
+  /* sfr->write (not set): routes through cl_psw1_op so the restored
+     shared bits land in PSW and the locals stay in the PSW1 cell */
+  sfr->write(PSW1, read_edata_ram(spx) & 0xff);  spx= (spx - 1) & 0xffff;  /* PSW1 SFR */
   PC= (x << 16) | (h << 8) | l;
   vc.rd+= 4;
   /* Unwind the interrupt level so do_interrupt's priority compare recovers
@@ -745,12 +780,11 @@ cl_uc251::exec_a5(t_mem fnrn)
 	  PC= rom->validate_address(PC + (signed char)rel);
 	return(resGO);
       }
-    case 0x1b: /* DJNZ Rn,rel */
+    case 0x1b: /* DJNZ Rn,rel (per Intel A-48 / STC32G p.814, flags unmodified) */
       {
 	t_mem rel= fetch();
 	t_mem rv= get_r8(n) - 1;
 	set_r8(n, rv);
-	set_nz(rv, 1);
 	if (rv != 0)
 	  PC= rom->validate_address(PC + (signed char)rel);
 	return(resGO);
@@ -1801,13 +1835,12 @@ cl_uc251::exec_inst(void)
     case 0xd3: /* SETB CY */
       bits->set(0xd7, 1);
       return(resGO);
-    case 0xd5: /* DJNZ dir8,rel */
+    case 0xd5: /* DJNZ dir8,rel (per Intel A-49 / STC32G p.814, flags unmodified) */
       {
 	t_mem addr= fetch();
 	t_mem rel= fetch();
 	t_mem v= read_dir8(addr) - 1;
 	write_dir8(addr, v);
-	set_nz(v, 1);
 	if (v != 0)
 	  PC= rom->validate_address(PC + (signed char)rel);
 	return(resGO);

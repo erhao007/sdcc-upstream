@@ -69,24 +69,28 @@ testNestedInterrupts4ByteFrame(void)
 /*
    Hardening for the 4-byte interrupt frame: verify PSW1 is saved on entry
    and restored on RETI. INT0_isr clobbers PSW1 to 0; unless the frame
-   saves/restores the PSW1 SFR cell, the pattern below is lost. Bits 7/6
-   (N/Z) are masked off because the ISR's ++count ALU legitimately updates
-   them; bits 0-5 (F1/RS etc.) must survive verbatim.
+   saves/restores the PSW1 SFR cell, the pattern below is lost. PSW1
+   layout per STC32G p.553: bit7 CY, bit6 AC, bit5 N, bit4:3 RS1:RS0,
+   bit2 OV, bit1 Z, bit0 reserved; CY/AC/RS/OV mirror PSW. The pattern
+   keeps RS = 0 so the register bank never switches, and N/Z are masked
+   off because the TCON/IE read-modify-writes legitimately update them
+   before the frame is taken; CY/AC/OV must survive
+   verbatim through the ISR's clobber and be restored by RETI.
 */
 void
 testPSW1RestoredAcrossInterrupt(void)
 {
 #if defined(__SDCC_mcs251)
+  volatile unsigned char captured_psw1 = 0;
   mcs251_int0_irq_count = 0;
-  PSW1 = 0x35;          /* recognizable pattern in bits 0-5 */
+  PSW1 = 0xE4;          /* CY|AC|N|OV set, Z clear, RS = 0 (0xE4 = 0x80|0x40|0x20|0x04) */
   TCON |= 0x01;         /* IT0 edge */
   IE  |= 0x81;          /* EX0 | EA */
-  TCON |= 0x02;         /* trigger INT0 (ISR clobbers PSW1 to 0) */
-  unsigned int timeout = 5000;
-  while (mcs251_int0_irq_count == 0 && --timeout)
-    ;
+  TCON |= 0x02;         /* trigger INT0 (ISR clobbers PSW1 to 0, RETI restores 0xE4) */
+  captured_psw1 = PSW1; /* captured immediately after RETI before any flag-modifying control flow */
   IE &= ~0x80;
   TCON &= ~0x01;
-  ASSERT((PSW1 & 0x3F) == (0x35 & 0x3F));   /* bits 0-5 restored by RETI */
+  ASSERT(mcs251_int0_irq_count > 0);
+  ASSERT((captured_psw1 & 0xC4) == 0xC4);   /* CY/AC/OV restored by RETI */
 #endif
 }

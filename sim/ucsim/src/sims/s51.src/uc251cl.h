@@ -51,6 +51,25 @@
  *   0B/1B <reg:4><0x0>: INC/DEC Rn
  *   9A/8A <addr24>: ECALL/EJMP (big-endian 24-bit)
  */
+/* PSW1 (SFR 0xD1) is the MCS-251 primary status register: CY/AC/RS/OV
+   sit at the same bit positions as in PSW and mirror it, while N (bit5)
+   and Z (bit1) exist only in PSW1 (STC32G manual p.553, Intel 8XC251SB
+   UM PSW1 table).  The simulator keeps the shared bits canonically in
+   the PSW cell (ALU helpers, bit band 0xD7) and N/Z in the PSW1 cell
+   (set_nz).  This operator composes/decomposes the PSW1 view so every
+   access path — direct MOV, PUSH/POP, the 4-byte interrupt frame and
+   the disassembler state dump — sees the architecturally complete
+   register.  F0/UD/P (PSW bits 5/1/0) and reserved PSW1 bit 0 are never
+   cross-written. */
+class cl_psw1_op: public cl_memory_operator
+{
+public:
+  class cl_address_space *sfr;
+  cl_psw1_op(class cl_memory_cell *acell, class cl_address_space *the_sfr);
+  virtual t_mem read(void);
+  virtual t_mem write(t_mem val);
+};
+
 class cl_uc251: public cl_uc89c51r
 {
 public:
@@ -116,8 +135,8 @@ public:
   void set_flags_sub8(t_mem a, t_mem b, t_mem borrow, t_mem r);
   void set_nz(t_mem r, int width);         // set PSW1 N/Z for width-byte result
   void set_nz_mul(t_mem r, int width);     // MUL: N reflects nonzero high half
-  int  get_n(void);                        // PSW1.7
-  int  get_z(void);                        // PSW1.6
+  int  get_n(void);                        // PSW1.5
+  int  get_z(void);                        // PSW1.1
 
   // core instruction implementations (Source mode encodings)
   int inst_ret251(void);
@@ -127,8 +146,8 @@ public:
   int inst_ecall24(t_mem addr);
   // Override the 3-arg virtual (cl_51core::inst_lcall) used by accept_it to
   // enter an ISR.  The base pushes a 16-bit PC to iram[SP]; MCS-251 ISRs
-  // return via ERET (3-byte pop from spx), so push the full 24-bit PC onto
-  // the SPX/edata stack instead.
+  // under CONFIG1.INTR=1 push the 4-byte frame (PSW1, PC23:16, PC7:0,
+  // PC15:8) onto the SPX stack and return via RETI (inst_reti251).
   int inst_lcall(t_mem code, uint addr, bool intr);
   int inst_add_a_imm8(void);
   int inst_addc_a_imm8(void);
