@@ -184,7 +184,7 @@ mcs251_init_asmops (void)
   mcs251_init_reg_asmop(&asmop_abdptr, (const signed char[]){DPL_IDX, DPH_IDX, B_IDX, A_IDX, -1});
   mcs251_init_reg_asmop(&asmop_r4abdptr, (const signed char[]){DPL_IDX, DPH_IDX, B_IDX, A_IDX, R4_IDX, -1});
   mcs251_init_reg_asmop(&asmop_r5r4abdptr, (const signed char[]){DPL_IDX, DPH_IDX, B_IDX, A_IDX, R4_IDX, R5_IDX, -1});
-  mcs251_init_reg_asmop(&asmop_r6r5r4abdptr, (const signed char[]){DPL_IDX, DPH_IDX, B_IDX, A_IDX, R4_IDX, R5_IDX, R6_IDX, R7_IDX, -1});
+  mcs251_init_reg_asmop(&asmop_r6r5r4abdptr, (const signed char[]){DPL_IDX, DPH_IDX, B_IDX, A_IDX, R4_IDX, R5_IDX, R6_IDX, -1});
   mcs251_init_reg_asmop(&asmop_r7r6r5r4abdptr, (const signed char[]){DPL_IDX, DPH_IDX, B_IDX, A_IDX, R4_IDX, R5_IDX,R6_IDX, R7_IDX, -1});
 }
 
@@ -2804,16 +2804,10 @@ toBoolean (operand * oper)
       AccUsed |= aopGetUsesAcc (oper->aop, offset++);
     }
 
-  if (opIsGptr (oper))
-    {
-      /* assumes that banks never map to address 0x0000
-         so it suffices to check dptr part only and ignore b */
-      size = AOP_SIZE (oper) - 2;
-    }
-  else
-    {
-      size = AOP_SIZE (oper) - 1;
-    }
+  /* Unlike the tagged generic pointers of the classic mcs51 backend,
+     every byte of an MCS-251 generic pointer is an address byte.  In
+     particular, 0x010000 is non-null even though its low 16 bits vanish. */
+  size = AOP_SIZE (oper) - 1;
 
   offset = 0;
   if (size && AccUsed && (AOP (oper)->type != AOP_ACC))

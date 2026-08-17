@@ -1854,6 +1854,25 @@ genFunction (iCode * ic)
         emitpush ("dpl");
       if (!inExcludeList ("dph"))
         emitpush ("dph");
+      if (!inExcludeList ("dpxl"))
+        emitpush ("dpxl");
+      if (!inExcludeList ("dr20"))
+        emitpush ("dr20");
+      /* DR20/DR24/DR28 are raw temporaries outside the allocator pool:
+         the backend uses DR24/DR28 for far pointers, hidden aggregate-
+         return pointers and indirect calls (genPagedPointerGet/
+         genPointerSet and friends), and the public runtime uses DR20 and
+         DR24 inside __setjmp's register dump (device/lib/_setjmp.c).  The
+         interrupted context can hold live values there mid-sequence, and
+         the 4-byte hardware frame saves only PSW1+PC.  DR16 is emitted
+         only by the startup XINIT copy (device/lib/mcs251/crtxinit.asm),
+         which runs before interrupts are enabled, so it needs no ISR
+         save; SPX-DR60 is the stack pointer alias.  Exactly these three
+         pairs are saved. */
+      if (!inExcludeList ("dr24"))
+        emitpush ("dr24");
+      if (!inExcludeList ("dr28"))
+        emitpush ("dr28");
 
       /* R8-R15 are fixed registers, not members of a PSW-selected bank. */
       saveFixedByteRegisters (sym, IFFUNC_HASFCALL (ftype));
@@ -2438,6 +2457,14 @@ genEndFunction (iCode * ic)
 
       restoreFixedByteRegisters (sym, IFFUNC_HASFCALL (ftype));
 
+      if (!inExcludeList ("dr28"))
+        emitpop ("dr28");
+      if (!inExcludeList ("dr24"))
+        emitpop ("dr24");
+      if (!inExcludeList ("dr20"))
+        emitpop ("dr20");
+      if (!inExcludeList ("dpxl"))
+        emitpop ("dpxl");
       if (!inExcludeList ("dph"))
         emitpop ("dph");
       if (!inExcludeList ("dpl"))
