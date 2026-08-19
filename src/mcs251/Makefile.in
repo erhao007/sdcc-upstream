@@ -145,6 +145,18 @@ check: all
 	$(PYTHON) $(srcdir)/tests/check-register-allocation.py \
 		--sdcc $(top_builddir)/bin/sdcc \
 		--source $(srcdir)/tests/register-pressure.c
+	$(PYTHON) $(srcdir)/tests/check-ralloc2-skeleton.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--ralloc2-source $(srcdir)/ralloc2.cc \
+		--probe-source $(srcdir)/tests/ralloc-baseline.c \
+		--call-source $(srcdir)/tests/call-24bit.c
+	$(PYTHON) $(srcdir)/tests/check-ralloc2-directed.py \
+		--sdcc $(top_builddir)/bin/sdcc \
+		--s51 $(top_builddir)/sim/ucsim/src/sims/s51.src/ucsim_51 \
+		--ralloc2-source $(srcdir)/ralloc2.cc \
+		--baseline-source $(srcdir)/tests/ralloc-baseline.c \
+		--extras-source $(srcdir)/tests/ralloc2-extras.c \
+		--mulreg-source $(srcdir)/tests/ralloc2-mulreg.c
 	$(PYTHON) $(srcdir)/tests/check-wide-shift-jump-table.py \
 		--sdcc $(top_builddir)/bin/sdcc \
 		--source $(srcdir)/tests/large-switch.c

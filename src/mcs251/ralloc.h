@@ -84,6 +84,13 @@ bitVect *mcs251_allBankregs (void);
 extern int mcs251_ptrRegReq;
 extern int mcs251_nRegs;
 
+/* ralloc2.cc: port-side greedy register allocator over the shared
+   framework's CFG and byte-level conflict graph.  Not on the default
+   compilation path (production uses mcs251_assignRegisters); linked
+   only into the directed-test compiler. */
+iCode *mcs251_ralloc2_cc (ebbIndex *ebbi);
+void mcs251_ralloc2_assignRegisters (ebbIndex *ebbi);
+
 
 /* reverse lookup register mnemonic to ?_IDX enum.
 
