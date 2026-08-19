@@ -84,10 +84,6 @@ static char *_mcs251_keywords[] =
   NULL
 };
 
-
-
-void mcs251_assignRegisters (ebbIndex *);
-
 static int regParmFlg = 0;      /* determine if we can register a parameter     */
 static int regBitParmFlg = 0;   /* determine if we can register a bit parameter */
 static struct sym_link *regParmFuncType;
@@ -1169,7 +1165,7 @@ PORT mcs251_port =
   NULL,
   _mcs251_finaliseOptions,
   _mcs251_setDefaultOptions,
-  mcs251_assignRegisters,
+  mcs251_ralloc2_assignRegisters,
   _mcs251_getRegName,
   0,
   _mcs251_rtrackUpdate,

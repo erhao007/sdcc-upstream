@@ -1,6 +1,7 @@
 /*------------------------------------------------------------------------
 
-  ralloc2.cc - register allocator for the MCS-251 port (MT-1C)
+  ralloc2.cc - register allocator for the MCS-251 port (MT-1C model;
+  MT-1D default path)
 
   Reuses SDCC's shared register-allocation framework
   (SDCCralloc.hpp / SDCCsalloc.hpp): the control-flow graph, the
@@ -9,7 +10,7 @@
   graph; no second allocator framework or tree-decomposition path is
   introduced.
 
-  Scope of this step (roadmap MT-1C):
+  Scope of the allocator model (roadmap MT-1C):
     - model the full legacy register pool R0..R9 + R12..R15 (R10/R11
       stay unallocatable, R16..R31 stay closed);
     - model WR/DR overlap as consecutive-byte tuples with legal starts
@@ -22,9 +23,10 @@
     - fixed raw temporaries (ACC/B/DPL/DPH/DPXL, DR20/DR24/DR28,
       CY/b0..b7) stay outside the pool, modelled as clobber classes.
 
-  The default compilation path keeps using ralloc.c.  The directed
-  adapter at the bottom is linked only into the gate's temporary
-  compiler (see tests/check-ralloc2-directed.py).
+  MT-1D installs the ralloc2 adapter as the default MCS-251 port
+  callback while retaining ralloc.c for the legacy comparison path.
+  The directed gate still rebuilds a temporary compiler so it can
+  exercise this exact source and the native-MUL mutation.
 
   The shared framework's compile-time bound MAX_NUM_REGS == 9 in
   SDCCralloc.hpp is too small for the 14-slot pool.  This file does
@@ -100,7 +102,7 @@ static const byte_reg_desc pool_byte_regs[kPoolByteRegs] =
    4-aligned run of four.  Preference order mirrors the legacy
    candidate lists.  No second physical register file exists. */
 static const int word_starts[7] = { 6, 4, 2, 14, 12, 8, 0 };
-static const int dword_starts[3] = { 4, 12, 0 };
+static const int dword_starts[3] = { 4, 0, 12 };
 
 static inline bool
 byte_rnum_in_pool (int rnum)
@@ -163,7 +165,7 @@ byte_clobber (int rnum)
 }
 
 /* Operand admission: plain/float scalars of 1..4 bytes may live in the
-   pool; pointers, bits, aggregates and wider scalars spill. */
+   pool; pointers, aggregate values, bits and wider scalars spill. */
 enum operand_kind
 {
   kind_plain,
@@ -322,7 +324,11 @@ spill_this (symbol *sym)
   int useXstack, model;
 
   if (sym->remat)
-    return;
+    {
+      /* gen.c treats nRegs == 0 as the rematerialised/spill path. */
+      sym->nRegs = 0;
+      return;
+    }
 
   if (sym->usl.spillLoc)
     {
@@ -333,6 +339,7 @@ spill_this (symbol *sym)
       sym->isspilt = sym->spillA = 1;
       if (!sym->remat)
         sym->usl.spillLoc->allocreq++;
+      sym->nRegs = 0;
       return;
     }
 
@@ -370,6 +377,7 @@ spill_this (symbol *sym)
     sloc->allocreq++;
   sloc->isFree = 0;
   addSetHead (&sloc->usl.itmpStack, sym);
+  sym->nRegs = 0;
 }
 
 /*------------------------------------------------------------------------
@@ -452,7 +460,7 @@ ralloc2_assign (const I_t &I)
     std::stable_sort (idx.begin (), idx.end (),
                       [&] (unsigned a, unsigned b)
                       { return order_syms[a]->liveFrom <
-                              order_syms[b]->liveFrom; });
+                               order_syms[b]->liveFrom; });
     std::vector<symbol *> s2;
     std::vector<std::vector<int> *> v2;
     for (unsigned i : idx)
@@ -633,140 +641,6 @@ set_masks_from_live_ranges (ebbIndex *ebbi)
 }
 
 /*------------------------------------------------------------------------
- * Rematerialisation marking (focused replica of the legacy
- * packRegisters() rules that matter for pool admission: pointer iTemp
- * chains rooted at address-of-constant become rematerialisable instead
- * of spilling to RAM).  packRegisters() itself is port-static in
- * ralloc.c, so only its remat/uptr transformations are mirrored here.
- *------------------------------------------------------------------------*/
-static void
-pack_remat (eBBlock **ebbs, int count)
-{
-  for (int b = 0; b < count; ++b)
-    for (iCode *ic = ebbs[b]->sch; ic; ic = ic->next)
-      {
-        /* address of a true sym: rematerialisable */
-        if (ic->op == ADDRESS_OF &&
-            IS_ITEMP (IC_RESULT (ic)) &&
-            IS_TRUE_SYMOP (IC_LEFT (ic)) &&
-            bitVectnBitsOn (OP_DEFS (IC_RESULT (ic))) == 1 &&
-            !OP_SYMBOL (IC_LEFT (ic))->onStack)
-          {
-            OP_SYMBOL (IC_RESULT (ic))->remat = 1;
-            OP_SYMBOL (IC_RESULT (ic))->rematiCode = ic;
-            OP_SYMBOL (IC_RESULT (ic))->usl.spillLoc = NULL;
-          }
-
-        /* straight assignment carries the remat flag */
-        if (ic->op == '=' &&
-            !POINTER_SET (ic) &&
-            IS_SYMOP (IC_RIGHT (ic)) &&
-            OP_SYMBOL (IC_RIGHT (ic))->remat &&
-            !IS_CAST_ICODE (OP_SYMBOL (IC_RIGHT (ic))->rematiCode) &&
-            !isOperandGlobal (IC_RESULT (ic)) &&
-            bitVectnBitsOn (OP_SYMBOL (IC_RESULT (ic))->defs) <= 1 &&
-            !OP_SYMBOL (IC_RESULT (ic))->addrtaken)
-          {
-            OP_SYMBOL (IC_RESULT (ic))->remat =
-              OP_SYMBOL (IC_RIGHT (ic))->remat;
-            OP_SYMBOL (IC_RESULT (ic))->rematiCode =
-              OP_SYMBOL (IC_RIGHT (ic))->rematiCode;
-          }
-
-        /* pointer-to-pointer cast of a remat */
-        if (ic->op == CAST &&
-            IS_SYMOP (IC_RIGHT (ic)) &&
-            OP_SYMBOL (IC_RIGHT (ic))->remat &&
-            bitVectnBitsOn (OP_DEFS (IC_RESULT (ic))) == 1 &&
-            !OP_SYMBOL (IC_RESULT (ic))->addrtaken)
-          {
-            sym_link *to_type = operandType (IC_LEFT (ic));
-            sym_link *from_type = operandType (IC_RIGHT (ic));
-            if (IS_PTR (to_type) && IS_PTR (from_type))
-              {
-                OP_SYMBOL (IC_RESULT (ic))->remat = 1;
-                OP_SYMBOL (IC_RESULT (ic))->rematiCode = ic;
-                OP_SYMBOL (IC_RESULT (ic))->usl.spillLoc = NULL;
-              }
-          }
-
-        /* +/- literal on a remat */
-        if ((ic->op == '+' || ic->op == '-') &&
-            IS_SYMOP (IC_LEFT (ic)) &&
-            IS_ITEMP (IC_RESULT (ic)) &&
-            IS_OP_LITERAL (IC_RIGHT (ic)) &&
-            OP_SYMBOL (IC_LEFT (ic))->remat &&
-            (!IS_SYMOP (IC_RIGHT (ic)) ||
-             !IS_CAST_ICODE (OP_SYMBOL (IC_RIGHT (ic))->rematiCode)) &&
-            bitVectnBitsOn (OP_DEFS (IC_RESULT (ic))) == 1)
-          {
-            OP_SYMBOL (IC_RESULT (ic))->remat = 1;
-            OP_SYMBOL (IC_RESULT (ic))->rematiCode = ic;
-            OP_SYMBOL (IC_RESULT (ic))->usl.spillLoc = NULL;
-          }
-
-        /* pointer usage marks */
-        if (POINTER_SET (ic) && IS_SYMOP (IC_RESULT (ic)))
-          OP_SYMBOL (IC_RESULT (ic))->uptr = 1;
-        if (POINTER_GET (ic) && IS_SYMOP (IC_LEFT (ic)))
-          OP_SYMBOL (IC_LEFT (ic))->uptr = 1;
-
-        /* R0/R1 pointer-scratch accounting (replica of the legacy
-           packRegisters block): gen.c relies on mcs251_ptrRegReq to
-           include ar0/ar1 in callee_saves save sets and elsewhere
-           whenever the function addresses stack/idata/near-pointer
-           operands through R0/R1. */
-        if (!SKIP_IC2 (ic))
-          {
-            if (options.useXstack && ic->parmPush &&
-                (ic->op == IPUSH || ic->op == IPOP))
-              mcs251_ptrRegReq++;
-            if (ic->op == IFX && IS_SYMOP (IC_COND (ic)))
-              mcs251_ptrRegReq +=
-                ((OP_SYMBOL (IC_COND (ic))->onStack ||
-                  OP_SYMBOL (IC_COND (ic))->iaccess ||
-                  SPEC_OCLS (OP_SYMBOL (IC_COND (ic))->etype) == idata)
-                 ? 1 : 0);
-            else if (ic->op == JUMPTABLE && IS_SYMOP (IC_JTCOND (ic)))
-              mcs251_ptrRegReq +=
-                ((OP_SYMBOL (IC_JTCOND (ic))->onStack ||
-                  OP_SYMBOL (IC_JTCOND (ic))->iaccess ||
-                  SPEC_OCLS (OP_SYMBOL (IC_JTCOND (ic))->etype) == idata)
-                 ? 1 : 0);
-            else
-              {
-                if (IS_SYMOP (IC_LEFT (ic)))
-                  mcs251_ptrRegReq +=
-                    ((OP_SYMBOL (IC_LEFT (ic))->onStack ||
-                      OP_SYMBOL (IC_LEFT (ic))->iaccess ||
-                      SPEC_OCLS (OP_SYMBOL (IC_LEFT (ic))->etype) == idata)
-                     ? 1 : 0);
-                if (IS_SYMOP (IC_RIGHT (ic)))
-                  mcs251_ptrRegReq +=
-                    ((OP_SYMBOL (IC_RIGHT (ic))->onStack ||
-                      OP_SYMBOL (IC_RIGHT (ic))->iaccess ||
-                      SPEC_OCLS (OP_SYMBOL (IC_RIGHT (ic))->etype) == idata)
-                     ? 1 : 0);
-                if (IS_SYMOP (IC_RESULT (ic)))
-                  mcs251_ptrRegReq +=
-                    ((OP_SYMBOL (IC_RESULT (ic))->onStack ||
-                      OP_SYMBOL (IC_RESULT (ic))->iaccess ||
-                      SPEC_OCLS (OP_SYMBOL (IC_RESULT (ic))->etype) == idata)
-                     ? 1 : 0);
-                if (POINTER_GET (ic) && IS_SYMOP (IC_LEFT (ic)) &&
-                    getSize (OP_SYMBOL (IC_LEFT (ic))->type) <=
-                      (unsigned int) NEARPTRSIZE)
-                  mcs251_ptrRegReq++;
-                if (POINTER_SET (ic) && IS_SYMOP (IC_RESULT (ic)) &&
-                    getSize (OP_SYMBOL (IC_RESULT (ic))->type) <=
-                      (unsigned int) NEARPTRSIZE)
-                  mcs251_ptrRegReq++;
-              }
-          }
-      }
-}
-
-/*------------------------------------------------------------------------
  * Live-range preparation: the legacy pipeline computes nRegs/regType
  * before allocation.  Set them for every iTemp live range (gen.c
  * relies on nRegs); mark only shapes the pool model admits as
@@ -817,8 +691,10 @@ prepare_live_ranges (ebbIndex *ebbi)
          nonzero nRegs. */
       sym->nRegs = 0;
 
-      if (mcs251_ralloc2::admit_operand (size, kind) ==
-          mcs251_ralloc2::admit_in_reg)
+      const mcs251_ralloc2::admit_decision admission =
+        mcs251_ralloc2::admit_operand (size, kind);
+
+      if (admission == mcs251_ralloc2::admit_in_reg)
         {
           sym->nRegs = size;
           sym->for_newralloc = true;
@@ -840,6 +716,66 @@ spill_unadmitted (void)
         !sym->accuse && !sym->ruonly && !sym->isspilt &&
         sym->liveTo != sym->liveFrom && !sym->usl.spillLoc)
       spill_this (sym);
+}
+
+/* Keep ralloc2 on the proven scalar subset until the remaining
+   call/stack/aggregate paths have their own invariants.  Falling back to the
+   retained allocator is fail-closed: a partial graph assignment must not
+   reach gen.c as if it were complete. */
+static bool
+ralloc2_should_fallback (ebbIndex *ebbi)
+{
+#ifdef MCS251_RALLOC2_FORCE
+  /* The directed gate uses this explicit override to exercise the actual
+     allocator.  It is intentionally not a user-facing compiler option: the
+     production callback remains fail-closed until each excluded shape has
+     its own proven invariants. */
+  (void) ebbi;
+  return false;
+#else
+  int pressure = 0;
+  symbol *sym;
+  int key;
+
+  if (options.stackAuto ||
+      (currFunc && (IFFUNC_ISREENT (currFunc->type) ||
+                    IFFUNC_ISISR (currFunc->type))))
+    return true;
+
+  for (int b = 0; b < ebbi->count; ++b)
+    for (iCode *ic = ebbi->bbOrder[b]->sch; ic; ic = ic->next)
+      switch (ic->op)
+        {
+        case CALL:
+        case PCALL:
+        case SEND:
+        case RECEIVE:
+        case JUMPTABLE:
+        case INLINEASM:
+          return true;
+        default:
+          if (POINTER_GET (ic) || POINTER_SET (ic))
+            return true;
+          break;
+        }
+
+  for (sym = (symbol *) hTabFirstItem (liveRanges, &key); sym;
+       sym = (symbol *) hTabNextItem (liveRanges, &key))
+    {
+      /* Do not restrict this guard to iTemps: a user aggregate/bit symbol
+         can still reach the live-range table without being an allocator
+         temporary, and its legacy storage convention is not represented by
+         the ralloc2 graph. */
+      if (IS_AGGREGATE (sym->type) || IS_BITVAR (sym->etype))
+        return true;
+      if (sym->isitmp && sym->liveTo != sym->liveFrom)
+      {
+        pressure += getSize (sym->type);
+      }
+    }
+
+  return pressure > 64;
+#endif
 }
 
 /*------------------------------------------------------------------------*/
@@ -917,10 +853,10 @@ mcs251_ralloc2_cc (ebbIndex *ebbi)
   return ic;
 }
 
-/* Directed-test adapter.  MT-1C still does not install this in
-   mcs251_port: production continues to use mcs251_assignRegisters in
-   ralloc.c.  The gate links a temporary compiler whose port table
-   names this adapter (tests/check-ralloc2-directed.py). */
+/* Port callback used by the production MCS-251 table and by the
+   directed-test compiler (tests/check-ralloc2-directed.py).  The
+   legacy mcs251_assignRegisters entry remains linkable for the MT-1D
+   comparison round. */
 void
 mcs251_ralloc2_assignRegisters (ebbIndex *ebbi)
 {
@@ -932,7 +868,13 @@ mcs251_ralloc2_assignRegisters (ebbIndex *ebbi)
   mcs251_ralloc2_sloc_num = 0;
   mcs251_ptrRegReq = 0;
 
-  pack_remat (ebbs, count);
+  if (ralloc2_should_fallback (ebbi))
+    {
+      mcs251_assignRegisters (ebbi);
+      return;
+    }
+
+  mcs251_ralloc2_prepare (ebbi);
   prepare_live_ranges (ebbi);
   spill_unadmitted ();
 
@@ -1046,7 +988,8 @@ main (void)
          tuple_cost (12) < tuple_cost (8) && tuple_cost (8) < tuple_cost (0),
          "tuple preference mirrors legacy order");
 
-  /* Assignment selection is enabled in MT-1C. */
+  /* Assignment selection was introduced in MT-1C and remains enabled in
+     MT-1D. */
   CHECK (assignment_selection_enabled (), "assignment selection enabled");
 
   if (failures)

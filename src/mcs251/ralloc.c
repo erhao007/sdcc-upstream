@@ -3670,6 +3670,15 @@ positionRegsReverse (eBBlock ** ebbs, int count)
 /* assignRegisters - assigns registers to each live range as need  */
 /*-----------------------------------------------------------------*/
 void
+mcs251_ralloc2_prepare (ebbIndex * ebbi)
+{
+  int i;
+
+  for (i = 0; i < ebbi->count; ++i)
+    packRegisters (ebbi->bbOrder, i);
+}
+
+void
 mcs251_assignRegisters (ebbIndex * ebbi)
 {
   eBBlock **ebbs = ebbi->bbOrder;
