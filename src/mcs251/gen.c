@@ -442,7 +442,6 @@ saveRegisters (iCode * lic)
     rsave = bitVectCopy (ic->rMask);
   /* but skip the ones for the result */
   rsave = bitVectCplAnd (rsave, mcs251_rUmaskForOp (IC_RESULT (ic)));
-
   ic->regsSaved = 1;
   if (options.useXstack)
     {
@@ -1480,9 +1479,14 @@ genCall (iCode * ic)
   if (!assignResultGenerated &&
        ((IS_ITEMP (IC_RESULT (ic)) &&
          !IS_BIT (OP_SYM_ETYPE (IC_RESULT (ic))) &&
-         (OP_SYMBOL (IC_RESULT (ic))->nRegs ||
-          OP_SYMBOL (IC_RESULT (ic))->accuse ||
-          OP_SYMBOL (IC_RESULT (ic))->spildir || IS_BIT (etype)))
+          (OP_SYMBOL (IC_RESULT (ic))->nRegs ||
+           OP_SYMBOL (IC_RESULT (ic))->accuse ||
+           OP_SYMBOL (IC_RESULT (ic))->spildir ||
+#ifndef MCS251_RALLOC2_DISABLE_CALL_RESULT_SPILL_MATERIALIZATION
+           OP_SYMBOL (IC_RESULT (ic))->isspilt || IS_BIT (etype)))
+#else
+           IS_BIT (etype)))
+#endif
          || IS_TRUE_SYMOP (IC_RESULT (ic))))
     {
       _G.accInUse++;
@@ -1686,7 +1690,14 @@ genPcall (iCode * ic)
   /* if we need assign a result value */
   if (!assignResultGenerated && ((IS_ITEMP (IC_RESULT (ic)) &&
        !IS_BIT (OP_SYM_ETYPE (IC_RESULT (ic))) &&
-       (OP_SYMBOL (IC_RESULT (ic))->nRegs || OP_SYMBOL (IC_RESULT (ic))->accuse || OP_SYMBOL (IC_RESULT (ic))->spildir)) || IS_TRUE_SYMOP (IC_RESULT (ic))))
+       (OP_SYMBOL (IC_RESULT (ic))->nRegs ||
+        OP_SYMBOL (IC_RESULT (ic))->accuse ||
+        OP_SYMBOL (IC_RESULT (ic))->spildir ||
+#ifndef MCS251_RALLOC2_DISABLE_CALL_RESULT_SPILL_MATERIALIZATION
+        OP_SYMBOL (IC_RESULT (ic))->isspilt)) || IS_TRUE_SYMOP (IC_RESULT (ic))))
+#else
+        0)) || IS_TRUE_SYMOP (IC_RESULT (ic))))
+#endif
     {
       _G.accInUse++;
       aopOp (IC_RESULT (ic), ic, FALSE);
@@ -3051,6 +3062,19 @@ genPlusIncr (iCode * ic)
   return FALSE;
 }
 
+/* Keep test-only mutation scope at the two genPlus call sites below.  The
+   production path always routes fixed R8..R15 sources through B because the
+   byte form of ADD/ADDC accepts only R0..R7. */
+static void
+mcs251EmitPlusAccumulatorOp (const char *instruction, const char *source)
+{
+#ifdef MCS251_RALLOC2_DISABLE_FIXED_REGISTER_ACCUMULATOR_LOWERING
+  emitcode (instruction, "a,%s", source);
+#else
+  emitRestrictedAccumulatorOp (instruction, source);
+#endif
+}
+
 /*-----------------------------------------------------------------*/
 /* outBitAcc - output a bit in acc                                 */
 /*-----------------------------------------------------------------*/
@@ -3538,7 +3562,7 @@ genPlus (iCode * ic)
               MOVA (opGet (leftOp, offset, FALSE, FALSE));
               if (preserveB)
                 emitpush ("b");
-              emitRestrictedAccumulatorOp (
+              mcs251EmitPlusAccumulatorOp (
                 add, aopGet (rightOp->aop, offset, false,
                              !aopInRn (rightOp->aop, offset)));
               if (preserveB)
@@ -3549,7 +3573,7 @@ genPlus (iCode * ic)
               MOVA (opGet (rightOp, offset, FALSE, FALSE));
               if (preserveB)
                 emitpush ("b");
-              emitRestrictedAccumulatorOp (
+              mcs251EmitPlusAccumulatorOp (
                 add, aopGet (leftOp->aop, offset, false,
                              !aopInRn (leftOp->aop, offset)));
               if (preserveB)
@@ -3854,7 +3878,29 @@ genMinus (iCode * ic)
         {
           if (useCarry || ((lit >> (offset * 8)) & 0x0ffll))
             {
-              MOVA (opGet (IC_LEFT (ic), offset, FALSE, FALSE));
+              /* Peephole 240 changes
+                   mov a,rN / addc a,#0
+                 into clr a / addc a,rN.  The latter only encodes R0-R7,
+                 so keep a zero-byte carry propagation from an R8-R15
+                 source in an explicitly encodable A:B form.  This is the
+                 literal-subtraction counterpart of the genPlus guard. */
+              const char *fixedCarryByte =
+                useCarry && !((lit >> (offset * 8)) & 0x0ffll) &&
+                AOP_TYPE (IC_LEFT (ic)) == AOP_REG &&
+                offset < AOP_SIZE (IC_LEFT (ic)) ?
+                IC_LEFT (ic)->aop->aopu.aop_reg[offset]->name : NULL;
+
+              if (fixedCarryByte && isFixedByteRegisterOperand (fixedCarryByte))
+                {
+                  bool pushedB = pushB ();
+
+                  MOVB (fixedCarryByte);
+                  emitcode ("clr", "a");
+                  emitcode ("addc", "a,b");
+                  popB (pushedB);
+                }
+              else
+                MOVA (opGet (IC_LEFT (ic), offset, FALSE, FALSE));
               if (!offset && !size && lit == (unsigned long long) - 1)
                 {
                   emitcode ("dec", "a");
@@ -11025,6 +11071,41 @@ mcs251CopyPlainBytes (operand *result, operand *right, int size)
         if (AOP (result)->aopu.aop_reg[destination] ==
             AOP (right)->aopu.aop_reg[source])
           destructiveOverlap = TRUE;
+
+#ifndef MCS251_RALLOC2_DISABLE_SPILL_COPY_OVERLAP
+  /* Spill-slot colouring may coalesce the result of a narrowing CAST with
+     its dying input.  Scalar bytes are laid out big-endian, so a low-to-high
+     copy can then overwrite a source byte that has not been read yet (for
+     example a 32-bit uintptr_t narrowed back to a 24-bit pointer).  The
+     arithmetic paths already protect stack-slot overlap; plain copies must
+     do the same for both stack and direct-DATA spill slots. */
+  if ((AOP_TYPE (result) == AOP_MCS251_STK &&
+       AOP_TYPE (right) == AOP_MCS251_STK) ||
+      (AOP_TYPE (result) == AOP_DIR && AOP_TYPE (right) == AOP_DIR &&
+       !strcmp (AOP (result)->aopu.aop_dir,
+                AOP (right)->aopu.aop_dir)))
+    {
+      for (int destination = 0; destination < size; ++destination)
+        {
+          int destinationAddress =
+            mcs251ScalarByteOffset (AOP (result), destination);
+          if (AOP_TYPE (result) == AOP_MCS251_STK)
+            destinationAddress +=
+              stackoffset (AOP (result)->aopu.aop_sym);
+
+          for (int source = destination + 1;
+               source < AOP_SIZE (right); ++source)
+            {
+              int sourceAddress =
+                mcs251ScalarByteOffset (AOP (right), source);
+              if (AOP_TYPE (right) == AOP_MCS251_STK)
+                sourceAddress += stackoffset (AOP (right)->aopu.aop_sym);
+              if (destinationAddress == sourceAddress)
+                destructiveOverlap = TRUE;
+            }
+        }
+    }
+#endif
 
   if (destructiveOverlap)
     {

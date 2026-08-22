@@ -40,9 +40,11 @@ cp "$test_dir/link.lk" "$work_dir/"
     "$linker" -nf link.lk
 )
 
-if ! cmp -s "$test_dir/linked.expected.ihx" "$work_dir/linked.ihx"; then
+if ! diff -q --strip-trailing-cr "$test_dir/linked.expected.ihx" \
+        "$work_dir/linked.ihx" >/dev/null; then
     echo "24-bit relocation/Intel HEX mismatch" >&2
-    diff -u "$test_dir/linked.expected.ihx" "$work_dir/linked.ihx" >&2 || true
+    diff -u --strip-trailing-cr "$test_dir/linked.expected.ihx" \
+        "$work_dir/linked.ihx" >&2 || true
     exit 1
 fi
 

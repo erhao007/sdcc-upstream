@@ -22,7 +22,7 @@ static char *zero = "#0x00";
 static char *one = "#0x01";
 static char *spname;
 
-unsigned mcs251_fReturnSize = 4;  /* shared with ralloc.c */
+unsigned mcs251_fReturnSize = 4;  /* shared with the MCS-251 allocator support */
 const char **mcs251_fReturn = mcs251_fReturnRegisters;
 const char *mcs251_fReturnRegisters[] = { "dpl", "dph", "b", "a", "r4", "r5", "r6", "r7" }; // Historically the registers used for return values. Got abused for other stuff since, then partially replaced by aopArg and aopRet.
 static asmop *aopRet (sym_link *ftype);

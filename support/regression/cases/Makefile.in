@@ -8,6 +8,15 @@ M4 = @M4@
 
 # Script that takes a source test suite and generates the iterations
 GENERATE_CASES = $(srcdir)/generate-cases.py
+
+# Generated wrappers embed the source path in #include "..."; a native
+# Windows sdcc cannot open MSYS-style /e/... paths, so emit a mixed-style
+# native path there.  POSIX hosts are unchanged.
+ifdef MSYSTEM
+  WRAPPER_INCLUDE = $(shell cygpath -m "$<")
+else
+  WRAPPER_INCLUDE = $<
+endif
 MAKE_DRV = $(srcdir)/mkdrv.py # BUG? use 1 line of sed?
 TESTS_DIR = $(srcdir)/../tests
 GTE_TESTS_DIR = $(srcdir)/../gte
@@ -891,7 +900,7 @@ qct_%.c: $(QC_TESTS_DIR)/%.c Makefile
 	@printf '#define MAINARGS' >> $@
 	@(grep -q main.*argv $< && echo " 0, 0" || \
 	 (grep -q main.*argc $< && echo " 0" || echo )) >> $@
-	@echo '#include "$<"' >> $@
+	@echo '#include "$(WRAPPER_INCLUDE)"' >> $@
 	@printf 'void __runSuite(void) { __prints("Running main\\n"); ASSERT(!main_(MAINARGS)); }' >> $@
 	@echo >> $@
 
@@ -912,7 +921,7 @@ tcc_%.c: $(TCC_TESTS_DIR)/%.c Makefile
 # non-standard __FUNCTION__
 	@grep -q __FUNCTION__ $< && echo "#define __FUNCTION__ __func__" >> $@ || :
 	@grep -q tcc_backtrace $< && echo "#define tcc_backtrace printf" >> $@ || :
-	@echo '#include "$<"' >> $@
+	@echo '#include "$(WRAPPER_INCLUDE)"' >> $@
 	@echo '#undef abort' >> $@ # yikes, 77_push_pop_macro.c
 
 	@echo '#ifdef __SDCC' >> $@
@@ -954,7 +963,7 @@ gte_%.c: $(GTE_TESTS_DIR)/%.c Makefile
 	@(grep -q main.*argv $< && echo " 0, 0" || \
 	 (grep -q main.*argc $< && echo " 0" || echo )) >> $@
 
-	@echo '#include "$<"' >> $@
+	@echo '#include "$(WRAPPER_INCLUDE)"' >> $@
 	@printf 'void __runSuite(void) { __prints("Running main\\n");' >> $@
 	@grep -q exit $< && echo 'if(!setjmp(after_main))' >> $@ || :
 	@printf 'main_(MAINARGS); }\n' >> $@

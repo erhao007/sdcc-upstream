@@ -2,18 +2,20 @@
    MT-1A baseline: setjmp/longjmp, pointer post-increment, switch,
    aggregate by-value/return, bit-scalar arithmetic and shifts.
 
-   Same self-checking protocol as ralloc-baseline.c: control block at
-   0x30 (0x55 PASS / 0xEE + line FAIL), build with --data-loc 0x38.
+   Same self-checking protocol as ralloc-baseline.c, but the control block is
+   isolated in XDATA at 0x010100 (0x55 PASS / 0xEE + line FAIL).  This keeps
+   the complete post-bit-bank DATA window available to the nine combined
+   stress shapes when the fixture is built with --data-loc 0x30.
    All operands come from volatile XDATA seeds; expected constants were
    derived with an independent host calculation.  */
 
 #include <stdint.h>
 #include <setjmp.h>
 
-volatile __data __at (0x30) uint8_t  rx_status;
-volatile __data __at (0x31) uint8_t  rx_reserved;
-volatile __data __at (0x32) uint16_t rx_fail_line;
-volatile __data __at (0x34) uint32_t rx_extra;
+volatile __xdata __at (0x010100) uint8_t  rx_status;
+volatile __xdata __at (0x010101) uint8_t  rx_reserved;
+volatile __xdata __at (0x010102) uint16_t rx_fail_line;
+volatile __xdata __at (0x010104) uint32_t rx_extra;
 
 #define RX_PASS() do { rx_status = 0x55; while (1); } while (0)
 #define RX_ASSERT(cond) do { \

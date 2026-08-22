@@ -8,9 +8,10 @@
    the active images in uCsim, observing the linked XDATA result directly so
    the probe itself adds no status/comparison pressure.
 
-   MCS251_RALLOC2_POINTER_SPILL selects a separate low-pressure image that
-   keeps a pointer value on the no-call/no-dereference ralloc2 path and
-   verifies that its 24-bit arithmetic survives fail-closed spilling.  */
+   MCS251_RALLOC2_POINTER_SPILL (historical macro name) selects a separate
+   low-pressure image that keeps a pointer value on the
+   no-call/no-dereference ralloc2 path and verifies that its 24-bit arithmetic
+   survives target-pointer register allocation.  */
 
 #include <stdint.h>
 

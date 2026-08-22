@@ -90,6 +90,7 @@ check: all $(ASLINK)
 		$(ASX) $(srcdir)/tests/instruction-forms.tsv
 	sh $(srcdir)/tests/check-coverage.sh
 	sh $(srcdir)/tests/check-link.sh $(ASX) $(ASLINK)
+	sh $(srcdir)/tests/check-abi-signature.sh $(ASX) $(ASLINK)
 	sh $(srcdir)/tests/check-errors.sh $(ASX) $(ASLINK)
 
 $(ASLINK):

@@ -1,7 +1,7 @@
 /* ralloc-baseline.c - MT-1A legacy register-allocator behaviour freeze.
 
    Purpose: lock the OBSERVABLE behaviour of the legacy mcs251 allocator
-   (ralloc.c) before ralloc2 work starts, so that any future change that
+   (the former serial allocator) before ralloc2 work starts, so that any future change that
    is not a correct re-allocation shows up as a failing sample here.
 
    Covered hazards (each section is a minimal failing sample for one

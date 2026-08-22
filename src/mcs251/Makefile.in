@@ -4,7 +4,7 @@ top_builddir = @top_builddir@
 top_srcdir   = @top_srcdir@
 
 CPPFLAGS += -I.
-SOURCES = gen.c main.c peep.c ralloc.c rtrack.c
+SOURCES = gen.c main.c peep.c ralloc2_support.c rtrack.c
 PEEPRULES = peeph.rul
 .DEFAULT_GOAL := all
 
@@ -19,7 +19,7 @@ check: all
 		--mcs251-rtrack-source $(srcdir)/rtrack.c \
 		--mcs251-gen-source $(srcdir)/gen.c \
 		--mcs251-gen-lower-source $(srcdir)/gen_lower.c.inc \
-		--mcs251-ralloc-source $(srcdir)/ralloc.c \
+		--mcs251-ralloc-source $(srcdir)/ralloc2_support.c \
 		--mcs51-source $(top_srcdir)/src/mcs51/main.c \
 		--mcs51-peep-source $(top_srcdir)/src/mcs51/peep.c \
 		--mcs51-rtrack-source $(top_srcdir)/src/mcs51/rtrack.c \
@@ -156,7 +156,15 @@ check: all
 		--ralloc2-source $(srcdir)/ralloc2.cc \
 		--baseline-source $(srcdir)/tests/ralloc-baseline.c \
 		--extras-source $(srcdir)/tests/ralloc2-extras.c \
-		--mulreg-source $(srcdir)/tests/ralloc2-mulreg.c
+		--mulreg-source $(srcdir)/tests/ralloc2-mulreg.c \
+		--aggregate-source $(srcdir)/tests/ralloc2-aggregate-bit.c \
+		--call-source $(srcdir)/tests/ralloc2-call-aggregate.c \
+		--pressure-source $(srcdir)/tests/ralloc2-class5-pressure.c \
+		--wide-source $(srcdir)/tests/ralloc2-class5-wide.c \
+		--phase2a-source $(srcdir)/tests/ralloc2-phase2a-fallbacks.c \
+		--spill-copy-source $(srcdir)/tests/ralloc2-spill-copy-overlap.c \
+		--ckd-add-source $(top_srcdir)/device/lib/ckd_add.c \
+		--printf-large-source $(top_srcdir)/device/lib/printf_large.c
 	$(PYTHON) $(srcdir)/tests/check-wide-shift-jump-table.py \
 		--sdcc $(top_builddir)/bin/sdcc \
 		--source $(srcdir)/tests/large-switch.c

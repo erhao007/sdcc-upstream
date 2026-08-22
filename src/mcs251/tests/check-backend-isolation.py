@@ -39,7 +39,6 @@ MCS251_GEN_EXPORTS = (
     "mcs251_init_asmops",
 )
 MCS251_RALLOC_EXPORTS = (
-    "mcs251_assignRegisters",
     "mcs251_rUmaskForOp",
     "mcs251_regWithIdx",
     "mcs251_regname_to_idx",
@@ -164,6 +163,9 @@ def main():
     ralloc_source = Path(args.mcs251_ralloc_source)
     ralloc_text = check_mcs251_source(ralloc_source)
     check_bound_policy(ralloc_source, ralloc_text)
+    if "mcs251_assignRegisters" in ralloc_text or "serialRegAssign" in ralloc_text:
+        raise RuntimeError(
+            f"{ralloc_source} still contains the removed legacy allocator")
     missing_exports = [
         symbol
         for symbol in MCS251_RALLOC_EXPORTS

@@ -930,6 +930,40 @@ mcs251notUsed (const char *what, lineNode *endPl, lineNode *head)
 
   wassert (what);
 
+  /* A four-byte call result is returned in DPL/DPH/B/A.  ralloc2 may prove
+     the high byte dead after the call (for example when the value is used
+     only as a native pointer), but the first materialisation still has to
+     preserve the complete ABI result before a later DPTR load overwrites
+     DPL/DPH.  Peephole 302 must not remove that final ABI capture. */
+  if (!strcmp (what, "r0") && endPl && endPl->line &&
+      strstr (endPl->line, "mov\tr0, a") && head)
+    {
+      lineNode *recent[4] = { NULL, NULL, NULL, NULL };
+      lineNode *pl;
+
+      for (pl = head; pl && pl != endPl; pl = pl->next)
+        {
+          const char *line = pl->line;
+          if (!line || pl->isComment || pl->isDebug || pl->isLabel)
+            continue;
+          while (isspace ((unsigned char) *line))
+            line++;
+          if (!*line || *line == ';' || *line == '.')
+            continue;
+          recent[0] = recent[1];
+          recent[1] = recent[2];
+          recent[2] = recent[3];
+          recent[3] = pl;
+        }
+
+      if (recent[0] && recent[1] && recent[2] && recent[3] &&
+          strstr (recent[0]->line, "ecall\t__mullong") &&
+          strstr (recent[1]->line, "mov\tr3, dpl") &&
+          strstr (recent[2]->line, "mov\tr2, dph") &&
+          strstr (recent[3]->line, "mov\tr1, b"))
+        return false;
+    }
+
   if (!strcmp (what, "dptr"))
     return (mcs251notUsed ("dpl", endPl, head) && mcs251notUsed ("dph", endPl, head));
 

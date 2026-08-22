@@ -84,17 +84,12 @@ bitVect *mcs251_allBankregs (void);
 extern int mcs251_ptrRegReq;
 extern int mcs251_nRegs;
 
-void mcs251_assignRegisters (ebbIndex *);
-
-/* Legacy iCode packing is shared by the ralloc2 migration path so that
-   gen.c receives the same accumulator/assignment reductions as the frozen
-   allocator before register selection begins. */
+/* iCode packing and register metadata support used by ralloc2 before
+   register selection begins. */
 void mcs251_ralloc2_prepare (ebbIndex *ebbi);
 
 /* ralloc2.cc: port-side greedy register allocator over the shared
-   framework's CFG and byte-level conflict graph.  MT-1D installs the
-   allocator as the default port callback while retaining the legacy
-   mcs251_assignRegisters entry for one comparison round. */
+   framework's CFG and byte-level conflict graph. */
 iCode *mcs251_ralloc2_cc (ebbIndex *ebbi);
 void mcs251_ralloc2_assignRegisters (ebbIndex *ebbi);
 

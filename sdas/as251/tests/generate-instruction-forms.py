@@ -9,6 +9,16 @@ the test suite consumes the checked-in TSV, not this generator, so accidental
 changes to the reference model cannot silently change the test oracle.
 """
 
+import sys
+
+# Keep generated matrices byte-comparable with the LF-committed TSV on
+# Windows hosts, where text-mode stdout would otherwise emit CRLF.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(newline="\n")
+    except Exception:
+        pass
+
 from dataclasses import dataclass
 
 

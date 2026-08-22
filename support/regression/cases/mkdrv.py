@@ -11,6 +11,15 @@ Derived from generate-cases, and far too complicated for the task.
 infile = sys.argv[1]
 outdir = sys.argv[2]
 
+# A native Windows sdcc cannot open MSYS-style /e/... paths embedded in
+# generated drivers; convert to a mixed-style native path when cygpath
+# is available (POSIX hosts have no cygpath and are unchanged).
+if infile.startswith("/"):
+    from shutil import which as _which
+    if _which("cygpath"):
+        from subprocess import check_output as _co
+        infile = _co(["cygpath", "-m", infile]).decode().strip()
+
 # Start of the test function table definition
 testfuntableheader = """
 void

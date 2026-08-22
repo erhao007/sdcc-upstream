@@ -271,6 +271,82 @@ EXCLUDE_mcs251 += \
 # below, see EXCLUDE_ARCH_pdk / tcc_110_average).
 EXCLUDE_mcs251 += \
 	tcc_110_average
+# mcs251 small non-stack-auto cannot link these tests within its fixed
+# 128-byte DSEG/OSEG budget.  Keep them in mcs251-large: the full large-model
+# lane is the coverage oracle for these tests (ST-6B-W v17).
+EXCLUDE_mcs251 += \
+	bitintarith \
+	funptrsstructreturn \
+	gte_20001229-1 \
+	gte_20041218-1 \
+	gte_align-2 \
+	gte_pr102134 \
+	gte_pr30185 \
+	itoa \
+	shifts3 \
+	snprintf \
+	structreturn \
+	tcc_05_array \
+	tcc_109_float_struct_calling \
+	tcc_21_char_array \
+	tcc_25_quicksort \
+	tcc_30_hanoi \
+	tcc_36_array_initialisers \
+	tcc_38_multiple_array_index \
+	tcc_55_lshift_type \
+	tcc_80_flexarray \
+	tst_bug-2124 \
+	tst_bug-2516 \
+	tst_bug-2569 \
+	tst_bug-2756 \
+	tst_bug-2890326 \
+	tst_bug-3470 \
+	tst_bug-3495411 \
+	tst_bug-3729 \
+	tst_bug-524697 \
+	tst_bug1057979 \
+	tst_bug3381400 \
+	tst_bug3521024 \
+	tst_constexpr \
+	tst_gcc-torture-execute-20000412-3 \
+	tst_gcc-torture-execute-20001026-1 \
+	tst_gcc-torture-execute-20021120-3 \
+	tst_gcc-torture-execute-20050502-1 \
+	tst_gcc-torture-execute-20050713-1 \
+	tst_gcc-torture-execute-20050826-1 \
+	tst_gcc-torture-execute-20070201-1 \
+	tst_gcc-torture-execute-20100708-1 \
+	tst_gcc-torture-execute-20121108-1 \
+	tst_gcc-torture-execute-960327-1 \
+	tst_gcc-torture-execute-980223 \
+	tst_gcc-torture-execute-pr39339 \
+	tst_gcc-torture-execute-pr43236 \
+	tst_gcc-torture-execute-pr47538 \
+	tst_gcc-torture-execute-pr63641 \
+	tst_gcc-torture-execute-pr69320-3 \
+	tst_gcc-torture-execute-pr78586 \
+	tst_gcc-torture-execute-pr83383 \
+	tst_gcc-torture-execute-pr89634 \
+	tst_gcc-torture-execute-string-opt-5 \
+	tst_gcc-torture-execute-strlen-1 \
+	tst_gcc-torture-execute-struct-ret-1 \
+	tst_malloc \
+	tst_offsetof \
+	tst_p99-conformance \
+	tst_string \
+	tst_wcsnlen \
+	wchar \
+	zeropad
+# MT-1E Class 5: admitting ordinary >64-byte pressure makes these small-model
+# cases exceed the fixed 128-byte DATA/OSEG budget before execution.  They are
+# structural small-model exclusions, not allocator correctness evidence; the
+# corresponding pressure shapes remain covered by the Class-5 directed fixtures
+# and the large/stack-auto lanes where applicable.
+EXCLUDE_mcs251 += \
+	bitintrot \
+	gte_pr40386 \
+	tst_bitfields \
+	tst_bugs-1596270-1736867
 EXCLUDE_mcs51-small-stack-auto += \
 	gte_loop-ivopts-2 \
 	gte_shiftdi-2
@@ -456,4 +532,3 @@ EXCLUDE_f8l += ${EXCLUDE_ARCH_f8}
 EXCLUDE_hc08 += ${EXCLUDE_ARCH_hc08}
 EXCLUDE_s08 += ${EXCLUDE_ARCH_hc08}
 EXCLUDE_s08-stack-auto += ${EXCLUDE_ARCH_hc08}
-
