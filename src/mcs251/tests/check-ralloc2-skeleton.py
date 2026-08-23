@@ -29,6 +29,7 @@ SELECTED_BASELINES = {
 }
 
 VERSION_LINE = re.compile(r"^; Version (\S+ \S+).*$", re.M)
+OPTSDCC_LINE = re.compile(r"^[ \t]*\.optsdcc .*$", re.M)
 
 
 def _host_env():
@@ -79,7 +80,31 @@ def defines_symbol(nm_text, symbol):
 
 
 def normalize_asm(text):
-    return VERSION_LINE.sub(r"; Version \1 <host elided>", text)
+    text = VERSION_LINE.sub(r"; Version \1 <host elided>", text)
+
+    def normalize_optsdcc(match):
+        signature = match.group(0).strip()
+        if not signature.startswith(".optsdcc stc32-mcs251 "):
+            return match.group(0)
+        tokens = signature.split()
+        model = next(token.split("=", 1)[1]
+                     for token in tokens if token.startswith("model="))
+        legacy = [".optsdcc", "-mmcs251", f"--model-{model}"]
+        if "xstack=1" in tokens:
+            legacy.append("--xstack")
+        if "reg-params=0" in tokens:
+            legacy.append("--no-reg-params")
+        if "all-callee-saves=1" in tokens:
+            legacy.append("--all-callee-saves")
+        # The Phase-2A line predates the canonical ABI metadata and did not
+        # encode stack-auto/int/float reentrancy.  Preserve that exact legacy
+        # spelling so the freeze remains a code-generation check.
+        return "\t" + " ".join(legacy)
+
+    # MT-2B changes the ABI transport line deliberately.  Keep the Phase-2A
+    # code-generation freeze focused on emitted code rather than its metadata;
+    # check-driver.sh verifies the complete canonical signature separately.
+    return OPTSDCC_LINE.sub(normalize_optsdcc, text)
 
 
 def compile_probe(sdcc, workdir, flags, source_name, out_name):

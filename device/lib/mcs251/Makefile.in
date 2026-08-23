@@ -25,6 +25,17 @@ MCS51_GENERATED_ASM = $(filter-out $(MCS251_ASM_OBJ:.rel=.asm),$(OBJ:.rel=.asm))
 
 ASFLAGS = -plosgff
 
+# Runtime assembly is linked under the same ABI gate as compiler-generated
+# objects.  The parent device/lib makefile supplies MODELFLAGS for the four
+# MCS-251 library variants; derive the approved signature from those flags.
+MCS251_ABI_MODEL = $(if $(findstring --model-large,$(MODELFLAGS)),large,small)
+MCS251_ABI_STACK_AUTO = $(if $(findstring --stack-auto,$(MODELFLAGS)),1,0)
+MCS251_ABI_SIGNATURE = stc32-mcs251 abi-major=1 abi-minor=0 target=mcs251 \
+model=$(MCS251_ABI_MODEL) stack-auto=$(MCS251_ABI_STACK_AUTO) xstack=0 \
+intlong-reent=$(MCS251_ABI_STACK_AUTO) float-reent=$(MCS251_ABI_STACK_AUTO) \
+reg-params=1 all-callee-saves=0 sdcccall=2 regset=r0-r9,r12-r15 \
+compiler-build=mcs251-abi1.0-r1
+
 all: $(PORTDIR)/$(LIB)
 
 $(PORTDIR)/$(LIB): $(OBJ) Makefile
@@ -42,19 +53,26 @@ else
 endif
 
 $(MCS251_ASM_OBJ): %.rel: $(srcdir)/%.asm
-	test $(srcdir) = . || cp $< .
-	-$(AS) $(ASFLAGS) $(notdir $<)
-	test $(srcdir) = . || rm $(notdir $<)
+	{ printf '\t.optsdcc %s\n' "$(MCS251_ABI_SIGNATURE)"; cat $<; } > $*.mcs251.asm
+	-$(AS) $(ASFLAGS) $*.mcs251.asm
+	test -f $*.mcs251.rel && mv $*.mcs251.rel $*.rel
+	test -f $*.mcs251.lst && mv $*.mcs251.lst $*.lst
+	test -f $*.mcs251.sym && mv $*.mcs251.sym $*.sym
+	rm -f $*.mcs251.asm
 
 %.rel: $(MCS51_RUNTIME)/%.asm
-	sed \
+	{ printf '\t.optsdcc %s\n' "$(MCS251_ABI_SIGNATURE)"; sed \
 		-e 's/\([[:space:]]\)lcall\([[:space:]]\)/\1ecall\2/g' \
 		-e 's/\([[:space:]]\)ljmp\([[:space:]]\)/\1ejmp\2/g' \
 		-e 's/^\([[:space:]]*\)mov\([[:space:]][[:space:]]*\)sp,#__start__stack/\1mov\2spx,#__start__stack/' \
 		-e 's/^\([[:space:]]*\)ret$$/\1eret/' \
 		-e 's/^\([[:space:]]*\)ret\([[:space:];]\)/\1eret\2/' \
-		$< > $*.asm
-	-$(AS) $(ASFLAGS) $*.asm
+		$<; } > $*.mcs251.asm
+	-$(AS) $(ASFLAGS) $*.mcs251.asm
+	test -f $*.mcs251.rel && mv $*.mcs251.rel $*.rel
+	test -f $*.mcs251.lst && mv $*.mcs251.lst $*.lst
+	test -f $*.mcs251.sym && mv $*.mcs251.sym $*.sym
+	rm -f $*.mcs251.asm
 
 clean:
 	rm -f $(MCS51_GENERATED_ASM) *.rel *.sym *.lst *~ *.lib

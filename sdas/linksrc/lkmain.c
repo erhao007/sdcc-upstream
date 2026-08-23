@@ -102,6 +102,147 @@ void Areas51 (void)
 }
 /* end sdld 8051 specific */
 
+/* The MCS-251 ABI contract deliberately uses a closed, fixed-order grammar.
+   Keeping the validator in the linker makes the strict mode independent of
+   the assembler implementation and rejects unsigned/legacy objects before
+   any output is written. */
+static int
+mcs251_abi_signature_valid (const char *signature)
+{
+        static const char *const fixed[] = {
+                "stc32-mcs251",
+                "abi-major=1",
+                "abi-minor=0",
+                "target=mcs251",
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                "sdcccall=2",
+                "regset=r0-r9,r12-r15",
+                "compiler-build=mcs251-abi1.0-r1"
+        };
+        char copy[241];
+        char *token;
+        size_t length;
+        unsigned int i;
+
+        if (signature == NULL)
+                return 0;
+        length = strlen (signature);
+        if (length == 0 || length > 240 || signature[0] == ' ' ||
+            signature[length - 1] == ' ' || strstr (signature, "  ") != NULL)
+                return 0;
+        for (i = 0; i < length; ++i)
+                if (signature[i] == '\t' || signature[i] == '\r' ||
+                    signature[i] == '\n')
+                        return 0;
+
+        memcpy (copy, signature, length + 1);
+        token = strtok (copy, " ");
+        for (i = 0; i < sizeof (fixed) / sizeof (fixed[0]); ++i) {
+                if (token == NULL)
+                        return 0;
+                if (i == 4) {
+                        if (strcmp (token, "model=small") != 0 &&
+                            strcmp (token, "model=large") != 0)
+                                return 0;
+                } else if (i >= 5 && i <= 10) {
+                        size_t prefix_length = 0;
+                        static const char *const names[] = {
+                                "stack-auto=", "xstack=", "intlong-reent=",
+                                "float-reent=", "reg-params=", "all-callee-saves="
+                        };
+                        prefix_length = strlen (names[i - 5]);
+                        if (strncmp (token, names[i - 5], prefix_length) != 0 ||
+                            (token[prefix_length] != '0' && token[prefix_length] != '1') ||
+                            token[prefix_length + 1] != '\0')
+                                return 0;
+                } else if (strcmp (token, fixed[i]) != 0) {
+                        return 0;
+                }
+                token = strtok (NULL, " ");
+        }
+        return token == NULL;
+}
+
+static char *mcs251_abi_expected;
+
+static void
+mcs251_set_abi_expected (void)
+{
+        const char *signature;
+        int c;
+
+        c = getnb ();
+        unget (c);
+        signature = ip;
+
+        if (mcs251_abi_expected != NULL) {
+                fprintf (stderr,
+                         "?ASlink-Error-MCS251 ABI expected signature specified more than once.\n");
+                lkerr++;
+                return;
+        }
+        if (!mcs251_abi_signature_valid (signature)) {
+                fprintf (stderr,
+                         "?ASlink-Error-MCS251 ABI expected signature is invalid.\n");
+                lkerr++;
+                return;
+        }
+        mcs251_abi_expected = strsto ((char *) signature);
+}
+
+static const char *
+mcs251_report_module_name (const struct head *module)
+{
+        if (module->m_id != NULL && module->m_id[0] != '\0')
+                return module->m_id;
+        if (module->h_lfile != NULL && module->h_lfile->f_idp != NULL &&
+            module->h_lfile->f_idp[0] != '\0')
+                return module->h_lfile->f_idp;
+        return "<unnamed>";
+}
+
+static void
+mcs251_check_abi_modules (void)
+{
+        struct head *module;
+
+        if (!sdld_mcs251_abi_required ())
+                return;
+        if (mcs251_abi_expected == NULL) {
+                fprintf (stderr,
+                         "?ASlink-Error-MCS251 ABI expected signature was not provided by the link driver.\n");
+                lkerr++;
+                return;
+        }
+        for (module = headp; module != NULL; module = module->h_hp) {
+                /* Areas51() contributes headers with no input-file owner.  Every
+                   header backed by a real .rel input must carry the signature,
+                   even when hand-written assembly omitted .module. */
+                if (module->h_lfile != NULL && !module->h_optsdcc_seen) {
+                        fprintf (stderr,
+                                 "?ASlink-Error-MCS251 ABI signature missing in module \"%s\"; "
+                                 "every input must contain .optsdcc.\n",
+                                 mcs251_report_module_name (module));
+                        lkerr++;
+                } else if (module->h_lfile != NULL &&
+                           module->h_optsdcc_signature != NULL &&
+                           strcmp (mcs251_abi_expected,
+                                   module->h_optsdcc_signature) != 0) {
+                        fprintf (stderr,
+                                 "?ASlink-Error-MCS251 ABI mismatch: module \"%s\" "
+                                 "does not match the link driver expectation.\n",
+                                 mcs251_report_module_name (module));
+                        lkerr++;
+                }
+        }
+}
+
 /*)Function	int	main(argc, argv)
  *
  *		int	argc		number of command line arguments + 1
@@ -214,6 +355,10 @@ main(int argc, char *argv[])
 	pflag = 1;
 
 	for(i=1; i<argc; i++) {
+		if (is_sdld() && strcmp (argv[i], "--mcs251-abi") == 0) {
+			sdld_require_mcs251_abi ();
+			continue;
+		}
 		ip = ib;
 		if(argv[i][0] == '-') {
 			j = i;
@@ -330,6 +475,12 @@ main(int argc, char *argv[])
 			 * Search libraries for global symbols
 			 */
 			search();
+
+				/* MCS251 links are fail-closed: every selected module must carry
+				   the approved signature, including modules pulled from archives. */
+				mcs251_check_abi_modules ();
+				if (sdld_mcs251_abi_required () && lkerr)
+					lkexit (ER_ERROR);
 
                         /* sdas specific */
                         /* use these defaults for parsing the .lk script */
@@ -572,17 +723,35 @@ link_main(void)  /* beware sdld changed name */
         /* sdld specific */
         case 'O': /* For some important sdcc options */
                 if (is_sdld() && pass == 0) {
-                        if (NULL == optsdcc) {
-                                optsdcc = strsto(&ip[1]);
-                                optsdcc_module = hp->m_id;
-			}
-                        else {
-                                if (strcmp(optsdcc, &ip[1]) != 0) {
+			const char *signature = ip;
+			while (*signature == ' ' || *signature == '\t')
+				signature++;
+			if (hp != NULL && sdld_mcs251_abi_required ()) {
+				if (hp->h_optsdcc_seen) {
+					fprintf (stderr,
+						 "?ASlink-Error-MCS251 ABI signature specified more than once in module \"%s\".\n",
+						 mcs251_report_module_name (hp));
+					lkerr++;
+				} else if (!mcs251_abi_signature_valid (signature)) {
+					hp->h_optsdcc_seen = 1;
+					fprintf (stderr,
+						 "?ASlink-Error-MCS251 ABI signature rejected in module \"%s\".\n",
+						 mcs251_report_module_name (hp));
+					lkerr++;
+				} else {
+					hp->h_optsdcc_seen = 1;
+					hp->h_optsdcc_signature = strsto ((char *) signature);
+				}
+			} else if (hp != NULL) {
+				if (NULL == optsdcc) {
+					optsdcc = strsto ((char *) signature);
+					optsdcc_module = hp->m_id;
+				} else if (strcmp(optsdcc, signature) != 0) {
 					fprintf(stderr,
-                                                "?ASlink-Warning-Conflicting sdcc options:\n"
-                                                "   \"%s\" in module \"%s\" and\n"
-                                                "   \"%s\" in module \"%s\".\n",
-                                                optsdcc, optsdcc_module, &ip[1], hp->m_id);
+							"?ASlink-Warning-Conflicting sdcc options:\n"
+							"   \"%s\" in module \"%s\" and\n"
+							"   \"%s\" in module \"%s\".\n",
+							optsdcc, optsdcc_module, signature, hp->m_id);
 					lkerr++;
 				}
 			}
@@ -1092,6 +1261,13 @@ parse()
 				case 'P':
 					pflag = 1;
 					break;
+
+				case 'A':
+					if (is_sdld() && sdld_mcs251_abi_required ()) {
+						mcs251_set_abi_expected ();
+						return(0);
+					}
+					goto err;
 
 				case 'b':
 				case 'B':

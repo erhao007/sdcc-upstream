@@ -2137,7 +2137,7 @@ genFunction (iCode * ic)
         }
       /* If the RECEIVE operand is 4 registers, we can do the moves now */
       /* to free up the accumulator. */
-      else if (rsym && rsym->nRegs && getSize (rsym->type) == 4) // Should be >= 4, but the loop below is fragile. TODO: Use genMove here, enable for >= 4.
+      else if (rsym && rsym->nRegs && !rsym->onStack && getSize (rsym->type) == 4) // Should be >= 4, but the loop below is fragile. TODO: Use genMove here, enable for >= 4.
         {
           int ofs;
 
@@ -9537,6 +9537,121 @@ mcs251WriteBackPostincrementedPointer (operand *pointer)
     }
 }
 
+/* Recover the source stack slot for a rematerialised address-of expression.
+   Stack objects live in the SPX address space; materialising their address as
+   a flat DPX pointer is not equivalent when the simulator/target code window
+   overlaps region 00.  Keep this narrow and leave escaped/computed pointers
+   on the normal flat-pointer path. */
+static iCode *
+mcs251DefinitionForOperand (operand *op)
+{
+  int key;
+
+  if (!IS_SYMOP (op) || !OP_DEFS (op) ||
+      bitVectnBitsOn (OP_DEFS (op)) != 1)
+    return NULL;
+
+  key = bitVectFirstBit (OP_DEFS (op));
+  return key < 0 ? NULL : hTabItemWithKey (iCodehTab, key);
+}
+
+static bool
+mcs251FindRematStackAddress (operand *op, symbol **sym, int *extraOffset)
+{
+  unsigned guard = 0;
+
+  *sym = NULL;
+  *extraOffset = 0;
+  while (IS_SYMOP (op) && guard++ < 32)
+    {
+      iCode *remat = OP_SYMBOL (op)->remat
+        ? OP_SYMBOL (op)->rematiCode
+        : NULL;
+
+      if (!remat)
+        remat = mcs251DefinitionForOperand (op);
+      if (!remat)
+        break;
+
+      if (remat->op == ADDRESS_OF && IS_TRUE_SYMOP (IC_LEFT (remat)) &&
+          OP_SYMBOL (IC_LEFT (remat))->onStack)
+        {
+          *sym = OP_SYMBOL (IC_LEFT (remat));
+          return true;
+        }
+
+      if (IS_CAST_ICODE (remat) || remat->op == '=')
+        {
+          op = IC_RIGHT (remat);
+          continue;
+        }
+
+      if ((remat->op == '+' || remat->op == '-') &&
+          IS_OP_LITERAL (IC_RIGHT (remat)))
+        {
+          int delta = (int) byteOfVal (OP_VALUE (IC_RIGHT (remat)), 0);
+          *extraOffset += remat->op == '+' ? delta : -delta;
+          op = IC_LEFT (remat);
+          continue;
+        }
+
+      break;
+    }
+  return *sym != NULL;
+}
+
+/* Scalar reads whose pointer provenance is a local stack address can use
+   SPX-relative operands directly.  Aggregate copies intentionally remain on
+   the generic path: memcpy/bitfield lowering may access their address through
+   a different pointer-space contract. */
+static bool
+mcs251StackPointerGet (operand *left, operand *result, iCode *ic,
+                       iCode *pi, iCode *ifx)
+{
+  symbol *sym;
+  int extraOffset;
+  int size, physicalOffset;
+
+  if (pi || !mcs251FindRematStackAddress (left, &sym, &extraOffset) ||
+      IS_AGGREGATE (sym->type) || IS_AGGREGATE (operandType (result)))
+    return false;
+
+  /* GET_VALUE_AT_ADDRESS may carry a folded byte offset for a narrow read;
+     preserve the same big-endian offset that the generic far-pointer path
+     applies before loading DPX. */
+  if (IC_RIGHT (ic) && IS_OP_LITERAL (IC_RIGHT (ic)))
+    extraOffset += byteOfVal (OP_VALUE (IC_RIGHT (ic)), 0);
+
+  size = getSize (operandType (result));
+  if (!size)
+    return false;
+
+  D (emitcode (";", "genStackPointerGet"));
+  aopOp (result, ic, FALSE);
+  physicalOffset = 0;
+  while (physicalOffset < size)
+    {
+      char stackOperand[32];
+      int logicalOffset = mcs251PointerByteOffset (
+        operandType (result), physicalOffset, size);
+
+      mcs251FormatStackOperand (stackOperand, sizeof (stackOperand),
+                                stackoffset (sym) + extraOffset +
+                                physicalOffset);
+      emitcode ("mov", "a,%s", stackOperand);
+      if (!ifx)
+        opPut (result, "a", logicalOffset);
+      physicalOffset++;
+    }
+
+  if (ifx && !ifx->generated)
+    genIfxJump (ifx, "a", left, NULL, result, ic->next);
+
+  freeAsmop (result, NULL, ic, TRUE);
+  freeAsmop (left, NULL, ic, TRUE);
+  return true;
+}
+
 static void
 genFarPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCode * ifx)
 {
@@ -9546,6 +9661,9 @@ genFarPointerGet (operand * left, operand * result, iCode * ic, iCode * pi, iCod
   sym_link *retype = getSpec (operandType (result));
 
   D (emitcode (";", "genFarPointerGet"));
+
+  if (mcs251StackPointerGet (left, result, ic, pi, ifx))
+    return;
 
   aopOp (left, ic, FALSE);
   loadDptrFromOperand (left, FALSE);
@@ -10414,6 +10532,47 @@ genPagedPointerSet (operand * right, operand * result, iCode * ic, iCode * pi)
   freeAsmop (result, NULL, ic, TRUE);
 }
 
+/* Store a scalar value through a local stack address without materialising a
+   flat DPX pointer.  Aggregate and bit-field forms remain on the generic
+   far-pointer path. */
+static bool
+mcs251StackPointerSet (operand *right, operand *result, iCode *ic, iCode *pi)
+{
+  symbol *sym;
+  int extraOffset;
+  int size, physicalOffset;
+
+  if (pi || IS_BITVAR (operandType (result)->next) ||
+      !mcs251FindRematStackAddress (result, &sym, &extraOffset) ||
+      IS_AGGREGATE (sym->type) || IS_AGGREGATE (operandType (right)))
+    return false;
+
+  size = getSize (operandType (right));
+  if (!size)
+    return false;
+
+  D (emitcode (";", "genStackPointerSet"));
+  aopOp (right, ic, FALSE);
+  physicalOffset = 0;
+  while (physicalOffset < size)
+    {
+      char stackOperand[32];
+      int logicalOffset = mcs251PointerByteOffset (
+        operandType (right), physicalOffset, size);
+
+      MOVA (opGet (right, logicalOffset, FALSE, FALSE));
+      mcs251FormatStackOperand (stackOperand, sizeof (stackOperand),
+                                stackoffset (sym) + extraOffset +
+                                physicalOffset);
+      emitcode ("mov", "%s,a", stackOperand);
+      physicalOffset++;
+    }
+
+  freeAsmop (right, NULL, ic, TRUE);
+  freeAsmop (result, NULL, ic, TRUE);
+  return true;
+}
+
 /*-----------------------------------------------------------------*/
 /* genFarPointerSet - set value in far space                       */
 /*-----------------------------------------------------------------*/
@@ -10424,6 +10583,9 @@ genFarPointerSet (operand * right, operand * result, iCode * ic, iCode * pi)
   bool mcs251FarSource;
 
   D (emitcode (";", "genFarPointerSet"));
+
+  if (mcs251StackPointerSet (right, result, ic, pi))
+    return;
 
   aopOp (result, ic, FALSE);
   loadDptrFromOperand (result, FALSE);

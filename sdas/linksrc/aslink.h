@@ -566,6 +566,8 @@ struct	head
 	int	h_nmode;	/* # of modes */
 	struct	mode  **m_list;	/* Mode list */
 	char *	m_id;		/* Module name */
+	int	h_optsdcc_seen;	/* MCS251 ABI signature was present */
+	char	*h_optsdcc_signature;	/* validated MCS251 ABI signature */
 };
 
 /*

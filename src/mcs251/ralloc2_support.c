@@ -908,6 +908,96 @@ mcs251_operandUsesAcc (operand * op, bool allowBitspace)
   return FALSE;
 }
 
+/* A stack address may be rematerialised only when all of its users consume it
+   as a typed far/paged pointer.  Other uses (notably va_start arithmetic or a
+   flat-pointer escape) still require a concrete SPX address. */
+static bool
+mcs251IsStackPointerType (sym_link *type)
+{
+  sym_link *etype;
+  int p_type;
+
+  if (!type)
+    return false;
+
+  if (IS_PTR (type) && !IS_FUNC (type->next))
+    p_type = DCL_TYPE (type);
+  else
+    {
+      etype = getSpec (type);
+      p_type = PTR_TYPE (SPEC_OCLS (etype));
+    }
+
+  return p_type == FPOINTER || p_type == PPOINTER;
+}
+
+static bool
+mcs251StackAddressUsesOnlyPointerGet (operand *op, unsigned depth)
+{
+  bitVect *uses = OP_USES (op);
+  int key;
+
+  if (!uses || bitVectIsZero (uses) || depth > 32)
+    return false;
+
+  for (key = 0; key < uses->size; ++key)
+    if (bitVectBitValue (uses, key))
+      {
+        iCode *use = hTabItemWithKey (iCodehTab, key);
+
+        if (!use)
+          return false;
+
+        if (use->op == GET_VALUE_AT_ADDRESS && IC_LEFT (use) &&
+            mcs251IsStackPointerType (operandType (IC_LEFT (use))) &&
+            IC_LEFT (use)->key == op->key)
+          continue;
+
+        if (POINTER_SET (use) && IC_RESULT (use) &&
+            !IS_BITVAR (operandType (IC_RESULT (use))->next) &&
+            mcs251IsStackPointerType (operandType (IC_RESULT (use))) &&
+            IC_RESULT (use)->key == op->key)
+          continue;
+
+        if ((use->op == '=' || IS_CAST_ICODE (use)) &&
+            IC_RIGHT (use) && IC_RIGHT (use)->key == op->key &&
+            IC_RESULT (use) &&
+            mcs251IsStackPointerType (operandType (IC_RESULT (use))) &&
+            mcs251StackAddressUsesOnlyPointerGet (IC_RESULT (use),
+                                                  depth + 1))
+          continue;
+
+        if ((use->op == '+' || use->op == '-') &&
+            IC_LEFT (use) && IC_LEFT (use)->key == op->key &&
+            IS_OP_LITERAL (IC_RIGHT (use)) && IC_RESULT (use) &&
+            mcs251IsStackPointerType (operandType (IC_RESULT (use))) &&
+            mcs251StackAddressUsesOnlyPointerGet (IC_RESULT (use),
+                                                  depth + 1))
+          continue;
+
+        return false;
+      }
+
+  return true;
+}
+
+static bool
+mcs251StackAddressOnlyPointerGet (iCode *ic)
+{
+  sym_link *type = operandType (IC_RESULT (ic));
+  symbol *sym = OP_SYMBOL (IC_LEFT (ic));
+
+  /* Only a stack object that is itself a pointer may be rematerialised here.
+     Rematerialising the address of a scalar/aggregate (for example a float
+     temporary in the runtime library) would turn its SPX slot into an
+     undefined flat symbol during later lowering. */
+  if (!IS_PTR (sym->type) || IS_FUNC (sym->type->next) ||
+      !mcs251IsStackPointerType (type))
+    return false;
+
+  return mcs251StackAddressUsesOnlyPointerGet (IC_RESULT (ic), 0);
+}
+
 /*-----------------------------------------------------------------*/
 /* packRegsForAccUse - pack registers for acc use                  */
 /*-----------------------------------------------------------------*/
@@ -1207,7 +1297,8 @@ packRegisters (eBBlock ** ebpp, int blockno)
           IS_ITEMP (IC_RESULT (ic)) &&
           IS_TRUE_SYMOP (IC_LEFT (ic)) &&
           bitVectnBitsOn (OP_DEFS (IC_RESULT (ic))) == 1 &&
-          !OP_SYMBOL (IC_LEFT (ic))->onStack)
+          (!OP_SYMBOL (IC_LEFT (ic))->onStack ||
+           mcs251StackAddressOnlyPointerGet (ic)))
         {
           OP_SYMBOL (IC_RESULT (ic))->remat = 1;
           OP_SYMBOL (IC_RESULT (ic))->rematiCode = ic;
@@ -1461,5 +1552,4 @@ mcs251_ralloc2_prepare (ebbIndex * ebbi)
   for (i = 0; i < ebbi->count; ++i)
     packRegisters (ebbi->bbOrder, i);
 }
-
 

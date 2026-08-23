@@ -39,6 +39,8 @@ void set_sdld_target(enum sdld_target_e trgt);
 enum sdld_target_e get_sdld_target(void);
 int is_sdld_target_z80_like(void);
 int is_sdld_target_8051_like(void);
+void sdld_require_mcs251_abi(void);
+int sdld_mcs251_abi_required(void);
 
 #define TARGET_IS_GB	(get_sdld_target() == TARGET_ID_GB)
 #define TARGET_IS_Z80   (get_sdld_target() == TARGET_ID_Z80)

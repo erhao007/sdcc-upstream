@@ -216,43 +216,49 @@ _mcs251_getRegName (const struct reg_info *reg)
 }
 
 static void
+_mcs251_write_abi_signature (FILE *of)
+{
+  const char *model = options.model == MODEL_LARGE ? "large" : "small";
+
+  fprintf (of,
+           "stc32-mcs251 abi-major=1 abi-minor=0 "
+           "target=mcs251 model=%s stack-auto=%d xstack=%d "
+           "intlong-reent=%d float-reent=%d reg-params=%d "
+           "all-callee-saves=%d sdcccall=2 regset=r0-r9,r12-r15 "
+           "compiler-build=mcs251-abi1.0-r1",
+           model,
+           options.stackAuto ? 1 : 0,
+           options.useXstack ? 1 : 0,
+           options.intlong_rent ? 1 : 0,
+           options.float_rent ? 1 : 0,
+           options.noRegParams ? 0 : 1,
+           options.all_callee_saves ? 1 : 0);
+}
+
+static void
 _mcs251_genAssemblerStart (FILE * of)
 {
   if (!options.noOptsdccInAsm)
     {
-      fprintf (of, "\t.optsdcc -m%s", port->target);
-
-      switch (options.model)
-        {
-        case MODEL_SMALL:
-          fprintf (of, " --model-small");
-          break;
-        case MODEL_COMPACT:
-          fprintf (of, " --model-compact");
-          break;
-        case MODEL_MEDIUM:
-          fprintf (of, " --model-medium");
-          break;
-        case MODEL_LARGE:
-          fprintf (of, " --model-large");
-          break;
-        case MODEL_HUGE:
-          fprintf (of, " --model-huge");
-          break;
-        default:
-          break;
-        }
-      /*if(options.stackAuto)      fprintf (asmFile, " --stack-auto"); */
-      if (options.useXstack)
-        fprintf (of, " --xstack");
-      /*if(options.intlong_rent)   fprintf (asmFile, " --int-long-rent"); */
-      /*if(options.float_rent)     fprintf (asmFile, " --float-rent"); */
-      if (options.noRegParams)
-        fprintf (of, " --no-reg-params");
-      if (options.all_callee_saves)
-        fprintf (of, " --all-callee-saves");
-      fprintf (of, "\n");
+      /* Keep this line byte-for-byte aligned with the approved MCS-251 ABI
+         contract.  The linker uses it as the object compatibility key; do
+         not replace it with the legacy option spelling.  stack-auto also
+         enables the effective int/long and float reentrancy settings in
+         SDCCmain.c, so those fields intentionally use the effective values. */
+      fputs ("\t.optsdcc ", of);
+      _mcs251_write_abi_signature (of);
+      fputc ('\n', of);
     }
+}
+
+static void
+_mcs251_genExtraAreaLinkOptions (FILE *of)
+{
+  /* The linker must compare every input against the ABI selected by this
+     driver invocation, not against whichever object happens to be first. */
+  fputs ("-A ", of);
+  _mcs251_write_abi_signature (of);
+  fputc ('\n', of);
 }
 
 /* Generate interrupt vector table. */
@@ -1045,7 +1051,7 @@ get_model (void)
 */
 static const char *_linkCmd[] =
 {
-  "sdld", "-r", "-nf", "$1", "$L", NULL
+  "sdld", "--mcs251-abi", "-r", "-nf", "$1", "$L", NULL
 };
 
 /* $3 is replaced by assembler.debug_opts resp. port->assembler.plain_opts */
@@ -1137,7 +1143,7 @@ PORT mcs251_port =
     false,                      // Flat MCS251 generic pointers address edata/xdata/code, not the direct SFR window.
     1                           // No fancy alignments supported.
   },
-  { _mcs251_genExtraAreas, NULL },
+  { _mcs251_genExtraAreas, _mcs251_genExtraAreaLinkOptions },
   2,                            // SDCC MCS251 ABI revision
   {
     +1,         /* direction (+1 = stack grows up) */

@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
 static int sdld = -1;
 static enum sdld_target_e target = TARGET_ID_UNKNOWN;
+static int mcs251_abi_required;
 
 
 static char
@@ -145,4 +146,20 @@ is_sdld_target_8051_like(void)
 {
   check_init();
   return target == TARGET_ID_8051;
+}
+
+
+void
+sdld_require_mcs251_abi(void)
+{
+  check_init();
+  mcs251_abi_required = 1;
+}
+
+
+int
+sdld_mcs251_abi_required(void)
+{
+  check_init();
+  return mcs251_abi_required;
 }
