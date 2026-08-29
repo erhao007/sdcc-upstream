@@ -1,0 +1,30 @@
+{
+  "schema": "openstc32.toolchain-source-provenance.v1",
+  "source_repository": "erhao007/sdcc-stc32",
+  "source_visibility": "private",
+  "source_tag": "pre-split-mt3-closed-20260829",
+  "source_root_commit": "0df8eb6d5d8b0deed78a128b3a83d116c6c04cd7",
+  "upstream_commit": "c654fb07950656fb3bf1afb5982127caa4c3a0c4",
+  "target_branch": "stc32",
+  "import_method": "support-directory-clean-snapshot",
+  "imported_paths": [
+    "support/stc32/isa",
+    "support/stc32/tests",
+    "support/stc32/tools",
+    "support/stc32/scripts",
+    "doc/stc32/ABI.md",
+    "doc/stc32/ARCHITECTURE.md",
+    "doc/stc32/PROJECT_PLAN.md",
+    "doc/stc32/UPSTREAM_SYNC.md"
+  ],
+  "excluded": [
+    "sdk",
+    "bootloader",
+    "ble-bridge",
+    "edu",
+    "raw-hardware-logs",
+    "private-root-history"
+  ],
+  "history_imported": false,
+  "license_review": "SDCC and component licenses remain authoritative; support snapshot adds no replacement license"
+}

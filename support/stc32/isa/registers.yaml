@@ -1,0 +1,88 @@
+# MCS-251 寄存器文件(Source Mode)
+# 依据:Intel 8XC251SB User's Manual(公开)与 zevorn/sdcc-c251 ABI 文档(公开,GPL)。
+# 字节序:MCS-251 原生大端——多字节标量/寄存器值最高有效字节位于最低地址
+# (最低编号字节寄存器)。无 little-endian 模式;mcs51 目标保持小端。
+
+schema_version: 2
+arch: mcs251
+byte_order: big
+
+# 通用寄存器(架构寄存器文件,地址空间 0x00-0x0F 内,可 bank 映射)
+registers:
+  - class: r8
+    name: Rn
+    size: 8
+    members: [R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, R15]
+    note: >
+      8 位通用寄存器。Rn 形式(传统,opcode 内 3 位编码)仅覆盖 R0-R7;
+      Rm 形式(251 扩展,独立 4 位编码)覆盖 R0-R15。
+
+  - class: wr16
+    name: WRj
+    size: 16
+    members: [WR0, WR2, WR4, WR6, WR8, WR10, WR12, WR14]
+    note: >
+      16 位寄存器元组,下标 j 为偶数。WRj = {Rj, Rj+1},大端:
+      Rj 存 bits 15:8,Rj+1 存 bits 7:0。例:WR6 的 bits 15:8 在 R6,bits 7:0 在 R7。
+
+  - class: dr32
+    name: DRk
+    size: 32
+    members: [DR0, DR4, DR8, DR12]
+    note: >
+      32 位寄存器元组,下标 k = 0,4,8,12。DRk = {Rk, Rk+1, Rk+2, Rk+3},大端:
+      Rk 存 bits 31:24,...,Rk+3 存 bits 7:0。例:DR0 = {R0=MSB, R1, R2, R3=LSB}。
+
+# 特殊/专用寄存器
+special:
+  - name: A
+    aliases: [ACC]
+    size: 8
+    note: 累加器(算术/逻辑主操作数)
+  - name: B
+    size: 8
+    note: 乘除法寄存器
+  - name: PSW
+    size: 8
+    note: >
+      兼容 8051 的程序状态字。位布局为 CY=bit7、AC=bit6、F0=bit5、
+      RS1:RS0=bit4:3、OV=bit2、UD=bit1、P=bit0。CY/AC/RS/OV 与 PSW1
+      的同位字段双向镜像；N/Z 不属于 PSW。
+  - name: PSW1
+    size: 8
+    note: >
+      MCS-251 扩展程序状态字。位布局为 CY=bit7、AC=bit6、N=bit5、
+      RS1:RS0=bit4:3、OV=bit2、Z=bit1、reserved=bit0。CY/AC/RS/OV 与
+      PSW 的同位字段双向镜像；N/Z 仅属于 PSW1。保留位 bit0 写入忽略、读取为 0。
+  - name: SP
+    size: 8
+    note: 栈指针(与 SPX 配合扩展)
+  - name: SPX
+    size: 16
+    note: 栈指针扩展(完整栈地址 bits 15:0)
+  - name: DPTR
+    size: 16
+    aliases: [DPTR0, DPTR1]
+    note: 数据指针(DPTR0/DPTR1 可选)
+  - name: DPX
+    size: 24
+    aliases: [DPX, DPH, DPL]
+    note: 24 位数据指针扩展,平铺(flat)地址的规范硬件地址寄存器
+  - name: PC
+    size: 24
+    note: 程序计数器(非程序员可见寄存器)
+
+# 重叠别名关系 —— 寄存器分配器核心风险(项目计划 §16.1)
+aliases:
+  DR0: [WR0, WR2, R0, R1, R2, R3]
+  DR4: [WR4, WR6, R4, R5, R6, R7]
+  DR8: [WR8, WR10, R8, R9, R10, R11]
+  DR12: [WR12, WR14, R12, R13, R14, R15]
+  WR0: [R0, R1]
+  WR2: [R2, R3]
+  WR4: [R4, R5]
+  WR6: [R6, R7]
+  WR8: [R8, R9]
+  WR10: [R10, R11]
+  WR12: [R12, R13]
+  WR14: [R14, R15]

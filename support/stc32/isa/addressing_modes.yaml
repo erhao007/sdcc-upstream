@@ -1,0 +1,69 @@
+# MCS-251 寻址模式(Source Mode)
+# operand token 定义与语义;token 取自 mcs251.yaml 的 operands 字段。
+
+schema_version: 1
+arch: mcs251
+
+modes:
+  - name: register
+    tokens: [Rn, Rm, Rmd, Rms, WRj, WRjd, WRjs, DRk, DRkd, DRks, A, B, AB, CY, DPTR, "DRk(hi)"]
+    description: >
+      寄存器操作数。Rn = R0-R7(3 位内嵌编码,传统形式);Rm = R0-R15(4 位编码,
+      251 扩展);d/s 后缀为目标/源变体(同编码,用于解决部分重叠元组的限制)。
+      AB 为乘除法累加器-寄存器对(MUL/DIV);DRk(hi) 为 MOVH 的高字半部。
+      WRj 16 位、DRk 32 位(见 registers.yaml,大端)。
+
+  - name: immediate
+    tokens: ["#data", "#data16", "#short", "#0data16", "#1data16"]
+    description: >
+      立即数。#data 8 位;#data16 16 位;#short 短立即数(指令内编码);
+      #0data16 / #1data16 为 DRk 装载的扩展位形式(bit31/bit15 由操作码区分)。
+
+  - name: direct
+    tokens: [dir8, dir16]
+    description: >
+      直接寻址。dir8 = 8 位直接地址(0x00-0xFF,含内部 RAM 与 SFR 窗口);
+      dir16 = 16 位直接地址(数据空间 64KB 窗口内)。
+
+  - name: indirect
+    tokens: ["@Ri", "@WRj", "@DRk", "@DPTR", "@WRjd", "@WRjs"]
+    description: >
+      间接寻址。@Ri 经 R0/R1(8 位地址);@WRj 16 位地址;@DRk 32 位地址(实际 24 位有效);
+      @DPTR 经数据指针;@WRjd/@WRjs 为目标/源变体(同 @WRj 编码语义)。
+
+  - name: indexed
+    tokens: ["@A+DPTR", "@A+PC"]
+    description: 变址寻址(查表,MOVC):基址 DPTR 或 PC 加 A 偏移。
+
+  - name: offset_indirect
+    tokens: ["@WRj+dis16", "@DRk+dis24"]
+    description: >
+      带位移间接寻址。@WRj+dis16:16 位寄存器 + 16 位无符号位移;
+      @DRk+dis24:32 位寄存器 + 24 位位移(平铺地址空间访问)。
+
+  - name: bit
+    tokens: [bit, bit51, "/bit", "/bit51"]
+    description: >
+      位寻址。bit = 251 扩展位地址(任意 RAM 位,经 bit-addressable 窗口);
+      bit51 = 传统 8051 位地址(0x20-0x2F 位区与可位寻址 SFR);
+      / 前缀表示取反(测试位时)。
+
+  - name: relative
+    tokens: [rel]
+    description: 8 位 PC 相对偏移(带符号,-128..+127)。
+
+  - name: absolute
+    tokens: [addr11]
+    description: 2KB 页内绝对地址(AJMP/ACALL)。
+
+  - name: long
+    tokens: [addr16]
+    description: 64KB 空间绝对地址(LJMP/LCALL,大端立即数)。
+
+  - name: extended
+    tokens: [addr24]
+    description: 24 位平铺代码地址(ECALL/EJMP,大端立即数)。
+
+  - name: none
+    tokens: ["-"]
+    description: 无操作数(NOP/RET/RETI/ERET 等)。

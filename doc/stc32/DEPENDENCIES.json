@@ -1,0 +1,13 @@
+{
+  "schema": "openstc32.toolchain-dependencies.v1",
+  "repository": "erhao007/sdcc-upstream",
+  "branch": "stc32",
+  "commit": "c654fb07950656fb3bf1afb5982127caa4c3a0c4",
+  "release_tag": "stc32-mt3-closed-20260829",
+  "target": "stc32",
+  "architecture": "mcs251",
+  "abi_major": 1,
+  "abi_minor": 0,
+  "sdk_consumer": "erhao007/openstc32-sdk",
+  "sdk_contract": "SDK locks this commit and the generated toolchain manifest; it does not vendor this tree"
+}

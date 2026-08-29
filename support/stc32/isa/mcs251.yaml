@@ -1,0 +1,5075 @@
+schema_version: 1
+arch: mcs251
+mode: source
+source: Generated from zevorn/sdcc-c251 sdas/as251/tests/instruction-forms.tsv (GPL-2 SDCC-derived; encoding
+  data from public Intel 8XC251SB / STC32G instruction tables, each row cites the Intel manual page).
+  Regenerate with tools/tsv_to_yaml.py.
+instruction_count: 269
+instructions:
+- id: add_a_rn
+  mnemonic: ADD
+  family: add
+  operands:
+  - A
+  - Rn
+  assembly: add a,r6
+  source_bytes:
+  - '0xa5'
+  - '0x2e'
+  binary_bytes:
+  - '0x2e'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19/A-28
+- id: add_a_dir8
+  mnemonic: ADD
+  family: add
+  operands:
+  - A
+  - dir8
+  assembly: add a,0x30
+  source_bytes:
+  - '0x25'
+  - '0x30'
+  binary_bytes:
+  - '0x25'
+  - '0x30'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19/A-28
+- id: add_a_at_ri
+  mnemonic: ADD
+  family: add
+  operands:
+  - A
+  - '@Ri'
+  assembly: add a,@r1
+  source_bytes:
+  - '0xa5'
+  - '0x27'
+  binary_bytes:
+  - '0x27'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19/A-28
+- id: add_a_imm8
+  mnemonic: ADD
+  family: add
+  operands:
+  - A
+  - '#data'
+  assembly: add a,#0x5a
+  source_bytes:
+  - '0x24'
+  - '0x5a'
+  binary_bytes:
+  - '0x24'
+  - '0x5a'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19/A-28
+- id: add_rm_rm
+  mnemonic: ADD
+  family: add
+  operands:
+  - Rmd
+  - Rms
+  assembly: add r3,r12
+  source_bytes:
+  - '0x2c'
+  - '0x3c'
+  binary_bytes:
+  - '0xa5'
+  - '0x2c'
+  - '0x3c'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_wr_wr
+  mnemonic: ADD
+  family: add
+  operands:
+  - WRjd
+  - WRjs
+  assembly: add wr4,wr10
+  source_bytes:
+  - '0x2d'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0x2d'
+  - '0x25'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_dr_dr
+  mnemonic: ADD
+  family: add
+  operands:
+  - DRkd
+  - DRks
+  assembly: add dr12,dr28
+  source_bytes:
+  - '0x2f'
+  - '0x37'
+  binary_bytes:
+  - '0xa5'
+  - '0x2f'
+  - '0x37'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_rm_imm8
+  mnemonic: ADD
+  family: add
+  operands:
+  - Rm
+  - '#data'
+  assembly: add r3,#0x5a
+  source_bytes:
+  - '0x2e'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0xa5'
+  - '0x2e'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_wr_imm16
+  mnemonic: ADD
+  family: add
+  operands:
+  - WRj
+  - '#data16'
+  assembly: add wr4,#0x1234
+  source_bytes:
+  - '0x2e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x2e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_dr_imm16_zero
+  mnemonic: ADD
+  family: add
+  operands:
+  - DRk
+  - '#0data16'
+  assembly: add dr12,#0x1234
+  source_bytes:
+  - '0x2e'
+  - '0x38'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x2e'
+  - '0x38'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_rm_dir8
+  mnemonic: ADD
+  family: add
+  operands:
+  - Rm
+  - dir8
+  assembly: add r3,0x30
+  source_bytes:
+  - '0x2e'
+  - '0x31'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x2e'
+  - '0x31'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_wr_dir8
+  mnemonic: ADD
+  family: add
+  operands:
+  - WRj
+  - dir8
+  assembly: add wr4,0x30
+  source_bytes:
+  - '0x2e'
+  - '0x25'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x2e'
+  - '0x25'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_rm_dir16
+  mnemonic: ADD
+  family: add
+  operands:
+  - Rm
+  - dir16
+  assembly: add r3,0x1234
+  source_bytes:
+  - '0x2e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x2e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_wr_dir16
+  mnemonic: ADD
+  family: add
+  operands:
+  - WRj
+  - dir16
+  assembly: add wr4,0x1234
+  source_bytes:
+  - '0x2e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x2e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: add_rm_at_wr
+  mnemonic: ADD
+  family: add
+  operands:
+  - Rm
+  - '@WRj'
+  assembly: add r3,@wr6
+  source_bytes:
+  - '0x2e'
+  - '0x39'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x2e'
+  - '0x39'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  - AC
+  reference: Intel A-8/A-19
+- id: add_rm_at_dr
+  mnemonic: ADD
+  family: add
+  operands:
+  - Rm
+  - '@DRk'
+  assembly: add r3,@dr16
+  source_bytes:
+  - '0x2e'
+  - '0x4b'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x2e'
+  - '0x4b'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  - AC
+  reference: Intel A-8/A-19
+- id: sub_rm_rm
+  mnemonic: SUB
+  family: sub
+  operands:
+  - Rmd
+  - Rms
+  assembly: sub r3,r12
+  source_bytes:
+  - '0x9c'
+  - '0x3c'
+  binary_bytes:
+  - '0xa5'
+  - '0x9c'
+  - '0x3c'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_wr_wr
+  mnemonic: SUB
+  family: sub
+  operands:
+  - WRjd
+  - WRjs
+  assembly: sub wr4,wr10
+  source_bytes:
+  - '0x9d'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0x9d'
+  - '0x25'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_dr_dr
+  mnemonic: SUB
+  family: sub
+  operands:
+  - DRkd
+  - DRks
+  assembly: sub dr12,dr28
+  source_bytes:
+  - '0x9f'
+  - '0x37'
+  binary_bytes:
+  - '0xa5'
+  - '0x9f'
+  - '0x37'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_rm_imm8
+  mnemonic: SUB
+  family: sub
+  operands:
+  - Rm
+  - '#data'
+  assembly: sub r3,#0x5a
+  source_bytes:
+  - '0x9e'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0xa5'
+  - '0x9e'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_wr_imm16
+  mnemonic: SUB
+  family: sub
+  operands:
+  - WRj
+  - '#data16'
+  assembly: sub wr4,#0x1234
+  source_bytes:
+  - '0x9e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x9e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_dr_imm16_zero
+  mnemonic: SUB
+  family: sub
+  operands:
+  - DRk
+  - '#0data16'
+  assembly: sub dr12,#0x1234
+  source_bytes:
+  - '0x9e'
+  - '0x38'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x9e'
+  - '0x38'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_rm_dir8
+  mnemonic: SUB
+  family: sub
+  operands:
+  - Rm
+  - dir8
+  assembly: sub r3,0x30
+  source_bytes:
+  - '0x9e'
+  - '0x31'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x9e'
+  - '0x31'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_wr_dir8
+  mnemonic: SUB
+  family: sub
+  operands:
+  - WRj
+  - dir8
+  assembly: sub wr4,0x30
+  source_bytes:
+  - '0x9e'
+  - '0x25'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x9e'
+  - '0x25'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_rm_dir16
+  mnemonic: SUB
+  family: sub
+  operands:
+  - Rm
+  - dir16
+  assembly: sub r3,0x1234
+  source_bytes:
+  - '0x9e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x9e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_wr_dir16
+  mnemonic: SUB
+  family: sub
+  operands:
+  - WRj
+  - dir16
+  assembly: sub wr4,0x1234
+  source_bytes:
+  - '0x9e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x9e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-19
+- id: sub_rm_at_wr
+  mnemonic: SUB
+  family: sub
+  operands:
+  - Rm
+  - '@WRj'
+  assembly: sub r3,@wr6
+  source_bytes:
+  - '0x9e'
+  - '0x39'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x9e'
+  - '0x39'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  - AC
+  reference: Intel A-8/A-19
+- id: sub_rm_at_dr
+  mnemonic: SUB
+  family: sub
+  operands:
+  - Rm
+  - '@DRk'
+  assembly: sub r3,@dr16
+  source_bytes:
+  - '0x9e'
+  - '0x4b'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x9e'
+  - '0x4b'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  - AC
+  reference: Intel A-8/A-19
+- id: addc_a_rn
+  mnemonic: ADDC
+  family: addc
+  operands:
+  - A
+  - Rn
+  assembly: addc a,r6
+  source_bytes:
+  - '0xa5'
+  - '0x3e'
+  binary_bytes:
+  - '0x3e'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19
+- id: addc_a_dir8
+  mnemonic: ADDC
+  family: addc
+  operands:
+  - A
+  - dir8
+  assembly: addc a,0x30
+  source_bytes:
+  - '0x35'
+  - '0x30'
+  binary_bytes:
+  - '0x35'
+  - '0x30'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19
+- id: addc_a_at_ri
+  mnemonic: ADDC
+  family: addc
+  operands:
+  - A
+  - '@Ri'
+  assembly: addc a,@r1
+  source_bytes:
+  - '0xa5'
+  - '0x37'
+  binary_bytes:
+  - '0x37'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19
+- id: addc_a_imm8
+  mnemonic: ADDC
+  family: addc
+  operands:
+  - A
+  - '#data'
+  assembly: addc a,#0x5a
+  source_bytes:
+  - '0x34'
+  - '0x5a'
+  binary_bytes:
+  - '0x34'
+  - '0x5a'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19
+- id: subb_a_rn
+  mnemonic: SUBB
+  family: subb
+  operands:
+  - A
+  - Rn
+  assembly: subb a,r6
+  source_bytes:
+  - '0xa5'
+  - '0x9e'
+  binary_bytes:
+  - '0x9e'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19
+- id: subb_a_dir8
+  mnemonic: SUBB
+  family: subb
+  operands:
+  - A
+  - dir8
+  assembly: subb a,0x30
+  source_bytes:
+  - '0x95'
+  - '0x30'
+  binary_bytes:
+  - '0x95'
+  - '0x30'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19
+- id: subb_a_at_ri
+  mnemonic: SUBB
+  family: subb
+  operands:
+  - A
+  - '@Ri'
+  assembly: subb a,@r1
+  source_bytes:
+  - '0xa5'
+  - '0x97'
+  binary_bytes:
+  - '0x97'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19
+- id: subb_a_imm8
+  mnemonic: SUBB
+  family: subb
+  operands:
+  - A
+  - '#data'
+  assembly: subb a,#0x5a
+  source_bytes:
+  - '0x94'
+  - '0x5a'
+  binary_bytes:
+  - '0x94'
+  - '0x5a'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-19
+- id: cmp_rm_rm
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - Rmd
+  - Rms
+  assembly: cmp r3,r12
+  source_bytes:
+  - '0xbc'
+  - '0x3c'
+  binary_bytes:
+  - '0xa5'
+  - '0xbc'
+  - '0x3c'
+  length: 2
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_wr_wr
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - WRjd
+  - WRjs
+  assembly: cmp wr4,wr10
+  source_bytes:
+  - '0xbd'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0xbd'
+  - '0x25'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_dr_dr
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - DRkd
+  - DRks
+  assembly: cmp dr12,dr28
+  source_bytes:
+  - '0xbf'
+  - '0x37'
+  binary_bytes:
+  - '0xa5'
+  - '0xbf'
+  - '0x37'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_rm_imm8
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - Rm
+  - '#data'
+  assembly: cmp r3,#0x5a
+  source_bytes:
+  - '0xbe'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_wr_imm16
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - WRj
+  - '#data16'
+  assembly: cmp wr4,#0x1234
+  source_bytes:
+  - '0xbe'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_dr_imm16_zero
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - DRk
+  - '#0data16'
+  assembly: cmp dr12,#0x1234
+  source_bytes:
+  - '0xbe'
+  - '0x38'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x38'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_dr_imm16_one
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - DRk
+  - '#1data16'
+  assembly: cmp dr12,#-3
+  source_bytes:
+  - '0xbe'
+  - '0x3c'
+  - '0xff'
+  - '0xfd'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x3c'
+  - '0xff'
+  - '0xfd'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_rm_dir8
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - Rm
+  - dir8
+  assembly: cmp r3,0x30
+  source_bytes:
+  - '0xbe'
+  - '0x31'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x31'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_wr_dir8
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - WRj
+  - dir8
+  assembly: cmp wr4,0x30
+  source_bytes:
+  - '0xbe'
+  - '0x25'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x25'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_rm_dir16
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - Rm
+  - dir16
+  assembly: cmp r3,0x1234
+  source_bytes:
+  - '0xbe'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - AC
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_wr_dir16
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - WRj
+  - dir16
+  assembly: cmp wr4,0x1234
+  source_bytes:
+  - '0xbe'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-20
+- id: cmp_rm_at_wr
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - Rm
+  - '@WRj'
+  assembly: cmp r3,@wr6
+  source_bytes:
+  - '0xbe'
+  - '0x39'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x39'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  - AC
+  reference: Intel A-8/A-20
+- id: cmp_rm_at_dr
+  mnemonic: CMP
+  family: cmp
+  operands:
+  - Rm
+  - '@DRk'
+  assembly: cmp r3,@dr16
+  source_bytes:
+  - '0xbe'
+  - '0x4b'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x4b'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  - AC
+  reference: Intel A-8/A-20
+- id: inc_a
+  mnemonic: INC
+  family: inc
+  operands:
+  - A
+  assembly: inc a
+  source_bytes:
+  - '0x04'
+  binary_bytes:
+  - '0x04'
+  length: 1
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: inc_rn
+  mnemonic: INC
+  family: inc
+  operands:
+  - Rn
+  assembly: inc r5
+  source_bytes:
+  - '0x0b'
+  - '0x50'
+  binary_bytes:
+  - '0x0d'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: inc_dir8
+  mnemonic: INC
+  family: inc
+  operands:
+  - dir8
+  assembly: inc 0x30
+  source_bytes:
+  - '0x05'
+  - '0x30'
+  binary_bytes:
+  - '0x05'
+  - '0x30'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: inc_at_ri
+  mnemonic: INC
+  family: inc
+  operands:
+  - '@Ri'
+  assembly: inc @r1
+  source_bytes:
+  - '0xa5'
+  - '0x07'
+  binary_bytes:
+  - '0x07'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: inc_rm_short
+  mnemonic: INC
+  family: inc
+  operands:
+  - Rm
+  - '#short'
+  assembly: inc r10,#2
+  source_bytes:
+  - '0x0b'
+  - '0xa1'
+  binary_bytes:
+  - '0xa5'
+  - '0x0b'
+  - '0xa1'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: inc_wr_short
+  mnemonic: INC
+  family: inc
+  operands:
+  - WRj
+  - '#short'
+  assembly: inc wr4,#2
+  source_bytes:
+  - '0x0b'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0x0b'
+  - '0x25'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: inc_dr_short
+  mnemonic: INC
+  family: inc
+  operands:
+  - DRk
+  - '#short'
+  assembly: inc dr12,#4
+  source_bytes:
+  - '0x0b'
+  - '0x3e'
+  binary_bytes:
+  - '0xa5'
+  - '0x0b'
+  - '0x3e'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: dec_a
+  mnemonic: DEC
+  family: dec
+  operands:
+  - A
+  assembly: dec a
+  source_bytes:
+  - '0x14'
+  binary_bytes:
+  - '0x14'
+  length: 1
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: dec_rn
+  mnemonic: DEC
+  family: dec
+  operands:
+  - Rn
+  assembly: dec r5
+  source_bytes:
+  - '0x1b'
+  - '0x50'
+  binary_bytes:
+  - '0x1d'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: dec_dir8
+  mnemonic: DEC
+  family: dec
+  operands:
+  - dir8
+  assembly: dec 0x30
+  source_bytes:
+  - '0x15'
+  - '0x30'
+  binary_bytes:
+  - '0x15'
+  - '0x30'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: dec_at_ri
+  mnemonic: DEC
+  family: dec
+  operands:
+  - '@Ri'
+  assembly: dec @r1
+  source_bytes:
+  - '0xa5'
+  - '0x17'
+  binary_bytes:
+  - '0x17'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: dec_rm_short
+  mnemonic: DEC
+  family: dec
+  operands:
+  - Rm
+  - '#short'
+  assembly: dec r10,#2
+  source_bytes:
+  - '0x1b'
+  - '0xa1'
+  binary_bytes:
+  - '0xa5'
+  - '0x1b'
+  - '0xa1'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: dec_wr_short
+  mnemonic: DEC
+  family: dec
+  operands:
+  - WRj
+  - '#short'
+  assembly: dec wr4,#2
+  source_bytes:
+  - '0x1b'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0x1b'
+  - '0x25'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: dec_dr_short
+  mnemonic: DEC
+  family: dec
+  operands:
+  - DRk
+  - '#short'
+  assembly: dec dr12,#4
+  source_bytes:
+  - '0x1b'
+  - '0x3e'
+  binary_bytes:
+  - '0xa5'
+  - '0x1b'
+  - '0x3e'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-15/A-16/A-21
+- id: inc_dptr
+  mnemonic: INC
+  family: inc
+  operands:
+  - DPTR
+  assembly: inc dptr
+  source_bytes:
+  - '0xa3'
+  binary_bytes:
+  - '0xa3'
+  length: 1
+  flags: []
+  reference: Intel A-21
+- id: mul_ab
+  mnemonic: MUL
+  family: mul
+  operands:
+  - AB
+  assembly: mul ab
+  source_bytes:
+  - '0xa4'
+  binary_bytes:
+  - '0xa4'
+  length: 1
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-22
+- id: mul_rm_rm
+  mnemonic: MUL
+  family: mul
+  operands:
+  - Rmd
+  - Rms
+  assembly: mul r3,r12
+  source_bytes:
+  - '0xac'
+  - '0x3c'
+  binary_bytes:
+  - '0xa5'
+  - '0xac'
+  - '0x3c'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-22
+- id: mul_wr_wr
+  mnemonic: MUL
+  family: mul
+  operands:
+  - WRjd
+  - WRjs
+  assembly: mul wr4,wr10
+  source_bytes:
+  - '0xad'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0xad'
+  - '0x25'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-22
+- id: div_ab
+  mnemonic: DIV
+  family: div
+  operands:
+  - AB
+  assembly: div ab
+  source_bytes:
+  - '0x84'
+  binary_bytes:
+  - '0x84'
+  length: 1
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-22
+- id: div_rm_rm
+  mnemonic: DIV
+  family: div
+  operands:
+  - Rmd
+  - Rms
+  assembly: div r3,r12
+  source_bytes:
+  - '0x8c'
+  - '0x3c'
+  binary_bytes:
+  - '0xa5'
+  - '0x8c'
+  - '0x3c'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-22
+- id: div_wr_wr
+  mnemonic: DIV
+  family: div
+  operands:
+  - WRjd
+  - WRjs
+  assembly: div wr4,wr10
+  source_bytes:
+  - '0x8d'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0x8d'
+  - '0x25'
+  length: 2
+  flags:
+  - CY
+  - OV
+  - N
+  - Z
+  reference: Intel A-8/A-22
+- id: da_a
+  mnemonic: DA
+  family: da
+  operands:
+  - A
+  assembly: da a
+  source_bytes:
+  - '0xd4'
+  binary_bytes:
+  - '0xd4'
+  length: 1
+  flags:
+  - CY
+  reference: Intel A-22
+- id: orl_a_rn
+  mnemonic: ORL
+  family: orl
+  operands:
+  - A
+  - Rn
+  assembly: orl a,r6
+  source_bytes:
+  - '0xa5'
+  - '0x4e'
+  binary_bytes:
+  - '0x4e'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_a_dir8
+  mnemonic: ORL
+  family: orl
+  operands:
+  - A
+  - dir8
+  assembly: orl a,0x30
+  source_bytes:
+  - '0x45'
+  - '0x30'
+  binary_bytes:
+  - '0x45'
+  - '0x30'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_a_at_ri
+  mnemonic: ORL
+  family: orl
+  operands:
+  - A
+  - '@Ri'
+  assembly: orl a,@r1
+  source_bytes:
+  - '0xa5'
+  - '0x47'
+  binary_bytes:
+  - '0x47'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_a_imm8
+  mnemonic: ORL
+  family: orl
+  operands:
+  - A
+  - '#data'
+  assembly: orl a,#0x5a
+  source_bytes:
+  - '0x44'
+  - '0x5a'
+  binary_bytes:
+  - '0x44'
+  - '0x5a'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_dir8_a
+  mnemonic: ORL
+  family: orl
+  operands:
+  - dir8
+  - A
+  assembly: orl 0x30,a
+  source_bytes:
+  - '0x42'
+  - '0x30'
+  binary_bytes:
+  - '0x42'
+  - '0x30'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_dir8_imm8
+  mnemonic: ORL
+  family: orl
+  operands:
+  - dir8
+  - '#data'
+  assembly: orl 0x30,#0x5a
+  source_bytes:
+  - '0x43'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0x43'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_rm_rm
+  mnemonic: ORL
+  family: orl
+  operands:
+  - Rmd
+  - Rms
+  assembly: orl r3,r12
+  source_bytes:
+  - '0x4c'
+  - '0x3c'
+  binary_bytes:
+  - '0xa5'
+  - '0x4c'
+  - '0x3c'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_wr_wr
+  mnemonic: ORL
+  family: orl
+  operands:
+  - WRjd
+  - WRjs
+  assembly: orl wr4,wr10
+  source_bytes:
+  - '0x4d'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0x4d'
+  - '0x25'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_rm_imm8
+  mnemonic: ORL
+  family: orl
+  operands:
+  - Rm
+  - '#data'
+  assembly: orl r3,#0x5a
+  source_bytes:
+  - '0x4e'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0xa5'
+  - '0x4e'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_wr_imm16
+  mnemonic: ORL
+  family: orl
+  operands:
+  - WRj
+  - '#data16'
+  assembly: orl wr4,#0x1234
+  source_bytes:
+  - '0x4e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x4e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_rm_dir8
+  mnemonic: ORL
+  family: orl
+  operands:
+  - Rm
+  - dir8
+  assembly: orl r3,0x30
+  source_bytes:
+  - '0x4e'
+  - '0x31'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x4e'
+  - '0x31'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_wr_dir8
+  mnemonic: ORL
+  family: orl
+  operands:
+  - WRj
+  - dir8
+  assembly: orl wr4,0x30
+  source_bytes:
+  - '0x4e'
+  - '0x25'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x4e'
+  - '0x25'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_rm_dir16
+  mnemonic: ORL
+  family: orl
+  operands:
+  - Rm
+  - dir16
+  assembly: orl r3,0x1234
+  source_bytes:
+  - '0x4e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x4e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_wr_dir16
+  mnemonic: ORL
+  family: orl
+  operands:
+  - WRj
+  - dir16
+  assembly: orl wr4,0x1234
+  source_bytes:
+  - '0x4e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x4e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_rm_at_wr
+  mnemonic: ORL
+  family: orl
+  operands:
+  - Rm
+  - '@WRj'
+  assembly: orl r3,@wr6
+  source_bytes:
+  - '0x4e'
+  - '0x39'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x4e'
+  - '0x39'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: orl_rm_at_dr
+  mnemonic: ORL
+  family: orl
+  operands:
+  - Rm
+  - '@DRk'
+  assembly: orl r3,@dr16
+  source_bytes:
+  - '0x4e'
+  - '0x4b'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x4e'
+  - '0x4b'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_a_rn
+  mnemonic: ANL
+  family: anl
+  operands:
+  - A
+  - Rn
+  assembly: anl a,r6
+  source_bytes:
+  - '0xa5'
+  - '0x5e'
+  binary_bytes:
+  - '0x5e'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_a_dir8
+  mnemonic: ANL
+  family: anl
+  operands:
+  - A
+  - dir8
+  assembly: anl a,0x30
+  source_bytes:
+  - '0x55'
+  - '0x30'
+  binary_bytes:
+  - '0x55'
+  - '0x30'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_a_at_ri
+  mnemonic: ANL
+  family: anl
+  operands:
+  - A
+  - '@Ri'
+  assembly: anl a,@r1
+  source_bytes:
+  - '0xa5'
+  - '0x57'
+  binary_bytes:
+  - '0x57'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_a_imm8
+  mnemonic: ANL
+  family: anl
+  operands:
+  - A
+  - '#data'
+  assembly: anl a,#0x5a
+  source_bytes:
+  - '0x54'
+  - '0x5a'
+  binary_bytes:
+  - '0x54'
+  - '0x5a'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_dir8_a
+  mnemonic: ANL
+  family: anl
+  operands:
+  - dir8
+  - A
+  assembly: anl 0x30,a
+  source_bytes:
+  - '0x52'
+  - '0x30'
+  binary_bytes:
+  - '0x52'
+  - '0x30'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_dir8_imm8
+  mnemonic: ANL
+  family: anl
+  operands:
+  - dir8
+  - '#data'
+  assembly: anl 0x30,#0x5a
+  source_bytes:
+  - '0x53'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0x53'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_rm_rm
+  mnemonic: ANL
+  family: anl
+  operands:
+  - Rmd
+  - Rms
+  assembly: anl r3,r12
+  source_bytes:
+  - '0x5c'
+  - '0x3c'
+  binary_bytes:
+  - '0xa5'
+  - '0x5c'
+  - '0x3c'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_wr_wr
+  mnemonic: ANL
+  family: anl
+  operands:
+  - WRjd
+  - WRjs
+  assembly: anl wr4,wr10
+  source_bytes:
+  - '0x5d'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0x5d'
+  - '0x25'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_rm_imm8
+  mnemonic: ANL
+  family: anl
+  operands:
+  - Rm
+  - '#data'
+  assembly: anl r3,#0x5a
+  source_bytes:
+  - '0x5e'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0xa5'
+  - '0x5e'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_wr_imm16
+  mnemonic: ANL
+  family: anl
+  operands:
+  - WRj
+  - '#data16'
+  assembly: anl wr4,#0x1234
+  source_bytes:
+  - '0x5e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x5e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_rm_dir8
+  mnemonic: ANL
+  family: anl
+  operands:
+  - Rm
+  - dir8
+  assembly: anl r3,0x30
+  source_bytes:
+  - '0x5e'
+  - '0x31'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x5e'
+  - '0x31'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_wr_dir8
+  mnemonic: ANL
+  family: anl
+  operands:
+  - WRj
+  - dir8
+  assembly: anl wr4,0x30
+  source_bytes:
+  - '0x5e'
+  - '0x25'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x5e'
+  - '0x25'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_rm_dir16
+  mnemonic: ANL
+  family: anl
+  operands:
+  - Rm
+  - dir16
+  assembly: anl r3,0x1234
+  source_bytes:
+  - '0x5e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x5e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_wr_dir16
+  mnemonic: ANL
+  family: anl
+  operands:
+  - WRj
+  - dir16
+  assembly: anl wr4,0x1234
+  source_bytes:
+  - '0x5e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x5e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_rm_at_wr
+  mnemonic: ANL
+  family: anl
+  operands:
+  - Rm
+  - '@WRj'
+  assembly: anl r3,@wr6
+  source_bytes:
+  - '0x5e'
+  - '0x39'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x5e'
+  - '0x39'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: anl_rm_at_dr
+  mnemonic: ANL
+  family: anl
+  operands:
+  - Rm
+  - '@DRk'
+  assembly: anl r3,@dr16
+  source_bytes:
+  - '0x5e'
+  - '0x4b'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x5e'
+  - '0x4b'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_a_rn
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - A
+  - Rn
+  assembly: xrl a,r6
+  source_bytes:
+  - '0xa5'
+  - '0x6e'
+  binary_bytes:
+  - '0x6e'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_a_dir8
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - A
+  - dir8
+  assembly: xrl a,0x30
+  source_bytes:
+  - '0x65'
+  - '0x30'
+  binary_bytes:
+  - '0x65'
+  - '0x30'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_a_at_ri
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - A
+  - '@Ri'
+  assembly: xrl a,@r1
+  source_bytes:
+  - '0xa5'
+  - '0x67'
+  binary_bytes:
+  - '0x67'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_a_imm8
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - A
+  - '#data'
+  assembly: xrl a,#0x5a
+  source_bytes:
+  - '0x64'
+  - '0x5a'
+  binary_bytes:
+  - '0x64'
+  - '0x5a'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_dir8_a
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - dir8
+  - A
+  assembly: xrl 0x30,a
+  source_bytes:
+  - '0x62'
+  - '0x30'
+  binary_bytes:
+  - '0x62'
+  - '0x30'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_dir8_imm8
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - dir8
+  - '#data'
+  assembly: xrl 0x30,#0x5a
+  source_bytes:
+  - '0x63'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0x63'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_rm_rm
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - Rmd
+  - Rms
+  assembly: xrl r3,r12
+  source_bytes:
+  - '0x6c'
+  - '0x3c'
+  binary_bytes:
+  - '0xa5'
+  - '0x6c'
+  - '0x3c'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_wr_wr
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - WRjd
+  - WRjs
+  assembly: xrl wr4,wr10
+  source_bytes:
+  - '0x6d'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0x6d'
+  - '0x25'
+  length: 2
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_rm_imm8
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - Rm
+  - '#data'
+  assembly: xrl r3,#0x5a
+  source_bytes:
+  - '0x6e'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0xa5'
+  - '0x6e'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_wr_imm16
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - WRj
+  - '#data16'
+  assembly: xrl wr4,#0x1234
+  source_bytes:
+  - '0x6e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x6e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_rm_dir8
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - Rm
+  - dir8
+  assembly: xrl r3,0x30
+  source_bytes:
+  - '0x6e'
+  - '0x31'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x6e'
+  - '0x31'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_wr_dir8
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - WRj
+  - dir8
+  assembly: xrl wr4,0x30
+  source_bytes:
+  - '0x6e'
+  - '0x25'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x6e'
+  - '0x25'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_rm_dir16
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - Rm
+  - dir16
+  assembly: xrl r3,0x1234
+  source_bytes:
+  - '0x6e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x6e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_wr_dir16
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - WRj
+  - dir16
+  assembly: xrl wr4,0x1234
+  source_bytes:
+  - '0x6e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x6e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_rm_at_wr
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - Rm
+  - '@WRj'
+  assembly: xrl r3,@wr6
+  source_bytes:
+  - '0x6e'
+  - '0x39'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x6e'
+  - '0x39'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: xrl_rm_at_dr
+  mnemonic: XRL
+  family: xrl
+  operands:
+  - Rm
+  - '@DRk'
+  assembly: xrl r3,@dr16
+  source_bytes:
+  - '0x6e'
+  - '0x4b'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x6e'
+  - '0x4b'
+  - '0x30'
+  length: 3
+  flags:
+  - N
+  - Z
+  reference: Intel A-8/A-23
+- id: clr_a
+  mnemonic: CLR
+  family: clr
+  operands:
+  - A
+  assembly: clr a
+  source_bytes:
+  - '0xe4'
+  binary_bytes:
+  - '0xe4'
+  length: 1
+  flags:
+  - N
+  - Z
+  reference: Intel A-23
+- id: cpl_a
+  mnemonic: CPL
+  family: cpl
+  operands:
+  - A
+  assembly: cpl a
+  source_bytes:
+  - '0xf4'
+  binary_bytes:
+  - '0xf4'
+  length: 1
+  flags:
+  - N
+  - Z
+  reference: Intel A-23
+- id: rl_a
+  mnemonic: RL
+  family: rl
+  operands:
+  - A
+  assembly: rl a
+  source_bytes:
+  - '0x23'
+  binary_bytes:
+  - '0x23'
+  length: 1
+  flags:
+  - N
+  - Z
+  reference: Intel A-23
+- id: rlc_a
+  mnemonic: RLC
+  family: rlc
+  operands:
+  - A
+  assembly: rlc a
+  source_bytes:
+  - '0x33'
+  binary_bytes:
+  - '0x33'
+  length: 1
+  flags:
+  - CY
+  - N
+  - Z
+  reference: Intel A-23
+- id: rr_a
+  mnemonic: RR
+  family: rr
+  operands:
+  - A
+  assembly: rr a
+  source_bytes:
+  - '0x03'
+  binary_bytes:
+  - '0x03'
+  length: 1
+  flags:
+  - N
+  - Z
+  reference: Intel A-23
+- id: rrc_a
+  mnemonic: RRC
+  family: rrc
+  operands:
+  - A
+  assembly: rrc a
+  source_bytes:
+  - '0x13'
+  binary_bytes:
+  - '0x13'
+  length: 1
+  flags:
+  - CY
+  - N
+  - Z
+  reference: Intel A-23
+- id: sra_rm
+  mnemonic: SRA
+  family: sra
+  operands:
+  - Rm
+  assembly: sra r3
+  source_bytes:
+  - '0x0e'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x0e'
+  - '0x30'
+  length: 2
+  flags:
+  - CY
+  - N
+  - Z
+  reference: Intel A-17/A-23
+- id: sra_wr
+  mnemonic: SRA
+  family: sra
+  operands:
+  - WRj
+  assembly: sra wr4
+  source_bytes:
+  - '0x0e'
+  - '0x24'
+  binary_bytes:
+  - '0xa5'
+  - '0x0e'
+  - '0x24'
+  length: 2
+  flags:
+  - CY
+  - N
+  - Z
+  reference: Intel A-17/A-23
+- id: srl_rm
+  mnemonic: SRL
+  family: srl
+  operands:
+  - Rm
+  assembly: srl r3
+  source_bytes:
+  - '0x1e'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x1e'
+  - '0x30'
+  length: 2
+  flags:
+  - CY
+  - N
+  - Z
+  reference: Intel A-17/A-23
+- id: srl_wr
+  mnemonic: SRL
+  family: srl
+  operands:
+  - WRj
+  assembly: srl wr4
+  source_bytes:
+  - '0x1e'
+  - '0x24'
+  binary_bytes:
+  - '0xa5'
+  - '0x1e'
+  - '0x24'
+  length: 2
+  flags:
+  - CY
+  - N
+  - Z
+  reference: Intel A-17/A-23
+- id: sll_rm
+  mnemonic: SLL
+  family: sll
+  operands:
+  - Rm
+  assembly: sll r3
+  source_bytes:
+  - '0x3e'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x3e'
+  - '0x30'
+  length: 2
+  flags:
+  - CY
+  - N
+  - Z
+  reference: Intel A-17/A-23
+- id: sll_wr
+  mnemonic: SLL
+  family: sll
+  operands:
+  - WRj
+  assembly: sll wr4
+  source_bytes:
+  - '0x3e'
+  - '0x24'
+  binary_bytes:
+  - '0xa5'
+  - '0x3e'
+  - '0x24'
+  length: 2
+  flags:
+  - CY
+  - N
+  - Z
+  reference: Intel A-17/A-23
+- id: swap_a
+  mnemonic: SWAP
+  family: swap
+  operands:
+  - A
+  assembly: swap a
+  source_bytes:
+  - '0xc4'
+  binary_bytes:
+  - '0xc4'
+  length: 1
+  flags:
+  - N
+  - Z
+  reference: Intel A-23
+- id: mov_a_rn
+  mnemonic: MOV
+  family: mov
+  operands:
+  - A
+  - Rn
+  assembly: mov a,r6
+  source_bytes:
+  - '0xa5'
+  - '0xee'
+  binary_bytes:
+  - '0xee'
+  length: 2
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_a_dir8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - A
+  - dir8
+  assembly: mov a,0x30
+  source_bytes:
+  - '0xe5'
+  - '0x30'
+  binary_bytes:
+  - '0xe5'
+  - '0x30'
+  length: 2
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_a_at_ri
+  mnemonic: MOV
+  family: mov
+  operands:
+  - A
+  - '@Ri'
+  assembly: mov a,@r1
+  source_bytes:
+  - '0xa5'
+  - '0xe7'
+  binary_bytes:
+  - '0xe7'
+  length: 2
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_a_imm8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - A
+  - '#data'
+  assembly: mov a,#0x5a
+  source_bytes:
+  - '0x74'
+  - '0x5a'
+  binary_bytes:
+  - '0x74'
+  - '0x5a'
+  length: 2
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_rn_a
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rn
+  - A
+  assembly: mov r5,a
+  source_bytes:
+  - '0xa5'
+  - '0xfd'
+  binary_bytes:
+  - '0xfd'
+  length: 2
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_rn_dir8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rn
+  - dir8
+  assembly: mov r5,0x30
+  source_bytes:
+  - '0x7e'
+  - '0x51'
+  - '0x30'
+  binary_bytes:
+  - '0xad'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_rn_imm8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rn
+  - '#data'
+  assembly: mov r5,#0x5a
+  source_bytes:
+  - '0x7e'
+  - '0x50'
+  - '0x5a'
+  binary_bytes:
+  - '0x7d'
+  - '0x5a'
+  length: 3
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_dir8_a
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir8
+  - A
+  assembly: mov 0x30,a
+  source_bytes:
+  - '0xf5'
+  - '0x30'
+  binary_bytes:
+  - '0xf5'
+  - '0x30'
+  length: 2
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_dir8_rn
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir8
+  - Rn
+  assembly: mov 0x30,r5
+  source_bytes:
+  - '0x7a'
+  - '0x51'
+  - '0x30'
+  binary_bytes:
+  - '0x8d'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_dir8_dir8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir8
+  - dir8
+  assembly: mov 0x30,0x31
+  source_bytes:
+  - '0x85'
+  - '0x31'
+  - '0x30'
+  binary_bytes:
+  - '0x85'
+  - '0x31'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_dir8_at_ri
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir8
+  - '@Ri'
+  assembly: mov 0x30,@r1
+  source_bytes:
+  - '0xa5'
+  - '0x87'
+  - '0x30'
+  binary_bytes:
+  - '0x87'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_dir8_imm8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir8
+  - '#data'
+  assembly: mov 0x30,#0x5a
+  source_bytes:
+  - '0x75'
+  - '0x30'
+  - '0x5a'
+  binary_bytes:
+  - '0x75'
+  - '0x30'
+  - '0x5a'
+  length: 3
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_at_ri_a
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@Ri'
+  - A
+  assembly: mov @r1,a
+  source_bytes:
+  - '0xa5'
+  - '0xf7'
+  binary_bytes:
+  - '0xf7'
+  length: 2
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_at_ri_dir8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@Ri'
+  - dir8
+  assembly: mov @r1,0x30
+  source_bytes:
+  - '0xa5'
+  - '0xa7'
+  - '0x30'
+  binary_bytes:
+  - '0xa7'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_at_ri_imm8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@Ri'
+  - '#data'
+  assembly: mov @r1,#0x5a
+  source_bytes:
+  - '0xa5'
+  - '0x77'
+  - '0x5a'
+  binary_bytes:
+  - '0x77'
+  - '0x5a'
+  length: 3
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_dptr_imm16
+  mnemonic: MOV
+  family: mov
+  operands:
+  - DPTR
+  - '#data16'
+  assembly: mov dptr,#0x1234
+  source_bytes:
+  - '0x90'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0x90'
+  - '0x12'
+  - '0x34'
+  length: 3
+  flags: []
+  reference: Intel A-6/A-24
+- id: mov_rm_rm
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rmd
+  - Rms
+  assembly: mov r3,r12
+  source_bytes:
+  - '0x7c'
+  - '0x3c'
+  binary_bytes:
+  - '0xa5'
+  - '0x7c'
+  - '0x3c'
+  length: 2
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_wr_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - WRjd
+  - WRjs
+  assembly: mov wr4,wr10
+  source_bytes:
+  - '0x7d'
+  - '0x25'
+  binary_bytes:
+  - '0xa5'
+  - '0x7d'
+  - '0x25'
+  length: 2
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dr_dr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - DRkd
+  - DRks
+  assembly: mov dr12,dr28
+  source_bytes:
+  - '0x7f'
+  - '0x37'
+  binary_bytes:
+  - '0xa5'
+  - '0x7f'
+  - '0x37'
+  length: 2
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_rm_imm8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rm
+  - '#data'
+  assembly: mov r10,#0x5a
+  source_bytes:
+  - '0x7e'
+  - '0xa0'
+  - '0x5a'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0xa0'
+  - '0x5a'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_wr_imm16
+  mnemonic: MOV
+  family: mov
+  operands:
+  - WRj
+  - '#data16'
+  assembly: mov wr4,#0x1234
+  source_bytes:
+  - '0x7e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dr_imm16_zero
+  mnemonic: MOV
+  family: mov
+  operands:
+  - DRk
+  - '#0data16'
+  assembly: mov dr12,#0x1234
+  source_bytes:
+  - '0x7e'
+  - '0x38'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x38'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dr_imm16_one
+  mnemonic: MOV
+  family: mov
+  operands:
+  - DRk
+  - '#1data16'
+  assembly: mov dr12,#-3
+  source_bytes:
+  - '0x7e'
+  - '0x3c'
+  - '0xff'
+  - '0xfd'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x3c'
+  - '0xff'
+  - '0xfd'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dr_dir8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - DRk
+  - dir8
+  assembly: mov dr12,0x30
+  source_bytes:
+  - '0x7e'
+  - '0x3d'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x3d'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dr_dir16
+  mnemonic: MOV
+  family: mov
+  operands:
+  - DRk
+  - dir16
+  assembly: mov dr12,0x1234
+  source_bytes:
+  - '0x7e'
+  - '0x3f'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x3f'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_rm_dir8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rm
+  - dir8
+  assembly: mov r10,0x30
+  source_bytes:
+  - '0x7e'
+  - '0xa1'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0xa1'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_wr_dir8
+  mnemonic: MOV
+  family: mov
+  operands:
+  - WRj
+  - dir8
+  assembly: mov wr4,0x30
+  source_bytes:
+  - '0x7e'
+  - '0x25'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x25'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_rm_dir16
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rm
+  - dir16
+  assembly: mov r3,0x1234
+  source_bytes:
+  - '0x7e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_wr_dir16
+  mnemonic: MOV
+  family: mov
+  operands:
+  - WRj
+  - dir16
+  assembly: mov wr4,0x1234
+  source_bytes:
+  - '0x7e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_rm_at_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rm
+  - '@WRj'
+  assembly: mov r3,@wr6
+  source_bytes:
+  - '0x7e'
+  - '0x39'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x39'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_rm_at_dr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rm
+  - '@DRk'
+  assembly: mov r3,@dr16
+  source_bytes:
+  - '0x7e'
+  - '0x4b'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7e'
+  - '0x4b'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_wr_at_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - WRjd
+  - '@WRjs'
+  assembly: mov wr4,@wr10
+  source_bytes:
+  - '0x0b'
+  - '0x58'
+  - '0x20'
+  binary_bytes:
+  - '0xa5'
+  - '0x0b'
+  - '0x58'
+  - '0x20'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_wr_at_dr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - WRj
+  - '@DRk'
+  assembly: mov wr4,@dr16
+  source_bytes:
+  - '0x0b'
+  - '0x4a'
+  - '0x20'
+  binary_bytes:
+  - '0xa5'
+  - '0x0b'
+  - '0x4a'
+  - '0x20'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dir8_rm
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir8
+  - Rm
+  assembly: mov 0x30,r10
+  source_bytes:
+  - '0x7a'
+  - '0xa1'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7a'
+  - '0xa1'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dir8_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir8
+  - WRj
+  assembly: mov 0x30,wr4
+  source_bytes:
+  - '0x7a'
+  - '0x25'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7a'
+  - '0x25'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dir16_rm
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir16
+  - Rm
+  assembly: mov 0x1234,r3
+  source_bytes:
+  - '0x7a'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x7a'
+  - '0x33'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dir16_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir16
+  - WRj
+  assembly: mov 0x1234,wr4
+  source_bytes:
+  - '0x7a'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x7a'
+  - '0x27'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_at_wr_rm
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@WRj'
+  - Rm
+  assembly: mov @wr6,r3
+  source_bytes:
+  - '0x7a'
+  - '0x39'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7a'
+  - '0x39'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_at_dr_rm
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@DRk'
+  - Rm
+  assembly: mov @dr16,r3
+  source_bytes:
+  - '0x7a'
+  - '0x4b'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7a'
+  - '0x4b'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_at_wr_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@WRjd'
+  - WRjs
+  assembly: mov @wr6,wr4
+  source_bytes:
+  - '0x1b'
+  - '0x38'
+  - '0x20'
+  binary_bytes:
+  - '0xa5'
+  - '0x1b'
+  - '0x38'
+  - '0x20'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_at_dr_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@DRk'
+  - WRj
+  assembly: mov @dr16,wr4
+  source_bytes:
+  - '0x1b'
+  - '0x4a'
+  - '0x20'
+  binary_bytes:
+  - '0xa5'
+  - '0x1b'
+  - '0x4a'
+  - '0x20'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dir8_dr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir8
+  - DRk
+  assembly: mov 0x30,dr12
+  source_bytes:
+  - '0x7a'
+  - '0x3d'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0x7a'
+  - '0x3d'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_dir16_dr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - dir16
+  - DRk
+  assembly: mov 0x1234,dr12
+  source_bytes:
+  - '0x7a'
+  - '0x3f'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x7a'
+  - '0x3f'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_rm_idx_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rm
+  - '@WRj+dis16'
+  assembly: mov r10,@wr6+0x1234
+  source_bytes:
+  - '0x09'
+  - '0xa3'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x09'
+  - '0xa3'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_wr_idx_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - WRj
+  - '@WRj+dis16'
+  assembly: mov wr4,@wr6+0x1234
+  source_bytes:
+  - '0x49'
+  - '0x23'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x49'
+  - '0x23'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_rm_idx_dr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - Rm
+  - '@DRk+dis24'
+  assembly: mov r10,@dr16+0x1234
+  source_bytes:
+  - '0x29'
+  - '0xa4'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x29'
+  - '0xa4'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_wr_idx_dr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - WRj
+  - '@DRk+dis24'
+  assembly: mov wr4,@dr16+0x1234
+  source_bytes:
+  - '0x69'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x69'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_idx_wr_rm
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@WRj+dis16'
+  - Rm
+  assembly: mov @wr6+0x1234,r10
+  source_bytes:
+  - '0x19'
+  - '0xa3'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x19'
+  - '0xa3'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_idx_wr_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@WRj+dis16'
+  - WRj
+  assembly: mov @wr6+0x1234,wr4
+  source_bytes:
+  - '0x59'
+  - '0x23'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x59'
+  - '0x23'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_idx_dr_rm
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@DRk+dis24'
+  - Rm
+  assembly: mov @dr16+0x1234,r10
+  source_bytes:
+  - '0x39'
+  - '0xa4'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x39'
+  - '0xa4'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: mov_idx_dr_wr
+  mnemonic: MOV
+  family: mov
+  operands:
+  - '@DRk+dis24'
+  - WRj
+  assembly: mov @dr16+0x1234,wr4
+  source_bytes:
+  - '0x79'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x79'
+  - '0x24'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-14/A-24
+- id: movh_dr_imm16
+  mnemonic: MOVH
+  family: movh
+  operands:
+  - DRk(hi)
+  - '#data16'
+  assembly: movh dr12,#0x1234
+  source_bytes:
+  - '0x7a'
+  - '0x3c'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0x7a'
+  - '0x3c'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-8/A-24
+- id: movs_wr_rm
+  mnemonic: MOVS
+  family: movs
+  operands:
+  - WRj
+  - Rm
+  assembly: movs wr4,r3
+  source_bytes:
+  - '0x1a'
+  - '0x23'
+  binary_bytes:
+  - '0xa5'
+  - '0x1a'
+  - '0x23'
+  length: 2
+  flags: []
+  reference: Intel A-14/A-24; flags per Intel A-102/A-105 and STC32G 1650/1651
+- id: movz_wr_rm
+  mnemonic: MOVZ
+  family: movz
+  operands:
+  - WRj
+  - Rm
+  assembly: movz wr4,r3
+  source_bytes:
+  - '0x0a'
+  - '0x23'
+  binary_bytes:
+  - '0xa5'
+  - '0x0a'
+  - '0x23'
+  length: 2
+  flags: []
+  reference: Intel A-14/A-24; flags per Intel A-102/A-105 and STC32G 1650/1651
+- id: movc_a_at_a_dptr
+  mnemonic: MOVC
+  family: movc
+  operands:
+  - A
+  - '@A+DPTR'
+  assembly: movc a,@a+dptr
+  source_bytes:
+  - '0x93'
+  binary_bytes:
+  - '0x93'
+  length: 1
+  flags: []
+  reference: Intel A-24
+- id: movc_a_at_a_pc
+  mnemonic: MOVC
+  family: movc
+  operands:
+  - A
+  - '@A+PC'
+  assembly: movc a,@a+pc
+  source_bytes:
+  - '0x83'
+  binary_bytes:
+  - '0x83'
+  length: 1
+  flags: []
+  reference: Intel A-24
+- id: movx_a_at_ri
+  mnemonic: MOVX
+  family: movx
+  operands:
+  - A
+  - '@Ri'
+  assembly: movx a,@r1
+  source_bytes:
+  - '0xe3'
+  binary_bytes:
+  - '0xe3'
+  length: 1
+  flags: []
+  reference: Intel A-6/A-24
+- id: movx_a_at_dptr
+  mnemonic: MOVX
+  family: movx
+  operands:
+  - A
+  - '@DPTR'
+  assembly: movx a,@dptr
+  source_bytes:
+  - '0xe0'
+  binary_bytes:
+  - '0xe0'
+  length: 1
+  flags: []
+  reference: Intel A-6/A-24
+- id: movx_at_ri_a
+  mnemonic: MOVX
+  family: movx
+  operands:
+  - '@Ri'
+  - A
+  assembly: movx @r1,a
+  source_bytes:
+  - '0xf3'
+  binary_bytes:
+  - '0xf3'
+  length: 1
+  flags: []
+  reference: Intel A-6/A-24
+- id: movx_at_dptr_a
+  mnemonic: MOVX
+  family: movx
+  operands:
+  - '@DPTR'
+  - A
+  assembly: movx @dptr,a
+  source_bytes:
+  - '0xf0'
+  binary_bytes:
+  - '0xf0'
+  length: 1
+  flags: []
+  reference: Intel A-6/A-24
+- id: xch_a_rn
+  mnemonic: XCH
+  family: xch
+  operands:
+  - A
+  - Rn
+  assembly: xch a,r5
+  source_bytes:
+  - '0xa5'
+  - '0xcd'
+  binary_bytes:
+  - '0xcd'
+  length: 2
+  flags: []
+  reference: Intel A-25
+- id: xch_a_dir8
+  mnemonic: XCH
+  family: xch
+  operands:
+  - A
+  - dir8
+  assembly: xch a,0x30
+  source_bytes:
+  - '0xc5'
+  - '0x30'
+  binary_bytes:
+  - '0xc5'
+  - '0x30'
+  length: 2
+  flags: []
+  reference: Intel A-25
+- id: xch_a_at_ri
+  mnemonic: XCH
+  family: xch
+  operands:
+  - A
+  - '@Ri'
+  assembly: xch a,@r1
+  source_bytes:
+  - '0xa5'
+  - '0xc7'
+  binary_bytes:
+  - '0xc7'
+  length: 2
+  flags: []
+  reference: Intel A-25
+- id: xchd_a_at_ri
+  mnemonic: XCHD
+  family: xchd
+  operands:
+  - A
+  - '@Ri'
+  assembly: xchd a,@r1
+  source_bytes:
+  - '0xa5'
+  - '0xd7'
+  binary_bytes:
+  - '0xd7'
+  length: 2
+  flags: []
+  reference: Intel A-25
+- id: push_dir8
+  mnemonic: PUSH
+  family: push
+  operands:
+  - dir8
+  assembly: push 0x30
+  source_bytes:
+  - '0xc0'
+  - '0x30'
+  binary_bytes:
+  - '0xc0'
+  - '0x30'
+  length: 2
+  flags: []
+  reference: Intel A-12/A-25
+- id: push_imm8
+  mnemonic: PUSH
+  family: push
+  operands:
+  - '#data'
+  assembly: 'push #0x5a'
+  source_bytes:
+  - '0xca'
+  - '0x02'
+  - '0x5a'
+  binary_bytes:
+  - '0xa5'
+  - '0xca'
+  - '0x02'
+  - '0x5a'
+  length: 3
+  flags: []
+  reference: Intel A-12/A-25
+- id: push_imm16
+  mnemonic: PUSH
+  family: push
+  operands:
+  - '#data16'
+  assembly: 'push #0x1234'
+  source_bytes:
+  - '0xca'
+  - '0x06'
+  - '0x12'
+  - '0x34'
+  binary_bytes:
+  - '0xa5'
+  - '0xca'
+  - '0x06'
+  - '0x12'
+  - '0x34'
+  length: 4
+  flags: []
+  reference: Intel A-12/A-25
+- id: push_rm
+  mnemonic: PUSH
+  family: push
+  operands:
+  - Rm
+  assembly: push r3
+  source_bytes:
+  - '0xca'
+  - '0x38'
+  binary_bytes:
+  - '0xa5'
+  - '0xca'
+  - '0x38'
+  length: 2
+  flags: []
+  reference: Intel A-12/A-25
+- id: push_wr
+  mnemonic: PUSH
+  family: push
+  operands:
+  - WRj
+  assembly: push wr4
+  source_bytes:
+  - '0xca'
+  - '0x29'
+  binary_bytes:
+  - '0xa5'
+  - '0xca'
+  - '0x29'
+  length: 2
+  flags: []
+  reference: Intel A-12/A-25
+- id: push_dr
+  mnemonic: PUSH
+  family: push
+  operands:
+  - DRk
+  assembly: push dr12
+  source_bytes:
+  - '0xca'
+  - '0x3b'
+  binary_bytes:
+  - '0xa5'
+  - '0xca'
+  - '0x3b'
+  length: 2
+  flags: []
+  reference: Intel A-12/A-25
+- id: pop_dir8
+  mnemonic: POP
+  family: pop
+  operands:
+  - dir8
+  assembly: pop 0x30
+  source_bytes:
+  - '0xd0'
+  - '0x30'
+  binary_bytes:
+  - '0xd0'
+  - '0x30'
+  length: 2
+  flags: []
+  reference: Intel A-12/A-25
+- id: pop_rm
+  mnemonic: POP
+  family: pop
+  operands:
+  - Rm
+  assembly: pop r3
+  source_bytes:
+  - '0xda'
+  - '0x38'
+  binary_bytes:
+  - '0xa5'
+  - '0xda'
+  - '0x38'
+  length: 2
+  flags: []
+  reference: Intel A-12/A-25
+- id: pop_wr
+  mnemonic: POP
+  family: pop
+  operands:
+  - WRj
+  assembly: pop wr4
+  source_bytes:
+  - '0xda'
+  - '0x29'
+  binary_bytes:
+  - '0xa5'
+  - '0xda'
+  - '0x29'
+  length: 2
+  flags: []
+  reference: Intel A-12/A-25
+- id: pop_dr
+  mnemonic: POP
+  family: pop
+  operands:
+  - DRk
+  assembly: pop dr12
+  source_bytes:
+  - '0xda'
+  - '0x3b'
+  binary_bytes:
+  - '0xa5'
+  - '0xda'
+  - '0x3b'
+  length: 2
+  flags: []
+  reference: Intel A-12/A-25
+- id: clr_cy
+  mnemonic: CLR
+  family: clr
+  operands:
+  - CY
+  assembly: clr cy
+  source_bytes:
+  - '0xc3'
+  binary_bytes:
+  - '0xc3'
+  length: 1
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: clr_bit51
+  mnemonic: CLR
+  family: clr
+  operands:
+  - bit51
+  assembly: clr 0x0f
+  source_bytes:
+  - '0xc2'
+  - '0x0f'
+  binary_bytes:
+  - '0xc2'
+  - '0x0f'
+  length: 2
+  flags: []
+  reference: Intel A-10/A-11/A-26
+- id: clr_bit
+  mnemonic: CLR
+  family: clr
+  operands:
+  - bit
+  assembly: clr 0x30.5
+  source_bytes:
+  - '0xa9'
+  - '0xc5'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0xc5'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-10/A-11/A-26
+- id: setb_cy
+  mnemonic: SETB
+  family: setb
+  operands:
+  - CY
+  assembly: setb cy
+  source_bytes:
+  - '0xd3'
+  binary_bytes:
+  - '0xd3'
+  length: 1
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: setb_bit51
+  mnemonic: SETB
+  family: setb
+  operands:
+  - bit51
+  assembly: setb 0x0f
+  source_bytes:
+  - '0xd2'
+  - '0x0f'
+  binary_bytes:
+  - '0xd2'
+  - '0x0f'
+  length: 2
+  flags: []
+  reference: Intel A-10/A-11/A-26
+- id: setb_bit
+  mnemonic: SETB
+  family: setb
+  operands:
+  - bit
+  assembly: setb 0x30.5
+  source_bytes:
+  - '0xa9'
+  - '0xd5'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0xd5'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-10/A-11/A-26
+- id: cpl_cy
+  mnemonic: CPL
+  family: cpl
+  operands:
+  - CY
+  assembly: cpl cy
+  source_bytes:
+  - '0xb3'
+  binary_bytes:
+  - '0xb3'
+  length: 1
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: cpl_bit51
+  mnemonic: CPL
+  family: cpl
+  operands:
+  - bit51
+  assembly: cpl 0x0f
+  source_bytes:
+  - '0xb2'
+  - '0x0f'
+  binary_bytes:
+  - '0xb2'
+  - '0x0f'
+  length: 2
+  flags: []
+  reference: Intel A-10/A-11/A-26
+- id: cpl_bit
+  mnemonic: CPL
+  family: cpl
+  operands:
+  - bit
+  assembly: cpl 0x30.5
+  source_bytes:
+  - '0xa9'
+  - '0xb5'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0xb5'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-10/A-11/A-26
+- id: anl_cy_bit51
+  mnemonic: ANL
+  family: anl
+  operands:
+  - CY
+  - bit51
+  assembly: anl cy,0x0f
+  source_bytes:
+  - '0x82'
+  - '0x0f'
+  binary_bytes:
+  - '0x82'
+  - '0x0f'
+  length: 2
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: anl_cy_bit
+  mnemonic: ANL
+  family: anl
+  operands:
+  - CY
+  - bit
+  assembly: anl cy,0x30.5
+  source_bytes:
+  - '0xa9'
+  - '0x85'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0x85'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: anl_cy_not_bit51
+  mnemonic: ANL
+  family: anl
+  operands:
+  - CY
+  - /bit51
+  assembly: anl cy,/0x0f
+  source_bytes:
+  - '0xb0'
+  - '0x0f'
+  binary_bytes:
+  - '0xb0'
+  - '0x0f'
+  length: 2
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: anl_cy_not_bit
+  mnemonic: ANL
+  family: anl
+  operands:
+  - CY
+  - /bit
+  assembly: anl cy,/0x30.5
+  source_bytes:
+  - '0xa9'
+  - '0xf5'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0xf5'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: orl_cy_bit51
+  mnemonic: ORL
+  family: orl
+  operands:
+  - CY
+  - bit51
+  assembly: orl cy,0x0f
+  source_bytes:
+  - '0x72'
+  - '0x0f'
+  binary_bytes:
+  - '0x72'
+  - '0x0f'
+  length: 2
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: orl_cy_bit
+  mnemonic: ORL
+  family: orl
+  operands:
+  - CY
+  - bit
+  assembly: orl cy,0x30.5
+  source_bytes:
+  - '0xa9'
+  - '0x75'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0x75'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: orl_cy_not_bit51
+  mnemonic: ORL
+  family: orl
+  operands:
+  - CY
+  - /bit51
+  assembly: orl cy,/0x0f
+  source_bytes:
+  - '0xa0'
+  - '0x0f'
+  binary_bytes:
+  - '0xa0'
+  - '0x0f'
+  length: 2
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: orl_cy_not_bit
+  mnemonic: ORL
+  family: orl
+  operands:
+  - CY
+  - /bit
+  assembly: orl cy,/0x30.5
+  source_bytes:
+  - '0xa9'
+  - '0xe5'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0xe5'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: mov_cy_bit51
+  mnemonic: MOV
+  family: mov
+  operands:
+  - CY
+  - bit51
+  assembly: mov cy,0x0f
+  source_bytes:
+  - '0xa2'
+  - '0x0f'
+  binary_bytes:
+  - '0xa2'
+  - '0x0f'
+  length: 2
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: mov_cy_bit
+  mnemonic: MOV
+  family: mov
+  operands:
+  - CY
+  - bit
+  assembly: mov cy,0x30.5
+  source_bytes:
+  - '0xa9'
+  - '0xa5'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0xa5'
+  - '0x30'
+  length: 3
+  flags:
+  - CY
+  reference: Intel A-10/A-11/A-26
+- id: mov_bit51_cy
+  mnemonic: MOV
+  family: mov
+  operands:
+  - bit51
+  - CY
+  assembly: mov 0x0f,cy
+  source_bytes:
+  - '0x92'
+  - '0x0f'
+  binary_bytes:
+  - '0x92'
+  - '0x0f'
+  length: 2
+  flags: []
+  reference: Intel A-10/A-11/A-26
+- id: mov_bit_cy
+  mnemonic: MOV
+  family: mov
+  operands:
+  - bit
+  - CY
+  assembly: mov 0x30.5,cy
+  source_bytes:
+  - '0xa9'
+  - '0x95'
+  - '0x30'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0x95'
+  - '0x30'
+  length: 3
+  flags: []
+  reference: Intel A-10/A-11/A-26
+- id: acall_addr11
+  mnemonic: ACALL
+  family: acall
+  operands:
+  - addr11
+  assembly: acall 0x120600
+  source_bytes:
+  - '0xd1'
+  - '0x00'
+  binary_bytes:
+  - '0xd1'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: ecall_at_dr
+  mnemonic: ECALL
+  family: ecall
+  operands:
+  - '@DRk'
+  assembly: ecall @dr16
+  source_bytes:
+  - '0x99'
+  - '0x48'
+  binary_bytes:
+  - '0xa5'
+  - '0x99'
+  - '0x48'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: ecall_addr24
+  mnemonic: ECALL
+  family: ecall
+  operands:
+  - addr24
+  assembly: ecall 0x123456
+  source_bytes:
+  - '0x9a'
+  - '0x12'
+  - '0x34'
+  - '0x56'
+  binary_bytes:
+  - '0xa5'
+  - '0x9a'
+  - '0x12'
+  - '0x34'
+  - '0x56'
+  length: 4
+  flags: []
+  reference: Intel A-13/A-27
+- id: lcall_at_wr
+  mnemonic: LCALL
+  family: lcall
+  operands:
+  - '@WRj'
+  assembly: lcall @wr4
+  source_bytes:
+  - '0x99'
+  - '0x24'
+  binary_bytes:
+  - '0xa5'
+  - '0x99'
+  - '0x24'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: lcall_addr16
+  mnemonic: LCALL
+  family: lcall
+  operands:
+  - addr16
+  assembly: lcall 0x123456
+  source_bytes:
+  - '0x12'
+  - '0x34'
+  - '0x56'
+  binary_bytes:
+  - '0x12'
+  - '0x34'
+  - '0x56'
+  length: 3
+  flags: []
+  reference: Intel A-13/A-27
+- id: ret
+  mnemonic: RET
+  family: ret
+  operands:
+  - '-'
+  assembly: ret
+  source_bytes:
+  - '0x22'
+  binary_bytes:
+  - '0x22'
+  length: 1
+  flags: []
+  reference: Intel A-27
+- id: eret
+  mnemonic: ERET
+  family: eret
+  operands:
+  - '-'
+  assembly: eret
+  source_bytes:
+  - '0xaa'
+  binary_bytes:
+  - '0xa5'
+  - '0xaa'
+  length: 1
+  flags: []
+  reference: Intel A-13/A-27
+- id: reti
+  mnemonic: RETI
+  family: reti
+  operands:
+  - '-'
+  assembly: reti
+  source_bytes:
+  - '0x32'
+  binary_bytes:
+  - '0x32'
+  length: 1
+  flags: []
+  reference: Intel A-27
+- id: ajmp_addr11
+  mnemonic: AJMP
+  family: ajmp
+  operands:
+  - addr11
+  assembly: ajmp 0x120600
+  source_bytes:
+  - '0xc1'
+  - '0x00'
+  binary_bytes:
+  - '0xc1'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: ejmp_addr24
+  mnemonic: EJMP
+  family: ejmp
+  operands:
+  - addr24
+  assembly: ejmp 0x123456
+  source_bytes:
+  - '0x8a'
+  - '0x12'
+  - '0x34'
+  - '0x56'
+  binary_bytes:
+  - '0xa5'
+  - '0x8a'
+  - '0x12'
+  - '0x34'
+  - '0x56'
+  length: 4
+  flags: []
+  reference: Intel A-13/A-27
+- id: ejmp_at_dr
+  mnemonic: EJMP
+  family: ejmp
+  operands:
+  - '@DRk'
+  assembly: ejmp @dr16
+  source_bytes:
+  - '0x89'
+  - '0x48'
+  binary_bytes:
+  - '0xa5'
+  - '0x89'
+  - '0x48'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: ljmp_at_wr
+  mnemonic: LJMP
+  family: ljmp
+  operands:
+  - '@WRj'
+  assembly: ljmp @wr4
+  source_bytes:
+  - '0x89'
+  - '0x24'
+  binary_bytes:
+  - '0xa5'
+  - '0x89'
+  - '0x24'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: ljmp_addr16
+  mnemonic: LJMP
+  family: ljmp
+  operands:
+  - addr16
+  assembly: ljmp 0x123456
+  source_bytes:
+  - '0x02'
+  - '0x34'
+  - '0x56'
+  binary_bytes:
+  - '0x02'
+  - '0x34'
+  - '0x56'
+  length: 3
+  flags: []
+  reference: Intel A-13/A-27
+- id: sjmp_rel
+  mnemonic: SJMP
+  family: sjmp
+  operands:
+  - rel
+  assembly: sjmp {target}
+  source_bytes:
+  - '0x80'
+  - '0x00'
+  binary_bytes:
+  - '0x80'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-27
+- id: jmp_at_a_dptr
+  mnemonic: JMP
+  family: jmp
+  operands:
+  - '@A+DPTR'
+  assembly: jmp @a+dptr
+  source_bytes:
+  - '0x73'
+  binary_bytes:
+  - '0x73'
+  length: 1
+  flags: []
+  reference: Intel A-27
+- id: jc_rel
+  mnemonic: JC
+  family: jc
+  operands:
+  - rel
+  assembly: jc {target}
+  source_bytes:
+  - '0x40'
+  - '0x00'
+  binary_bytes:
+  - '0x40'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jnc_rel
+  mnemonic: JNC
+  family: jnc
+  operands:
+  - rel
+  assembly: jnc {target}
+  source_bytes:
+  - '0x50'
+  - '0x00'
+  binary_bytes:
+  - '0x50'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jz_rel
+  mnemonic: JZ
+  family: jz
+  operands:
+  - rel
+  assembly: jz {target}
+  source_bytes:
+  - '0x60'
+  - '0x00'
+  binary_bytes:
+  - '0x60'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jnz_rel
+  mnemonic: JNZ
+  family: jnz
+  operands:
+  - rel
+  assembly: jnz {target}
+  source_bytes:
+  - '0x70'
+  - '0x00'
+  binary_bytes:
+  - '0x70'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: je_rel
+  mnemonic: JE
+  family: je
+  operands:
+  - rel
+  assembly: je {target}
+  source_bytes:
+  - '0x68'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0x68'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jne_rel
+  mnemonic: JNE
+  family: jne
+  operands:
+  - rel
+  assembly: jne {target}
+  source_bytes:
+  - '0x78'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0x78'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jg_rel
+  mnemonic: JG
+  family: jg
+  operands:
+  - rel
+  assembly: jg {target}
+  source_bytes:
+  - '0x38'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0x38'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jle_rel
+  mnemonic: JLE
+  family: jle
+  operands:
+  - rel
+  assembly: jle {target}
+  source_bytes:
+  - '0x28'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0x28'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jsl_rel
+  mnemonic: JSL
+  family: jsl
+  operands:
+  - rel
+  assembly: jsl {target}
+  source_bytes:
+  - '0x48'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0x48'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jsle_rel
+  mnemonic: JSLE
+  family: jsle
+  operands:
+  - rel
+  assembly: jsle {target}
+  source_bytes:
+  - '0x08'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0x08'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jsg_rel
+  mnemonic: JSG
+  family: jsg
+  operands:
+  - rel
+  assembly: jsg {target}
+  source_bytes:
+  - '0x18'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0x18'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jsge_rel
+  mnemonic: JSGE
+  family: jsge
+  operands:
+  - rel
+  assembly: jsge {target}
+  source_bytes:
+  - '0x58'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0x58'
+  - '0x00'
+  length: 2
+  flags: []
+  reference: Intel A-13/A-27
+- id: jbc_bit51_rel
+  mnemonic: JBC
+  family: jbc
+  operands:
+  - bit51
+  - rel
+  assembly: jbc 0x0f,{target}
+  source_bytes:
+  - '0x10'
+  - '0x0f'
+  - '0x00'
+  binary_bytes:
+  - '0x10'
+  - '0x0f'
+  - '0x00'
+  length: 3
+  flags: []
+  reference: Intel A-10/A-11/A-27
+- id: jbc_bit_rel
+  mnemonic: JBC
+  family: jbc
+  operands:
+  - bit
+  - rel
+  assembly: jbc 0x30.5,{target}
+  source_bytes:
+  - '0xa9'
+  - '0x15'
+  - '0x30'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0x15'
+  - '0x30'
+  - '0x00'
+  length: 4
+  flags: []
+  reference: Intel A-10/A-11/A-27
+- id: jb_bit51_rel
+  mnemonic: JB
+  family: jb
+  operands:
+  - bit51
+  - rel
+  assembly: jb 0x0f,{target}
+  source_bytes:
+  - '0x20'
+  - '0x0f'
+  - '0x00'
+  binary_bytes:
+  - '0x20'
+  - '0x0f'
+  - '0x00'
+  length: 3
+  flags: []
+  reference: Intel A-10/A-11/A-27
+- id: jb_bit_rel
+  mnemonic: JB
+  family: jb
+  operands:
+  - bit
+  - rel
+  assembly: jb 0x30.5,{target}
+  source_bytes:
+  - '0xa9'
+  - '0x25'
+  - '0x30'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0x25'
+  - '0x30'
+  - '0x00'
+  length: 4
+  flags: []
+  reference: Intel A-10/A-11/A-27
+- id: jnb_bit51_rel
+  mnemonic: JNB
+  family: jnb
+  operands:
+  - bit51
+  - rel
+  assembly: jnb 0x0f,{target}
+  source_bytes:
+  - '0x30'
+  - '0x0f'
+  - '0x00'
+  binary_bytes:
+  - '0x30'
+  - '0x0f'
+  - '0x00'
+  length: 3
+  flags: []
+  reference: Intel A-10/A-11/A-27
+- id: jnb_bit_rel
+  mnemonic: JNB
+  family: jnb
+  operands:
+  - bit
+  - rel
+  assembly: jnb 0x30.5,{target}
+  source_bytes:
+  - '0xa9'
+  - '0x35'
+  - '0x30'
+  - '0x00'
+  binary_bytes:
+  - '0xa5'
+  - '0xa9'
+  - '0x35'
+  - '0x30'
+  - '0x00'
+  length: 4
+  flags: []
+  reference: Intel A-10/A-11/A-27
+- id: cjne_a_dir8_rel
+  mnemonic: CJNE
+  family: cjne
+  operands:
+  - A
+  - dir8
+  - rel
+  assembly: cjne a,0x30,{target}
+  source_bytes:
+  - '0xb5'
+  - '0x30'
+  - '0x00'
+  binary_bytes:
+  - '0xb5'
+  - '0x30'
+  - '0x00'
+  length: 3
+  flags: []
+  reference: Intel A-27
+- id: cjne_a_imm8_rel
+  mnemonic: CJNE
+  family: cjne
+  operands:
+  - A
+  - '#data'
+  - rel
+  assembly: cjne a,#0x5a,{target}
+  source_bytes:
+  - '0xb4'
+  - '0x5a'
+  - '0x00'
+  binary_bytes:
+  - '0xb4'
+  - '0x5a'
+  - '0x00'
+  length: 3
+  flags: []
+  reference: Intel A-27
+- id: cjne_rn_imm8_rel
+  mnemonic: CJNE
+  family: cjne
+  operands:
+  - Rn
+  - '#data'
+  - rel
+  assembly: cjne r6,#0x5a,{target}
+  source_bytes:
+  - '0xa5'
+  - '0xbe'
+  - '0x5a'
+  - '0x00'
+  binary_bytes:
+  - '0xbe'
+  - '0x5a'
+  - '0x00'
+  length: 4
+  flags: []
+  reference: Intel A-27
+- id: cjne_at_ri_imm8_rel
+  mnemonic: CJNE
+  family: cjne
+  operands:
+  - '@Ri'
+  - '#data'
+  - rel
+  assembly: cjne @r1,#0x5a,{target}
+  source_bytes:
+  - '0xa5'
+  - '0xb7'
+  - '0x5a'
+  - '0x00'
+  binary_bytes:
+  - '0xb7'
+  - '0x5a'
+  - '0x00'
+  length: 4
+  flags: []
+  reference: Intel A-27
+- id: djnz_rn_rel
+  mnemonic: DJNZ
+  family: djnz
+  operands:
+  - Rn
+  - rel
+  assembly: djnz r5,{target}
+  source_bytes:
+  - '0xa5'
+  - '0xdd'
+  - '0x00'
+  binary_bytes:
+  - '0xdd'
+  - '0x00'
+  length: 3
+  flags: []
+  reference: Intel A-27
+- id: djnz_dir8_rel
+  mnemonic: DJNZ
+  family: djnz
+  operands:
+  - dir8
+  - rel
+  assembly: djnz 0x30,{target}
+  source_bytes:
+  - '0xd5'
+  - '0x30'
+  - '0x00'
+  binary_bytes:
+  - '0xd5'
+  - '0x30'
+  - '0x00'
+  length: 3
+  flags: []
+  reference: Intel A-27
+- id: trap
+  mnemonic: TRAP
+  family: trap
+  operands:
+  - '-'
+  assembly: trap
+  source_bytes:
+  - '0xb9'
+  binary_bytes:
+  - '0xa5'
+  - '0xb9'
+  length: 1
+  flags: []
+  reference: Intel A-13/A-27
+- id: nop
+  mnemonic: NOP
+  family: nop
+  operands:
+  - '-'
+  assembly: nop
+  source_bytes:
+  - '0x00'
+  binary_bytes:
+  - '0x00'
+  length: 1
+  flags: []
+  reference: Intel A-27
+- id: esc
+  mnemonic: ESC
+  family: esc
+  operands:
+  - '-'
+  assembly: esc
+  source_bytes:
+  - '0xa5'
+  binary_bytes:
+  - '0xa5'
+  length: 1
+  flags: []
+  reference: Intel A-6

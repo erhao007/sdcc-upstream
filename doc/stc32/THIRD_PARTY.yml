@@ -1,0 +1,18 @@
+schema: openstc32.third-party.v1
+components:
+  - name: SDCC upstream and bundled components
+    source_url: https://github.com/erhao007/sdcc-upstream
+    version_or_commit: c654fb07950656fb3bf1afb5982127caa4c3a0c4
+    license: repository COPYING/LICENSE files and per-file notices
+    local_paths: compiler, assembler, linker, simulator, runtime, device
+    modified: yes
+    redistribution_decision: retain existing SDCC/mixed-license notices
+    reviewer: pending upstream review for future contribution
+  - name: STC32 ISA reference data
+    source_url: public Intel MCS-251 and STC32G documentation; see isa/mcs251.yaml
+    version_or_commit: frozen with stc32-mt3-closed-20260829
+    license: project-authored data with source references; verify each upstream contribution
+    local_paths: support/stc32/isa
+    modified: yes
+    redistribution_decision: included with this SDCC-derived repository
+    reviewer: pending legal/source audit before downstream repackaging
