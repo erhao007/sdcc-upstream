@@ -1,0 +1,154 @@
+name: STC32 toolchain release
+
+on:
+  push:
+    tags:
+      - 'stc32-mt3-support-*'
+
+permissions:
+  contents: write
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-24.04
+    env:
+      BUILD_DIR: ${{ runner.temp }}/stc32-build
+      PREFIX: ${{ runner.temp }}/stc32-install
+      JOBS: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tagged source
+        run: |
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          test -n "$GITHUB_REF_NAME"
+          case "$GITHUB_REF_NAME" in
+            stc32-mt3-support-*) ;;
+            *) echo "unexpected release tag: $GITHUB_REF_NAME" >&2; exit 1 ;;
+          esac
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison build-essential flex libboost-dev libboost-graph-dev \
+            libreadline-dev libzstd-dev python3 zlib1g-dev
+
+      - name: Build and install
+        run: |
+          env -u COMPILER_PATH -u SDCC_HOME \
+            bash support/stc32/scripts/build-toolchain.sh
+
+      - name: Verify install boundary
+        run: |
+          python3 - "$PREFIX" <<'PY'
+          import hashlib
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          prefix = Path(sys.argv[1])
+          metadata = {
+              Path("share/openstc32/toolchain.json"),
+              Path("share/openstc32/toolchain-artifacts.json"),
+          }
+          for path in prefix.rglob("*"):
+              if path.is_symlink():
+                  raise SystemExit(
+                      f"unexpected symlink in install tree: {path.relative_to(prefix)}"
+                  )
+          artifact_path = prefix / "share/openstc32/toolchain-artifacts.json"
+          artifact = json.loads(artifact_path.read_text())
+          listed = {}
+          for entry in artifact["files"]:
+              relative = Path(entry["path"])
+              if relative.is_absolute() or ".." in relative.parts or relative in metadata:
+                  raise SystemExit(f"unsafe artifact path: {relative}")
+              if relative in listed:
+                  raise SystemExit(f"duplicate artifact path: {relative}")
+              path = prefix / relative
+              if not path.is_file():
+                  raise SystemExit(f"missing artifact: {relative}")
+              data = path.read_bytes()
+              if (
+                  len(data) != entry["size"]
+                  or hashlib.sha256(data).hexdigest() != entry["sha256"]
+              ):
+                  raise SystemExit(f"artifact mismatch: {relative}")
+              listed[relative] = None
+          actual = {
+              path.relative_to(prefix)
+              for path in prefix.rglob("*")
+              if path.is_file() and path.relative_to(prefix) not in metadata
+          }
+          if set(listed) != actual:
+              raise SystemExit(
+                  f"artifact coverage mismatch: listed={len(listed)} actual={len(actual)}"
+              )
+          toolchain_path = prefix / "share/openstc32/toolchain.json"
+          toolchain = json.loads(toolchain_path.read_text())
+          artifact_sha = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+          if toolchain["artifact_manifest_sha256"] != artifact_sha:
+              raise SystemExit("toolchain manifest does not bind artifact manifest")
+          head = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          if toolchain["source_commit"] != head:
+              raise SystemExit("toolchain manifest source commit mismatch")
+          if toolchain["source_dirty"] is not False:
+              raise SystemExit("toolchain manifest source is dirty")
+          print(f"verified {len(actual)} installed artifacts")
+          PY
+
+      - name: Run toolchain gates
+        env:
+          STC32_TOOLCHAIN_ROOT: ${{ runner.temp }}/stc32-install
+        run: |
+          python3 support/stc32/tools/opcode_check.py
+          PYTHONPATH=tools/pylib python3 support/stc32/tools/run_isa_semantics.py
+          python3 support/stc32/tools/run_runtime_tests.py
+          python3 support/stc32/tools/run_abi_tests.py
+          PYTHONPATH=tools/pylib python3 support/stc32/tools/ucsim_isa_probe.py \
+            --strict --out "$RUNNER_TEMP/isa-decode-report.md"
+          python3 support/stc32/tools/ucsim_unknown_mode_probe.py
+          mkdir -p "$BUILD_DIR/install"
+          ln -s "$PREFIX/share" "$BUILD_DIR/install/share"
+          make -C "$BUILD_DIR/src/mcs251" check
+
+      - name: Package release
+        id: package
+        run: |
+          mkdir -p dist
+          package="openstc32-toolchain-${GITHUB_REF_NAME}-linux-x86_64.tar.gz"
+          source_date_epoch="$(git show -s --format=%ct HEAD)"
+          tar --sort=name --mtime="@$source_date_epoch" \
+            --owner=0 --group=0 --numeric-owner -C "$PREFIX" -cf - . \
+            | gzip -n > "dist/$package"
+          (cd dist && sha256sum "$package" > "$package.sha256")
+          cp "$PREFIX/share/openstc32/toolchain.json" dist/
+          cp "$PREFIX/share/openstc32/toolchain-artifacts.json" dist/
+          printf 'package=%s\n' "$package" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openstc32-toolchain-${{ github.ref_name }}-linux-x86_64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "OpenSTC32 toolchain $GITHUB_REF_NAME" \
+              --notes "Linux x86_64 build produced by GitHub Actions from $GITHUB_SHA. Includes the installed toolchain, SHA-256 checksum, and complete install manifests. This release is E5 evidence for Ubuntu 24.04 x86_64 only; it does not claim Windows/macOS or real-board validation."
+          fi
