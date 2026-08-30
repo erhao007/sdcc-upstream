@@ -154,7 +154,11 @@ repository-level [`COPYING`](COPYING), [`LICENSE`](LICENSE), original
 [`doc/README.txt`](doc/README.txt), and per-file notices remain authoritative.
 STC32-specific source and dependency provenance is recorded in
 [`doc/stc32/SOURCE_PROVENANCE.json`](doc/stc32/SOURCE_PROVENANCE.json) and
-[`doc/stc32/THIRD_PARTY.yml`](doc/stc32/THIRD_PARTY.yml).
+[`doc/stc32/THIRD_PARTY.yml`](doc/stc32/THIRD_PARTY.yml). The engineering input
+for qualified legal review is tracked in
+[`doc/stc32/LEGAL_REVIEW_SCOPE.json`](doc/stc32/LEGAL_REVIEW_SCOPE.json) and
+[`doc/stc32/LEGAL_REVIEW_CHECKLIST.md`](doc/stc32/LEGAL_REVIEW_CHECKLIST.md);
+that review is still pending.
 
 Do not assume that one repository-level license label replaces component or
 per-file terms. Binary redistributors should preserve the corresponding license

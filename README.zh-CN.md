@@ -143,7 +143,11 @@ SDCC 由采用多种自由软件许可证的组件构成。仓库级 [`COPYING`]
 [`LICENSE`](LICENSE)、原始 [`doc/README.txt`](doc/README.txt) 以及逐文件声明保持
 权威。STC32 专属源码和依赖来源记录在
 [`doc/stc32/SOURCE_PROVENANCE.json`](doc/stc32/SOURCE_PROVENANCE.json) 与
-[`doc/stc32/THIRD_PARTY.yml`](doc/stc32/THIRD_PARTY.yml)。
+[`doc/stc32/THIRD_PARTY.yml`](doc/stc32/THIRD_PARTY.yml)。供合资格法律审查使用的
+工程输入记录在
+[`doc/stc32/LEGAL_REVIEW_SCOPE.json`](doc/stc32/LEGAL_REVIEW_SCOPE.json) 与
+[`doc/stc32/LEGAL_REVIEW_CHECKLIST.md`](doc/stc32/LEGAL_REVIEW_CHECKLIST.md)；
+该审查目前仍未完成。
 
 不要把单一仓库许可证标签理解为替代组件或逐文件条款。二进制再分发者应保留相应的
 许可证与版权声明，并按适用许可证提供完整对应源码。本节仅为工程提示，不构成法律意见。

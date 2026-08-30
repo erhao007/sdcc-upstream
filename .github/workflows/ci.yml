@@ -6,11 +6,19 @@ on:
   pull_request:
     branches: [stc32]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: stc32-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-verify:
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -32,6 +40,7 @@ jobs:
           python3 - "$PREFIX" <<'PY'
           import hashlib
           import json
+          import subprocess
           import sys
           from pathlib import Path
 
@@ -70,5 +79,19 @@ jobs:
           expected = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
           if toolchain["artifact_manifest_sha256"] != expected:
               raise SystemExit("toolchain manifest does not bind artifact manifest")
+          head = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          if toolchain["source_commit"] != head:
+              raise SystemExit("toolchain manifest source commit mismatch")
+          if toolchain["source_dirty"] is not False:
+              raise SystemExit("toolchain manifest source is dirty")
           print(f"verified {len(actual)} installed artifacts")
           PY
+      - name: Run core and product regression gates
+        env:
+          BUILD_DIR: ${{ runner.temp }}/stc32-build
+          PREFIX: ${{ runner.temp }}/stc32-install
+          JOBS: 2
+          STC32_REGRESSION_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: bash support/stc32/scripts/run-posix-gates.sh --regression
