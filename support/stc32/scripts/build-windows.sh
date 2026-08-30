@@ -74,6 +74,15 @@ python support/stc32/tools/ucsim_isa_probe.py --strict
 python support/stc32/tools/ucsim_unknown_mode_probe.py
 python support/stc32/tools/run_isa_semantics.py
 make -C "$BUILD_DIR/sdas/as251" check
+# The mcs251 backend check discovers installed data below BUILD_DIR/install
+# even when CI installs to a separate prefix (see run-posix-gates.sh); bridge
+# it with a directory junction, which needs no privileges on Windows.
+build_install="$BUILD_DIR/install"
+if [[ "$PREFIX" != "$build_install" && ! -e "$build_install/share" ]]; then
+  mkdir -p "$build_install"
+  cmd //c mklink //J "$(cygpath -w "$build_install/share")" \
+    "$(cygpath -w "$PREFIX/share")" >/dev/null
+fi
 # The mcs251 backend check includes the ralloc2 directed gate; run it to
 # completion and propagate its status without hiding the remaining gates.
 mcs251_check_rc=0
