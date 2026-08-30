@@ -91,12 +91,13 @@ def validate_scope(scope_path: Path, require_binary_release_approval: bool) -> t
         fail(f"audit baseline must remain {EXPECTED_IMPORT_COMMIT}")
     if baseline.get("delta_command") != EXPECTED_DELTA_COMMAND:
         fail("audit baseline delta command changed")
-    subprocess.run(
-        ["git", "cat-file", "-e", f"{import_commit}^{{commit}}"],
+    object_type = subprocess.check_output(
+        ["git", "cat-file", "-t", import_commit],
         cwd=ROOT,
-        check=True,
-        stdout=subprocess.DEVNULL,
-    )
+        text=True,
+    ).strip()
+    if object_type != "commit":
+        fail(f"audit baseline is not a commit: {import_commit} ({object_type})")
     if baseline.get("classification_status") != "pending-file-level-review":
         fail("audit baseline classification must remain pending")
 
