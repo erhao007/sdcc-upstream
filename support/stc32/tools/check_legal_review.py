@@ -96,7 +96,6 @@ def validate_scope(scope_path: Path, require_binary_release_approval: bool) -> t
         cwd=ROOT,
         check=True,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
     )
     if baseline.get("classification_status") != "pending-file-level-review":
         fail("audit baseline classification must remain pending")

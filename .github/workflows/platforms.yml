@@ -86,6 +86,9 @@ jobs:
       - name: Configure build paths
         shell: msys2 {0}
         run: |
+          git config --global --add safe.directory "$(pwd -W)"
+          git fetch --no-tags origin stc32
+          git cat-file -e '6962481^{commit}'
           runner_temp_posix="$(cygpath -u "$RUNNER_TEMP")"
           printf 'BUILD_DIR=%s/stc32-build\n' "$runner_temp_posix" >> "$GITHUB_ENV"
           printf 'PREFIX=%s/stc32-install\n' "$runner_temp_posix" >> "$GITHUB_ENV"
