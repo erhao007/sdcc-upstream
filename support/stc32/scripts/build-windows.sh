@@ -70,7 +70,10 @@ export STC32_TOOLCHAIN_ROOT="$PREFIX"
 # gates are the explicit ISA, assembler/backend, ABI, runtime and regression
 # commands below.
 python support/stc32/tools/opcode_check.py
-python support/stc32/tools/ucsim_isa_probe.py --strict
+# Keep the ISA decode report out of the source tree; verify_install.py
+# requires a clean checkout (run-posix-gates.sh redirects it the same way).
+python support/stc32/tools/ucsim_isa_probe.py \
+  --strict --out "$BUILD_DIR/isa-decode-report.md"
 python support/stc32/tools/ucsim_unknown_mode_probe.py
 python support/stc32/tools/run_isa_semantics.py
 make -C "$BUILD_DIR/sdas/as251" check
