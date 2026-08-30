@@ -170,11 +170,58 @@ if not commit:
 version = subprocess.check_output(
     [str(sdcc), "--version"], text=True, stderr=subprocess.STDOUT
 ).splitlines()[0]
+built_at = datetime.now(timezone.utc).isoformat()
+metadata_paths = {
+    Path("share/openstc32/toolchain.json"),
+    Path("share/openstc32/toolchain-artifacts.json"),
+}
+
+# The artifact manifest is the complete installed-file boundary.  Reject
+# symlinks before asking Path whether an entry is a regular file: a broken
+# symlink returns is_file() == False and would otherwise disappear from the
+# inventory while remaining present in the install tree.
+artifact_files = []
+for candidate in sorted(prefix.rglob("*"),
+                        key=lambda path: path.relative_to(prefix).as_posix()):
+    relative = candidate.relative_to(prefix)
+    if candidate.is_symlink():
+        raise SystemExit(f"refusing symlink in install tree: {relative}")
+    if not candidate.is_file():
+        continue
+    if relative in metadata_paths:
+        continue
+    content = candidate.read_bytes()
+    artifact_files.append({
+        "path": relative.as_posix(),
+        "size": len(content),
+        "sha256": hashlib.sha256(content).hexdigest(),
+    })
+
+artifact_manifest = {
+    "schema": 1,
+    "target": "stc32",
+    "architecture": "mcs251",
+    "chip": "STC32G12K128",
+    "host_os": platform.system(),
+    "host_arch": platform.machine(),
+    "sdcc_version": version,
+    "source_commit": commit,
+    "source_dirty": source_dirty,
+    "source_state_sha256": source_state_sha256,
+    "built_at_utc": built_at,
+    "files": artifact_files,
+}
+artifact_out = prefix / "share" / "openstc32" / "toolchain-artifacts.json"
+artifact_out.parent.mkdir(parents=True, exist_ok=True)
+artifact_out.write_text(json.dumps(artifact_manifest, indent=2) + "\n")
+artifact_sha256 = hashlib.sha256(artifact_out.read_bytes()).hexdigest()
+
 manifest = {
     "schema": 1,
     "target": "stc32",
     "architecture": "mcs251",
     "chip": "STC32G12K128",
+    "host_os": platform.system(),
     "host_arch": platform.machine(),
     "sdcc_version": version,
     "source_commit": commit,
@@ -187,12 +234,14 @@ manifest = {
         "--enable-mcs251-port",
         "--with-isl=no",
     ],
-    "built_at_utc": datetime.now(timezone.utc).isoformat(),
+    "artifact_manifest": "share/openstc32/toolchain-artifacts.json",
+    "artifact_manifest_sha256": artifact_sha256,
+    "built_at_utc": built_at,
 }
 out = prefix / "share" / "openstc32" / "toolchain.json"
-out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(json.dumps(manifest, indent=2) + "\n")
 print(f"toolchain manifest: {out}")
+print(f"artifact manifest: {artifact_out} ({len(artifact_files)} files)")
 PY
 
 echo "STC32 toolchain ready: $PREFIX"

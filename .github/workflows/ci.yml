@@ -1,0 +1,74 @@
+name: STC32 toolchain
+
+on:
+  push:
+    branches: [stc32]
+  pull_request:
+    branches: [stc32]
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison build-essential flex libboost-dev libboost-graph-dev \
+            libreadline-dev libzstd-dev python3 zlib1g-dev
+      - name: Validate build driver
+        run: bash -n support/stc32/scripts/build-toolchain.sh
+      - name: Build and install
+        env:
+          BUILD_DIR: ${{ runner.temp }}/stc32-build
+          PREFIX: ${{ runner.temp }}/stc32-install
+          JOBS: 2
+        run: env -u COMPILER_PATH -u SDCC_HOME bash support/stc32/scripts/build-toolchain.sh
+      - name: Verify complete install boundary
+        env:
+          PREFIX: ${{ runner.temp }}/stc32-install
+        run: |
+          python3 - "$PREFIX" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          prefix = Path(sys.argv[1])
+          metadata = {
+              Path("share/openstc32/toolchain.json"),
+              Path("share/openstc32/toolchain-artifacts.json"),
+          }
+          for path in prefix.rglob("*"):
+              if path.is_symlink():
+                  raise SystemExit(f"unexpected symlink in install tree: {path.relative_to(prefix)}")
+          manifest_path = prefix / "share/openstc32/toolchain-artifacts.json"
+          manifest = json.loads(manifest_path.read_text())
+          listed = {}
+          for entry in manifest["files"]:
+              rel = Path(entry["path"])
+              if rel.is_absolute() or ".." in rel.parts or rel in metadata:
+                  raise SystemExit(f"unsafe artifact path: {rel}")
+              if rel in listed:
+                  raise SystemExit(f"duplicate artifact path: {rel}")
+              path = prefix / rel
+              if not path.is_file():
+                  raise SystemExit(f"missing artifact: {rel}")
+              data = path.read_bytes()
+              if len(data) != entry["size"] or hashlib.sha256(data).hexdigest() != entry["sha256"]:
+                  raise SystemExit(f"artifact mismatch: {rel}")
+              listed[rel] = None
+          actual = {
+              path.relative_to(prefix)
+              for path in prefix.rglob("*")
+              if path.is_file() and path.relative_to(prefix) not in metadata
+          }
+          if set(listed) != actual:
+              raise SystemExit(f"artifact coverage mismatch: listed={len(listed)} actual={len(actual)}")
+          toolchain = json.loads((prefix / "share/openstc32/toolchain.json").read_text())
+          expected = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+          if toolchain["artifact_manifest_sha256"] != expected:
+              raise SystemExit("toolchain manifest does not bind artifact manifest")
+          print(f"verified {len(actual)} installed artifacts")
+          PY
