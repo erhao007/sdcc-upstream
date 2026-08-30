@@ -61,7 +61,10 @@ cd "$ROOT"
 # both the installed tree and the build tree bin directories.
 export PATH="$PREFIX/bin:$BUILD_DIR/bin:$PATH"
 export COMPILER_PATH="$BUILD_DIR/support/cpp/gcc"
-python -m unittest discover -s tests -p 'test_*.py'
+# The standalone public toolchain intentionally excludes the integration
+# repository's Factory/DFU/BLE product tests.  Its authoritative toolchain
+# gates are the explicit ISA, assembler/backend, ABI, runtime and regression
+# commands below.
 python support/stc32/tools/opcode_check.py
 python support/stc32/tools/ucsim_isa_probe.py --strict
 python support/stc32/tools/ucsim_unknown_mode_probe.py
