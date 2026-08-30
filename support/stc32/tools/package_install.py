@@ -60,7 +60,13 @@ def write_tar_gz(prefix: Path, output: Path, epoch: int) -> None:
             with tarfile.open(fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT) as archive:
                 for path in installed_files(prefix):
                     relative = path.relative_to(prefix).as_posix()
-                    info = archive.gettarinfo(str(path), arcname=relative)
+                    # Installed SDCC host-tool aliases can be hard links.  The
+                    # release boundary is a complete regular-file inventory,
+                    # so expand every entry instead of emitting TAR links.
+                    info = tarfile.TarInfo(relative)
+                    info.size = path.stat().st_size
+                    info.mode = path.stat().st_mode & 0o777
+                    info.type = tarfile.REGTYPE
                     info.uid = 0
                     info.gid = 0
                     info.uname = ""
