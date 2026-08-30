@@ -27,6 +27,15 @@ The support tests are intentionally kept under this directory so they can be
 run from a standalone clone without the former integration repository:
 
 ```sh
+bash support/stc32/scripts/run-posix-gates.sh --regression
+```
+
+That command runs the STC32-specific checks plus fresh `mcs251`,
+`mcs251-large`, `mcs251-stack-auto`, `mcs51-small`, and `mcs51-large`
+regression lanes, rejecting reused lane directories and non-zero summaries.
+To run individual gates while diagnosing a failure:
+
+```sh
 python support/stc32/tools/opcode_check.py
 python support/stc32/tools/ucsim_isa_probe.py --strict
 python support/stc32/tools/ucsim_unknown_mode_probe.py

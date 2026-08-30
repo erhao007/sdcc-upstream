@@ -14,7 +14,7 @@ jobs:
     env:
       JOBS: 2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Configure build paths
         run: |
@@ -29,6 +29,11 @@ jobs:
             stc32-mt3-support-*) ;;
             *) echo "unexpected release tag: $GITHUB_REF_NAME" >&2; exit 1 ;;
           esac
+
+      - name: Require qualified legal approval for binary distribution
+        run: |
+          python3 support/stc32/tools/check_legal_review.py \
+            --require-binary-release-approval
 
       - name: Install build dependencies
         run: |
@@ -107,17 +112,9 @@ jobs:
       - name: Run toolchain gates
         env:
           STC32_TOOLCHAIN_ROOT: ${{ runner.temp }}/stc32-install
+          STC32_REGRESSION_RUN_ID: release-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          python3 support/stc32/tools/opcode_check.py
-          PYTHONPATH=tools/pylib python3 support/stc32/tools/run_isa_semantics.py
-          python3 support/stc32/tools/run_runtime_tests.py
-          python3 support/stc32/tools/run_abi_tests.py
-          PYTHONPATH=tools/pylib python3 support/stc32/tools/ucsim_isa_probe.py \
-            --strict --out "$RUNNER_TEMP/isa-decode-report.md"
-          python3 support/stc32/tools/ucsim_unknown_mode_probe.py
-          mkdir -p "$BUILD_DIR/install"
-          ln -s "$PREFIX/share" "$BUILD_DIR/install/share"
-          make -C "$BUILD_DIR/src/mcs251" check
+          bash support/stc32/scripts/run-posix-gates.sh --regression
 
       - name: Package release
         id: package
@@ -134,7 +131,7 @@ jobs:
           printf 'package=%s\n' "$package" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openstc32-toolchain-${{ github.ref_name }}-linux-x86_64
           path: dist/

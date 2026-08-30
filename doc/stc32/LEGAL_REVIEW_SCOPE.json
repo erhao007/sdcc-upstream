@@ -1,0 +1,152 @@
+{
+  "schema": "openstc32.legal-review-scope.v1",
+  "status": "pending-qualified-legal-review",
+  "not_legal_advice": true,
+  "repository": "erhao007/sdcc-upstream",
+  "audit_baseline": {
+    "sdcc_import_commit": "6962481",
+    "delta_command": "git diff --name-status 6962481..HEAD",
+    "classification_status": "pending-file-level-review"
+  },
+  "evidence_files": [
+    "COPYING",
+    "LICENSE",
+    "doc/README.txt",
+    "doc/stc32/SOURCE_PROVENANCE.json",
+    "doc/stc32/THIRD_PARTY.yml",
+    "doc/stc32/UPSTREAM_SYNC.md",
+    "doc/stc32/LEGAL_REVIEW_CHECKLIST.md"
+  ],
+  "engineering_release_policy": {
+    "public_toolchain_source_maintenance": "continue-with-existing-notices-and-open-review-status",
+    "new_stable_binary_release": "requires-scoped-license-bom-and-notice-review",
+    "non_gpl_sdk_or_closed_firmware_distribution": "blocked-pending-device-header-and-linking-review"
+  },
+  "components": [
+    {
+      "id": "sdcc-inherited-mixed-license-baseline",
+      "path_globs": [
+        "COPYING",
+        "LICENSE",
+        "doc/README.txt"
+      ],
+      "declared_license": "mixed FOSS licenses; repository and per-file notices are authoritative",
+      "linking_exception": "component-specific",
+      "review_status": "pending-full-delta-scan",
+      "required_action": "classify every path changed from the import baseline without replacing per-file terms"
+    },
+    {
+      "id": "mcs251-compiler-backend",
+      "path_globs": [
+        "src/mcs251/**/*"
+      ],
+      "declared_license": "inherited GPL-2.0-or-later notices plus files whose explicit notice must be confirmed",
+      "linking_exception": "not-applicable-to-host-compiler",
+      "review_status": "pending-file-header-and-authorship-review",
+      "required_action": "map inherited and new files to copyright holders and exact SPDX expressions"
+    },
+    {
+      "id": "mcs251-assembler-linker",
+      "path_globs": [
+        "sdas/as251/mcs251*",
+        "sdas/as251/tests/**/*"
+      ],
+      "declared_license": "assembler core contains GPL-3.0-or-later notices; tests and integration files require per-file review",
+      "linking_exception": "not-applicable-to-host-tools",
+      "review_status": "pending-file-level-review",
+      "required_action": "preserve Alan R. Baldwin and other upstream notices and classify newly authored tests"
+    },
+    {
+      "id": "mcs251-simulator",
+      "path_globs": [
+        "sim/ucsim/src/sims/s51.src/uc251*",
+        "sim/ucsim/src/sims/s51.src/test/**/*"
+      ],
+      "declared_license": "uCsim and test notices are authoritative per file",
+      "linking_exception": "not-applicable-to-host-simulator",
+      "review_status": "pending-file-level-review",
+      "required_action": "classify the MCS-251 simulator delta and retain inherited uCsim notices"
+    },
+    {
+      "id": "mcs251-runtime-with-linking-exception",
+      "path_globs": [
+        "device/lib/mcs251/atomic_flag_clear.asm",
+        "device/lib/mcs251/atomic_flag_test_and_set.asm",
+        "device/lib/mcs251/crtxclear.asm",
+        "device/lib/mcs251/crtxinit.asm"
+      ],
+      "declared_license": "GPL-2.0-or-later with the SDCC-style linking exception stated in each file",
+      "linking_exception": "present",
+      "review_status": "pending-rights-holder-confirmation",
+      "required_action": "confirm contributor identity, copyright ownership, and authority to grant the exception"
+    },
+    {
+      "id": "stc32g12k128-device-header",
+      "path_globs": [
+        "device/include/mcs251/stc32g12k128.h"
+      ],
+      "declared_license": "GPL-2.0-or-later as stated in the file",
+      "linking_exception": "not-present",
+      "review_status": "pending-license-compatibility-and-source-review",
+      "required_action": "decide whether to grant a compatible exception or dual license, or replace it with a legally approved device pack"
+    },
+    {
+      "id": "stc32-isa-tests-tools-and-scripts",
+      "path_globs": [
+        "support/stc32/isa/**/*",
+        "support/stc32/tests/**/*",
+        "support/stc32/tools/**/*",
+        "support/stc32/scripts/**/*"
+      ],
+      "declared_license": "project-authored and SDCC-derived material with source references; no single replacement license asserted",
+      "linking_exception": "not-applicable-or-pending-by-file",
+      "review_status": "pending-source-expression-and-file-notice-review",
+      "required_action": "separate unprotectable facts from protectable expression and assign per-file notices"
+    },
+    {
+      "id": "stc32-documentation-and-release-metadata",
+      "path_globs": [
+        ".github/workflows/**/*",
+        "README.md",
+        "README.zh-CN.md",
+        "doc/stc32/**/*"
+      ],
+      "declared_license": "pending explicit per-file documentation and metadata classification",
+      "linking_exception": "not-applicable",
+      "review_status": "pending-file-level-review",
+      "required_action": "assign copyright and license expressions without changing inherited software terms"
+    }
+  ],
+  "open_decisions": [
+    {
+      "id": "rights-chain",
+      "status": "open",
+      "question": "Do Git identities, file headers, employers, contractors, and contributors establish authority for every new grant?"
+    },
+    {
+      "id": "device-header-firmware-boundary",
+      "status": "open",
+      "question": "What terms apply when the GPL-only device header is used to build non-GPL or closed firmware?"
+    },
+    {
+      "id": "isa-and-manual-provenance",
+      "status": "open",
+      "question": "Are the ISA tables, register maps, and explanatory expression redistributable under the proposed per-file licenses?"
+    },
+    {
+      "id": "binary-notices-and-source-offer",
+      "status": "open",
+      "question": "Does every platform package contain the required notices and provide complete corresponding source for its exact tag?"
+    },
+    {
+      "id": "names-and-trademarks",
+      "status": "open",
+      "question": "Are SDCC, STC, STC32, and OpenSTC32 names and disclaimers used without implying official endorsement?"
+    },
+    {
+      "id": "contribution-policy",
+      "status": "open",
+      "question": "Will future contributions use a DCO, CLA, or another documented rights-certification process?"
+    }
+  ]
+}
