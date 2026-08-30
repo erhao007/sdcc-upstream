@@ -17,6 +17,8 @@ jobs:
   build-and-verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    env:
+      JOBS: 2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -27,76 +29,33 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             bison build-essential flex libboost-dev libboost-graph-dev \
             libreadline-dev libzstd-dev python3 zlib1g-dev
-      - name: Validate build driver
-        run: bash -n support/stc32/scripts/build-toolchain.sh
+      - name: Configure build paths
+        run: |
+          printf 'BUILD_DIR=%s/stc32-build\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'PREFIX=%s/stc32-install\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DIST_DIR=%s/stc32-dist\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Validate source and build policy
+        run: |
+          bash -n support/stc32/scripts/build-toolchain.sh
+          python3 support/stc32/tools/check_legal_review.py
       - name: Build and install
-        env:
-          BUILD_DIR: ${{ runner.temp }}/stc32-build
-          PREFIX: ${{ runner.temp }}/stc32-install
-          JOBS: 2
         run: env -u COMPILER_PATH -u SDCC_HOME bash support/stc32/scripts/build-toolchain.sh
       - name: Verify complete install boundary
-        env:
-          PREFIX: ${{ runner.temp }}/stc32-install
-        run: |
-          python3 - "$PREFIX" <<'PY'
-          import hashlib
-          import json
-          import subprocess
-          import sys
-          from pathlib import Path
-
-          prefix = Path(sys.argv[1])
-          metadata = {
-              Path("share/openstc32/toolchain.json"),
-              Path("share/openstc32/toolchain-artifacts.json"),
-          }
-          for path in prefix.rglob("*"):
-              if path.is_symlink():
-                  raise SystemExit(f"unexpected symlink in install tree: {path.relative_to(prefix)}")
-          manifest_path = prefix / "share/openstc32/toolchain-artifacts.json"
-          manifest = json.loads(manifest_path.read_text())
-          listed = {}
-          for entry in manifest["files"]:
-              rel = Path(entry["path"])
-              if rel.is_absolute() or ".." in rel.parts or rel in metadata:
-                  raise SystemExit(f"unsafe artifact path: {rel}")
-              if rel in listed:
-                  raise SystemExit(f"duplicate artifact path: {rel}")
-              path = prefix / rel
-              if not path.is_file():
-                  raise SystemExit(f"missing artifact: {rel}")
-              data = path.read_bytes()
-              if len(data) != entry["size"] or hashlib.sha256(data).hexdigest() != entry["sha256"]:
-                  raise SystemExit(f"artifact mismatch: {rel}")
-              listed[rel] = None
-          actual = {
-              path.relative_to(prefix)
-              for path in prefix.rglob("*")
-              if path.is_file() and path.relative_to(prefix) not in metadata
-          }
-          if set(listed) != actual:
-              raise SystemExit(f"artifact coverage mismatch: listed={len(listed)} actual={len(actual)}")
-          toolchain = json.loads((prefix / "share/openstc32/toolchain.json").read_text())
-          expected = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-          if toolchain["artifact_manifest_sha256"] != expected:
-              raise SystemExit("toolchain manifest does not bind artifact manifest")
-          head = subprocess.check_output(
-              ["git", "rev-parse", "HEAD"], text=True
-          ).strip()
-          if toolchain["source_commit"] != head:
-              raise SystemExit("toolchain manifest source commit mismatch")
-          if toolchain["source_dirty"] is not False:
-              raise SystemExit("toolchain manifest source is dirty")
-          print(f"verified {len(actual)} installed artifacts")
-          PY
+        run: >-
+          python3 support/stc32/tools/verify_install.py "$PREFIX"
+          --expect-host-os Linux --expect-host-arch x86_64
       - name: Run core and product regression gates
         env:
-          BUILD_DIR: ${{ runner.temp }}/stc32-build
-          PREFIX: ${{ runner.temp }}/stc32-install
-          JOBS: 2
           STC32_REGRESSION_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
         run: bash support/stc32/scripts/run-posix-gates.sh --regression
+      - name: Validate release package without uploading
+        run: |
+          tag="ci-${GITHUB_SHA}"
+          python3 support/stc32/tools/package_install.py \
+            "$PREFIX" "$DIST_DIR" --tag "$tag" --platform linux-x86_64
+          python3 support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
+            --platform linux-x86_64
       - name: Upload regression diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
