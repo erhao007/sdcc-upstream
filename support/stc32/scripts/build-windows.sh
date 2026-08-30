@@ -61,6 +61,10 @@ cd "$ROOT"
 # both the installed tree and the build tree bin directories.
 export PATH="$PREFIX/bin:$BUILD_DIR/bin:$PATH"
 export COMPILER_PATH="$BUILD_DIR/support/cpp/gcc"
+# Gate runners resolve installed binaries through STC32_TOOLCHAIN_ROOT, as
+# run-posix-gates.sh does; the in-tree build/install default does not exist
+# for out-of-tree builds.
+export STC32_TOOLCHAIN_ROOT="$PREFIX"
 # The standalone public toolchain intentionally excludes the integration
 # repository's Factory/DFU/BLE product tests.  Its authoritative toolchain
 # gates are the explicit ISA, assembler/backend, ABI, runtime and regression
