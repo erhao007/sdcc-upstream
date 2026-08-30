@@ -82,10 +82,39 @@ regression_run_id="${STC32_REGRESSION_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
   || fail "invalid STC32_REGRESSION_RUN_ID: $regression_run_id"
 regression_tmp="gen-$regression_run_id"
 regression_results="results-$regression_run_id"
+directed_tmp="gen-directed-$regression_run_id"
+directed_results="results-directed-$regression_run_id"
 [[ ! -e "$regression_root/$regression_tmp" ]] \
   || fail "regression temp directory is not fresh: $regression_tmp"
 [[ ! -e "$regression_root/$regression_results" ]] \
   || fail "regression result directory is not fresh: $regression_results"
+[[ ! -e "$regression_root/$directed_tmp" ]] \
+  || fail "directed regression temp directory is not fresh: $directed_tmp"
+[[ ! -e "$regression_root/$directed_results" ]] \
+  || fail "directed regression result directory is not fresh: $directed_results"
+
+echo "== directed wide-model bitint regression =="
+directed_rc=0
+for lane in mcs251-large mcs251-stack-auto; do
+  make -C "$regression_root" -j"$JOBS" \
+    SIM_TIMEOUT="$SIM_TIMEOUT" TEST_PREFIX=bitintarith \
+    TMP_DIR="$directed_tmp" RESULTS_DIR="$directed_results" \
+    "test-$lane" \
+    || directed_rc=1
+  summary="$regression_root/$directed_results/$lane.sum"
+  if [[ ! -f "$summary" ]]; then
+    echo "run-posix-gates: missing directed summary: $summary" >&2
+    directed_rc=1
+    continue
+  fi
+  grep -E "^Summary for '$lane':" "$summary" || true
+  if ! grep -Eq "^Summary for '$lane': 0 failures," "$summary"; then
+    echo "run-posix-gates: failing directed summary: $summary" >&2
+    directed_rc=1
+  fi
+done
+(( directed_rc == 0 )) \
+  || fail "one or more directed wide-model bitint lanes failed"
 
 echo "regression evidence: $regression_tmp / $regression_results"
 regression_rc=0

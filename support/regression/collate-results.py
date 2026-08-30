@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-import sys, re, io
+import sys, re, io, os
 #import string
 
 """Simple script that scans all of the test suite results text fed in
@@ -14,12 +14,35 @@ def number_from_string(str_value):
   else:
     return int(str_value)
 
-# Read in everything
-if sys.version_info[0]<3:
-    safe_stdin = sys.stdin
-else:
-    safe_stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="latin-1")
-lines = safe_stdin.readlines()
+def result_lines():
+  """Yield result text from stdin or a directory without a huge argv."""
+  if len(sys.argv) == 4 and sys.argv[2] == "--results-dir":
+    results_dir = sys.argv[3]
+    if not os.path.isdir(results_dir):
+      raise SystemExit("results directory does not exist: %s" % results_dir)
+    result_files = [
+      os.path.join(results_dir, filename)
+      for filename in sorted(os.listdir(results_dir))
+      if filename.endswith(".out") and
+         os.path.isfile(os.path.join(results_dir, filename))
+    ]
+    if not result_files:
+      raise SystemExit("results directory contains no .out files: %s" % results_dir)
+    for result_file in result_files:
+      with io.open(result_file, "r", encoding="latin-1") as handle:
+        for line in handle:
+          yield line
+  elif len(sys.argv) <= 2:
+    if sys.version_info[0] < 3:
+      safe_stdin = sys.stdin
+    else:
+      safe_stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="latin-1")
+    for line in safe_stdin:
+      yield line
+  else:
+    raise SystemExit(
+      "usage: collate-results.py [PORT [--results-dir DIRECTORY]]"
+    )
 
 # Init the running totals
 failures = 0
@@ -38,7 +61,7 @@ exlist = ["bug663539"]
 # hack for valdiag
 name = ""
 
-for line in lines:
+for line in result_lines():
 
     m = re.match(r'^Simulation started,', line)
     if (m):
