@@ -21,13 +21,13 @@ it is not a separate backend or ABI.
 | Gate | Current public-release evidence |
 | --- | --- |
 | Linux x86_64 build and tests | Passed on GitHub Actions, Ubuntu 24.04 |
-| Linux x86_64 release package | Published with SHA-256 and complete install manifests |
+| Linux x86_64 release package | Historical prerelease with SHA-256 and complete install manifests |
 | macOS release package | Not yet published for the current public tag |
 | Windows x86_64 release package | Not yet published for the current public tag |
 | STC32G12K128 real-board validation | Historical project evidence exists, but has not been rerun and bound to the current public release |
 
-The latest verified package is available from
-[GitHub Releases](https://github.com/erhao007/sdcc-upstream/releases/latest).
+The current historical Linux package is the
+[r7 prerelease](https://github.com/erhao007/sdcc-upstream/releases/tag/stc32-mt3-support-20260830-r7).
 The release notes and asset names state the exact host platform covered by each
 package. Do not treat simulator or host-build results as real-board evidence.
 
@@ -39,7 +39,7 @@ generation unless the scoped qualified legal review permits distribution. When
 that gate is opened, Linux, macOS, and Windows must all pass before a single
 complete release is published.
 
-## Download the Linux x86_64 package
+## Download the historical Linux x86_64 prerelease
 
 With the GitHub CLI installed:
 

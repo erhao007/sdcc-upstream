@@ -19,13 +19,13 @@ STC32G12K128 单片机提供原生 C 编译器、汇编器、链接器、模拟�
 | 门禁 | 当前公开发行证据 |
 | --- | --- |
 | Linux x86_64 构建与测试 | GitHub Actions Ubuntu 24.04 已通过 |
-| Linux x86_64 发行包 | 已发布，并附 SHA-256 和完整安装清单 |
+| Linux x86_64 发行包 | 历史 prerelease，附 SHA-256 和完整安装清单 |
 | macOS 发行包 | 当前公开标签尚未发布 |
 | Windows x86_64 发行包 | 当前公开标签尚未发布 |
 | STC32G12K128 真板验证 | 项目存在历史证据，但尚未重新执行并绑定当前公开发行身份 |
 
-最新已验证产物见
-[GitHub Releases](https://github.com/erhao007/sdcc-upstream/releases/latest)。
+当前历史 Linux 产物见
+[r7 prerelease](https://github.com/erhao007/sdcc-upstream/releases/tag/stc32-mt3-support-20260830-r7)。
 发行说明和文件名会明确每个包覆盖的宿主平台。模拟器或宿主构建通过不能替代真板证据。
 
 每个 PR 和默认分支更新都会在 GitHub 托管的 macOS 15 arm64 与 Windows Server
@@ -34,7 +34,7 @@ STC32G12K128 单片机提供原生 C 编译器、汇编器、链接器、模拟�
 审查允许二进制分发后，Linux、macOS 与 Windows 三个平台全部通过，才会统一发布
 一份完整 Release。
 
-## 下载 Linux x86_64 发行包
+## 下载历史 Linux x86_64 prerelease
 
 已安装 GitHub CLI 时可执行：
 
