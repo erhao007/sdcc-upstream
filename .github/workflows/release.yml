@@ -12,11 +12,14 @@ jobs:
   linux-x86_64:
     runs-on: ubuntu-24.04
     env:
-      BUILD_DIR: ${{ runner.temp }}/stc32-build
-      PREFIX: ${{ runner.temp }}/stc32-install
       JOBS: 2
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure build paths
+        run: |
+          printf 'BUILD_DIR=%s/stc32-build\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'PREFIX=%s/stc32-install\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
 
       - name: Verify tagged source
         run: |
