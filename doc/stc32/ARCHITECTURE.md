@@ -4,8 +4,9 @@
 
 ## 1. 项目定位
 
-为 SDCC 增加 **STC32G / MCS-251 Source Mode** 的 upstream-friendly port(target 名 `stc32`,架构名 `mcs251`)。
-第一版只做 Source Mode、不追求 Keil ABI 兼容、正确性优先。工具链闭环:
+为 SDCC 增加 **STC32G / MCS-251 Source Mode** 的 upstream-friendly port（内部端口名
+`mcs251`，用户目标别名 `stc32`）。第一版只做 Source Mode、不追求 Keil ABI
+兼容、正确性优先。工具链闭环:
 assembler(sdas251) → simulator(ucsim-mcs251) → C backend(sdcc -mstc32)。
 
 ## 2. SDCC 编译流水线(相关部分)
@@ -35,10 +36,13 @@ C 源码 → 前端(SDCpp/parse) → iCode(中间表示) → 寄存器分配(ral
 - **变体模式**:一个 backend 目录承载多个 PORT。例:Rabbit 系列(r2k/r2ka/r3ka/**r4k**/r5k/r6k/r800)全部共享 `src/z80/` 目录——`z80/main.c` 里逐个定义 `r4k_port` 等,`gen.c`/`ralloc.c`/`ralloc2.cc` 共用,靠 `port->id` 区分;configure.ac 里 `AC_DO_PORT(r4k, z80, R4K, ...)` 的第二个参数就是目录名。
 - **全新模式**:独立 `src/<port>/` 目录 + 独立 gen/ralloc。
 
-**STC32 决策:全新模式(`src/stc32/`)**。理由:
+**STC32 决策:以 `mcs251` 为唯一真实端口，`stc32` 仅是用户别名**。不创建
+平行的 `src/stc32/` 或 `TARGET_ID_STC32`。理由:
 - MCS-251 有全新 16/32 位指令、WR/DR 重叠寄存器、A5 前缀、EDATA 等,mcs51 的 gen.c 无法复用(且 mcs51 多字节表示与 251 原生宽数据行为不同,见项目计划 §16.2)。
 - 与 z80 系列也无指令/寄存器共性。
-- 但**参考新式端口的结构与流程**:尤其 r4k 所用 `ralloc2.cc`(新式最优寄存器分配器,SDCCralloc.hpp 接口),不要沿用 mcs51 的老式 ralloc(上游自己也在迁移,计划 §16.5)。
+- 因此使用独立的 `src/mcs251/` backend；`-mstc32` 在 `SDCCmain.c` 中归一化为
+  `-mmcs251`。同时参考新式端口的结构与流程，尤其 r4k 所用 `ralloc2.cc`，不要沿用
+  mcs51 的老式 ralloc（计划 §16.5）。
 
 ## 4. 新端口必需组件(wiki "Adding a port")
 
@@ -46,22 +50,25 @@ C 源码 → 前端(SDCpp/parse) → iCode(中间表示) → 寄存器分配(ral
 |---|---|---|
 | 汇编器/链接器 | `sdas/`(asxxxx fork)新增 mcs251 后端 | 或外部工具;SDCC 上游建议**先做 assembler** |
 | 模拟器 | `sim/ucsim/` 新增 mcs251 CPU | 或外部;**第二步**,供 regression |
-| 端口基础设施 | `src/stc32/main.c` | PORT 定义、命令行 |
-| 寄存器/栈分配接口 | `src/stc32/ralloc.h`、`ralloc.c`、`ralloc2.cc` | 建议直接新式 ralloc2 |
-| 代码生成 | `src/stc32/gen.h`、`gen.c` | iCode → MCS-251 汇编 |
-| peephole 接口 | `src/stc32/peep.h`、`peep.c` | 初期可最小化 |
-| peephole 规则 | `src/stc32/peeph.def` | **后期再投入**(先 ralloc/codegen 内做优化) |
-| runtime 库 | `device/lib/stc32/` | 尽量 C 实现(参考 noasm2 思路) |
-| regression | `support/regression/ports/stc32/` | spec.mk + mcs251 模拟器 |
+| 端口基础设施 | `src/mcs251/main.c` | `mcs251_port` 定义、命令行；`stc32` 为别名 |
+| 寄存器/栈分配接口 | `src/mcs251/ralloc.h`、`ralloc.c`、`ralloc2.cc` | 使用新式 ralloc2 |
+| 代码生成 | `src/mcs251/gen.h`、`gen.c` | iCode → MCS-251 汇编 |
+| peephole 接口 | `src/mcs251/peep.h`、`peep.c` | 初期可最小化 |
+| peephole 规则 | `src/mcs251/peeph.def` | **后期再投入**(先 ralloc/codegen 内做优化) |
+| runtime 库 | `device/lib/mcs251/` | 尽量 C 实现(参考 noasm2 思路) |
+| regression | `support/regression/ports/mcs251*` | spec.mk + mcs251 模拟器 |
 
-### 端口注册需修改的具体点(全新 port)
+### 当前端口注册点
 
-1. `configure.ac`:`AC_DO_PORT(stc32, stc32, STC32, [Excludes the STC32 port])`
-2. `src/port.h`:追加 `TARGET_ID_STC32`;`extern PORT stc32_port;`
-3. `src/SDCCmain.c`:端口表加 `&stc32_port,`
-4. 新建 `src/stc32/`(main.c/gen.c/gen.h/ralloc.h/ralloc.c/ralloc2.cc/peep.c/peep.h/peeph.def)+ 构建集成(Makefile 体系)
-5. `device/lib/Makefile.in`:`TARGETS += model-stc32`
-6. `support/regression/ports/stc32/`(spec.mk,参考 mcs51-small)
+1. `configure.ac` 保持 `AC_DO_PORT(mcs251, mcs251, MCS251, ...)`；不要注册第二个
+   `stc32` PORT。
+2. `src/port.h` 使用 `TARGET_ID_MCS251` 和 `extern PORT mcs251_port;`。
+3. `src/SDCCmain.c` 的端口表只加入 `&mcs251_port`；`-mstc32` 在此归一化为
+   `-mmcs251`。
+4. 端口实现位于现有 `src/mcs251/`（main.c/gen.c/gen.h/ralloc*.*/peep.* 等），由现有
+   Makefile 体系构建。
+5. `device/lib/Makefile.in` 使用 `TARGETS += model-mcs251`。
+6. regression 使用 `support/regression/ports/mcs251*`（参考 mcs51-small）。
 
 ## 5. PORT 结构体要点(参考 r4k_port,src/z80/main.c:2118)
 
@@ -110,7 +117,7 @@ STC32 的 PORT 需定义:模型(model small 起步,对应 XSmall memory model)�
 1. **sdas251 + disassembler**(先有 ISA 数据库 `isa/mcs251.yaml`,assembler/disassembler/simulator 共享)
 2. **ucsim mcs251 CPU core**(逐指令状态机测试)
 3. **ABI 冻结文档**(docs/ABI.md)
-4. **最小 C backend**(src/stc32/,uint8_t 起步)
+4. **最小 C backend**(src/mcs251/,uint8_t 起步；用户仍可用 -mstc32)
 5. device support + runtime + regression 全量
 
 ## 10. 参考端口速查
