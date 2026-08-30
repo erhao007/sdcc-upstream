@@ -6,151 +6,201 @@ on:
       - 'stc32-mt3-support-*'
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: stc32-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  linux-x86_64:
+  legal-approval:
     runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify tagged source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-list -n 1 "$GITHUB_REF_NAME")" = "$GITHUB_SHA"
+          case "$GITHUB_REF_NAME" in
+            stc32-mt3-support-*) ;;
+            *) echo "unexpected release tag: $GITHUB_REF_NAME" >&2; exit 1 ;;
+          esac
+      - name: Require qualified legal approval before binary generation
+        run: >-
+          python3 support/stc32/tools/check_legal_review.py
+          --require-binary-release-approval
+
+  posix-packages:
+    needs: legal-approval
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux-x86_64
+            host_os: Linux
+            host_arch: x86_64
+          - runner: macos-15
+            platform: macos-arm64
+            host_os: Darwin
+            host_arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
     env:
       JOBS: 2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
-      - name: Configure build paths
-        run: |
-          printf 'BUILD_DIR=%s/stc32-build\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
-          printf 'PREFIX=%s/stc32-install\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
-
-      - name: Verify tagged source
-        run: |
-          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$GITHUB_REF_NAME")"
-          test -n "$GITHUB_REF_NAME"
-          case "$GITHUB_REF_NAME" in
-            stc32-mt3-support-*) ;;
-            *) echo "unexpected release tag: $GITHUB_REF_NAME" >&2; exit 1 ;;
-          esac
-
-      - name: Require qualified legal approval for binary distribution
-        run: |
-          python3 support/stc32/tools/check_legal_review.py \
-            --require-binary-release-approval
-
-      - name: Install build dependencies
+      - name: Verify source commit
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             bison build-essential flex libboost-dev libboost-graph-dev \
             libreadline-dev libzstd-dev python3 zlib1g-dev
-
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install boost bison flex
+          printf '%s/bin\n' "$(brew --prefix bison)" >> "$GITHUB_PATH"
+          printf '%s/bin\n' "$(brew --prefix flex)" >> "$GITHUB_PATH"
+      - name: Configure build paths
+        run: |
+          printf 'BUILD_DIR=%s/stc32-build\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'PREFIX=%s/stc32-install\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DIST_DIR=%s/stc32-dist\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Build and install
-        run: |
-          env -u COMPILER_PATH -u SDCC_HOME \
-            bash support/stc32/scripts/build-toolchain.sh
-
+        run: env -u COMPILER_PATH -u SDCC_HOME bash support/stc32/scripts/build-toolchain.sh
       - name: Verify install boundary
-        run: |
-          python3 - "$PREFIX" <<'PY'
-          import hashlib
-          import json
-          import subprocess
-          import sys
-          from pathlib import Path
-
-          prefix = Path(sys.argv[1])
-          metadata = {
-              Path("share/openstc32/toolchain.json"),
-              Path("share/openstc32/toolchain-artifacts.json"),
-          }
-          for path in prefix.rglob("*"):
-              if path.is_symlink():
-                  raise SystemExit(
-                      f"unexpected symlink in install tree: {path.relative_to(prefix)}"
-                  )
-          artifact_path = prefix / "share/openstc32/toolchain-artifacts.json"
-          artifact = json.loads(artifact_path.read_text())
-          listed = {}
-          for entry in artifact["files"]:
-              relative = Path(entry["path"])
-              if relative.is_absolute() or ".." in relative.parts or relative in metadata:
-                  raise SystemExit(f"unsafe artifact path: {relative}")
-              if relative in listed:
-                  raise SystemExit(f"duplicate artifact path: {relative}")
-              path = prefix / relative
-              if not path.is_file():
-                  raise SystemExit(f"missing artifact: {relative}")
-              data = path.read_bytes()
-              if (
-                  len(data) != entry["size"]
-                  or hashlib.sha256(data).hexdigest() != entry["sha256"]
-              ):
-                  raise SystemExit(f"artifact mismatch: {relative}")
-              listed[relative] = None
-          actual = {
-              path.relative_to(prefix)
-              for path in prefix.rglob("*")
-              if path.is_file() and path.relative_to(prefix) not in metadata
-          }
-          if set(listed) != actual:
-              raise SystemExit(
-                  f"artifact coverage mismatch: listed={len(listed)} actual={len(actual)}"
-              )
-          toolchain_path = prefix / "share/openstc32/toolchain.json"
-          toolchain = json.loads(toolchain_path.read_text())
-          artifact_sha = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
-          if toolchain["artifact_manifest_sha256"] != artifact_sha:
-              raise SystemExit("toolchain manifest does not bind artifact manifest")
-          head = subprocess.check_output(
-              ["git", "rev-parse", "HEAD"], text=True
-          ).strip()
-          if toolchain["source_commit"] != head:
-              raise SystemExit("toolchain manifest source commit mismatch")
-          if toolchain["source_dirty"] is not False:
-              raise SystemExit("toolchain manifest source is dirty")
-          print(f"verified {len(actual)} installed artifacts")
-          PY
-
-      - name: Run toolchain gates
+        run: >-
+          python3 support/stc32/tools/verify_install.py "$PREFIX"
+          --expect-host-os "${{ matrix.host_os }}"
+          --expect-host-arch "${{ matrix.host_arch }}"
+      - name: Run core and product regression gates
         env:
-          STC32_TOOLCHAIN_ROOT: ${{ runner.temp }}/stc32-install
-          STC32_REGRESSION_RUN_ID: release-${{ github.run_id }}-${{ github.run_attempt }}
+          STC32_REGRESSION_RUN_ID: release-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.platform }}
+        run: bash support/stc32/scripts/run-posix-gates.sh --regression
+      - name: Package and verify release assets
         run: |
-          bash support/stc32/scripts/run-posix-gates.sh --regression
-
-      - name: Package release
-        id: package
-        run: |
-          mkdir -p dist
-          package="openstc32-toolchain-${GITHUB_REF_NAME}-linux-x86_64.tar.gz"
-          source_date_epoch="$(git show -s --format=%ct HEAD)"
-          tar --sort=name --mtime="@$source_date_epoch" \
-            --owner=0 --group=0 --numeric-owner -C "$PREFIX" -cf - . \
-            | gzip -n > "dist/$package"
-          (cd dist && sha256sum "$package" > "$package.sha256")
-          cp "$PREFIX/share/openstc32/toolchain.json" dist/
-          cp "$PREFIX/share/openstc32/toolchain-artifacts.json" dist/
-          printf 'package=%s\n' "$package" >> "$GITHUB_OUTPUT"
-
-      - name: Upload workflow artifact
+          python3 support/stc32/tools/package_install.py \
+            "$PREFIX" "$DIST_DIR" \
+            --tag "$GITHUB_REF_NAME" --platform "${{ matrix.platform }}"
+          python3 support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA" --platform "${{ matrix.platform }}"
+      - name: Upload validated workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: openstc32-toolchain-${{ github.ref_name }}-linux-x86_64
-          path: dist/
+          name: openstc32-toolchain-${{ github.ref_name }}-${{ matrix.platform }}
+          path: ${{ runner.temp }}/stc32-dist/
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish GitHub release
+  windows-package:
+    needs: legal-approval
+    runs-on: windows-2025
+    timeout-minutes: 180
+    env:
+      JOBS: 2
+    steps:
+      - name: Preserve LF line endings
+        shell: pwsh
+        run: git config --global core.autocrlf input
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            bison
+            diffutils
+            flex
+            git
+            make
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-pyserial
+            mingw-w64-ucrt-x86_64-python-yaml
+            patch
+            python
+      - name: Configure build paths
+        shell: msys2 {0}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          runner_temp_posix="$(cygpath -u "$RUNNER_TEMP")"
+          printf 'BUILD_DIR=%s/stc32-build\n' "$runner_temp_posix" >> "$GITHUB_ENV"
+          printf 'PREFIX=%s/stc32-install\n' "$runner_temp_posix" >> "$GITHUB_ENV"
+          printf 'DIST_DIR=%s/stc32-dist\n' "$runner_temp_posix" >> "$GITHUB_ENV"
+      - name: Build, install, and run product gates
+        shell: msys2 {0}
+        env:
+          STC32_REGRESSION_RUN_ID: release-${{ github.run_id }}-${{ github.run_attempt }}-windows-x86_64
+        run: bash support/stc32/scripts/build-windows.sh --gates
+      - name: Verify install boundary
+        shell: msys2 {0}
+        run: >-
+          python support/stc32/tools/verify_install.py "$PREFIX"
+          --expect-host-os Windows --expect-host-arch AMD64
+      - name: Package and verify release assets
+        shell: msys2 {0}
+        run: |
+          python support/stc32/tools/package_install.py \
+            "$PREFIX" "$DIST_DIR" \
+            --tag "$GITHUB_REF_NAME" --platform windows-x86_64
+          python support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA" --platform windows-x86_64
+      - name: Upload validated workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openstc32-toolchain-${{ github.ref_name }}-windows-x86_64
+          path: ${{ runner.temp }}/stc32-dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-release:
+    needs: [posix-packages, windows-package]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Download validated platform assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: openstc32-toolchain-${{ github.ref_name }}-*
+          path: dist
+          merge-multiple: true
+      - name: Revalidate the complete release set
+        run: |
+          python3 support/stc32/tools/check_legal_review.py \
+            --require-binary-release-approval
+          python3 support/stc32/tools/verify_release_assets.py \
+            dist --tag "$GITHUB_REF_NAME" --source-commit "$GITHUB_SHA" \
+            --platform linux-x86_64 \
+            --platform macos-arm64 \
+            --platform windows-x86_64
+      - name: Publish one complete GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          notes="Validated GitHub-hosted builds for Ubuntu 24.04 x86_64, macOS 15 arm64, and Windows Server 2025 x86_64. Each package includes complete install manifests and a SHA-256 checksum. This is E5 build and regression evidence only; it does not claim STC32G12K128 real-board E4 acceptance."
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" dist/* \
               --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$GITHUB_REF_NAME" dist/* \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
+              --repo "$GITHUB_REPOSITORY" --verify-tag \
               --title "OpenSTC32 toolchain $GITHUB_REF_NAME" \
-              --notes "Linux x86_64 build produced by GitHub Actions from $GITHUB_SHA. Includes the installed toolchain, SHA-256 checksum, and complete install manifests. This release is E5 evidence for Ubuntu 24.04 x86_64 only; it does not claim Windows/macOS or real-board validation."
+              --notes "$notes"
           fi

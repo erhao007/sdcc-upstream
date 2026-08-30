@@ -3,6 +3,7 @@
 English | [简体中文](README.zh-CN.md)
 
 [![STC32 toolchain CI](https://github.com/erhao007/sdcc-upstream/actions/workflows/ci.yml/badge.svg?branch=stc32)](https://github.com/erhao007/sdcc-upstream/actions/workflows/ci.yml)
+[![STC32 platform builds](https://github.com/erhao007/sdcc-upstream/actions/workflows/platforms.yml/badge.svg?branch=stc32)](https://github.com/erhao007/sdcc-upstream/actions/workflows/platforms.yml)
 [![STC32 toolchain release](https://github.com/erhao007/sdcc-upstream/actions/workflows/release.yml/badge.svg)](https://github.com/erhao007/sdcc-upstream/actions/workflows/release.yml)
 
 OpenSTC32 is an SDCC-derived, upstream-oriented toolchain port for the Intel
@@ -29,6 +30,14 @@ The latest verified package is available from
 [GitHub Releases](https://github.com/erhao007/sdcc-upstream/releases/latest).
 The release notes and asset names state the exact host platform covered by each
 package. Do not treat simulator or host-build results as real-board evidence.
+
+Every pull request and default-branch update builds and runs the full product
+gates on GitHub-hosted macOS 15 arm64 and Windows Server 2025 x86_64 runners.
+Those jobs also create and validate a package in temporary runner storage, but
+do not upload it. A tagged release remains separately blocked before binary
+generation unless the scoped qualified legal review permits distribution. When
+that gate is opened, Linux, macOS, and Windows must all pass before a single
+complete release is published.
 
 ## Download the Linux x86_64 package
 

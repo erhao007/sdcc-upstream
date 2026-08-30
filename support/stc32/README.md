@@ -49,6 +49,16 @@ The tests use the installed toolchain by default.  `STC32_TOOLCHAIN_ROOT`,
 an explicitly selected installation.  Generated reports and temporary build
 outputs are not part of the source snapshot.
 
+## Package validation
+
+`tools/verify_install.py` checks the complete installed-file boundary and binds
+it to the current clean Git source state.  `tools/package_install.py` creates a
+deterministic platform package plus checksum and manifest sidecars, and
+`tools/verify_release_assets.py` reopens the archive and verifies every file
+before any workflow artifact or GitHub Release can be published.  Branch CI
+performs this package validation without uploading binaries; tagged publishing
+also requires the separate qualified-legal-review gate.
+
 ## Ownership and provenance
 
 `doc/stc32/SOURCE_PROVENANCE.json` records the clean-snapshot source and the
