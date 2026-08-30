@@ -11455,12 +11455,8 @@ genCast (iCode * ic)
      than the size of the source */
   /* we move to result for the size of source */
   size = AOP_SIZE (right);
-  offset = 0;
-  while (size--)
-    {
-      opPut(result, opGet (right, offset, FALSE, FALSE), offset);
-      offset++;
-    }
+  mcs251CopyPlainBytes (result, right, size);
+  offset = size;
 
   if (AOP_SIZE (right) == 1 &&
       AOP_SIZE (result) >= 2 && IS_SPEC (rtype))
@@ -11498,8 +11494,10 @@ genCast (iCode * ic)
     {
       bool masktopbyte = IS_BITINT (ctype) && (SPEC_BITINTWIDTH (ctype) % 8) && SPEC_USIGN (ctype);
 
-      /* we need to extend the sign :{ */
-      MOVA (opGet (right, AOP_SIZE (right) - 1, FALSE, FALSE));
+      /* The overlap-safe copy may overwrite registers that belonged to the
+         dying source tuple.  Extend from the byte already copied into the
+         result instead of reading the potentially clobbered source again. */
+      MOVA (opGet (result, AOP_SIZE (right) - 1, FALSE, FALSE));
       emitcode ("rlc", "a");
       emitcode ("subb", "a,acc");
       while (size--)
