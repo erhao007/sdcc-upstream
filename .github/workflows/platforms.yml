@@ -61,7 +61,9 @@ jobs:
 
   windows-x86_64:
     runs-on: windows-2025
-    timeout-minutes: 180
+    # Round-4 evidence: build+gates ~50 min, three mcs251 lanes ~98 min,
+    # and the mcs51 lanes were cut mid-run at the old 180 min mark.
+    timeout-minutes: 360
     env:
       JOBS: 2
     steps:
