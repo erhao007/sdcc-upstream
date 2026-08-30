@@ -159,14 +159,15 @@ def source_state(path):
 
 
 source_state_sha256, source_dirty = source_state(root)
-commit = os.environ.get("STC32_SOURCE_COMMIT")
-if not commit:
-    try:
-        commit = subprocess.check_output(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
-            text=True, stderr=subprocess.DEVNULL).strip()
-    except Exception:
-        commit = "unknown"
+commit = subprocess.check_output(
+    ["git", "-C", str(root), "rev-parse", "HEAD"],
+    text=True, stderr=subprocess.DEVNULL).strip()
+requested_commit = os.environ.get("STC32_SOURCE_COMMIT")
+if requested_commit and requested_commit != commit:
+    raise SystemExit(
+        "STC32_SOURCE_COMMIT does not match source HEAD: "
+        f"requested={requested_commit} HEAD={commit}"
+    )
 version = subprocess.check_output(
     [str(sdcc), "--version"], text=True, stderr=subprocess.STDOUT
 ).splitlines()[0]

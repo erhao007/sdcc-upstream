@@ -3,6 +3,7 @@
 [English](README.md) | 简体中文
 
 [![STC32 toolchain CI](https://github.com/erhao007/sdcc-upstream/actions/workflows/ci.yml/badge.svg?branch=stc32)](https://github.com/erhao007/sdcc-upstream/actions/workflows/ci.yml)
+[![STC32 platform builds](https://github.com/erhao007/sdcc-upstream/actions/workflows/platforms.yml/badge.svg?branch=stc32)](https://github.com/erhao007/sdcc-upstream/actions/workflows/platforms.yml)
 [![STC32 toolchain release](https://github.com/erhao007/sdcc-upstream/actions/workflows/release.yml/badge.svg)](https://github.com/erhao007/sdcc-upstream/actions/workflows/release.yml)
 
 OpenSTC32 是一个面向上游贡献的 SDCC 衍生工具链端口，为 Intel MCS-251 架构和
@@ -26,6 +27,12 @@ STC32G12K128 单片机提供原生 C 编译器、汇编器、链接器、模拟�
 最新已验证产物见
 [GitHub Releases](https://github.com/erhao007/sdcc-upstream/releases/latest)。
 发行说明和文件名会明确每个包覆盖的宿主平台。模拟器或宿主构建通过不能替代真板证据。
+
+每个 PR 和默认分支更新都会在 GitHub 托管的 macOS 15 arm64 与 Windows Server
+2025 x86_64 runner 上构建，并执行完整产品门禁。任务会在 runner 临时目录生成并
+校验发行包，但不会上传。带标签的发行流程仍有独立的合资格法律审查前置门禁；只有
+审查允许二进制分发后，Linux、macOS 与 Windows 三个平台全部通过，才会统一发布
+一份完整 Release。
 
 ## 下载 Linux x86_64 发行包
 

@@ -1,0 +1,127 @@
+name: STC32 platform builds
+
+on:
+  push:
+    branches: [stc32]
+  pull_request:
+    branches: [stc32]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stc32-platform-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-arm64:
+    runs-on: macos-15
+    timeout-minutes: 180
+    env:
+      JOBS: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install build dependencies
+        run: |
+          brew install boost bison flex
+          printf '%s/bin\n' "$(brew --prefix bison)" >> "$GITHUB_PATH"
+          printf '%s/bin\n' "$(brew --prefix flex)" >> "$GITHUB_PATH"
+      - name: Configure build paths
+        run: |
+          printf 'BUILD_DIR=%s/stc32-build\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'PREFIX=%s/stc32-install\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DIST_DIR=%s/stc32-dist\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Validate source policy
+        run: python3 support/stc32/tools/check_legal_review.py
+      - name: Build and install
+        run: env -u COMPILER_PATH -u SDCC_HOME bash support/stc32/scripts/build-toolchain.sh
+      - name: Verify install boundary
+        run: >-
+          python3 support/stc32/tools/verify_install.py "$PREFIX"
+          --expect-host-os Darwin --expect-host-arch arm64
+      - name: Run core and product regression gates
+        env:
+          STC32_REGRESSION_RUN_ID: platform-${{ github.run_id }}-${{ github.run_attempt }}
+        run: bash support/stc32/scripts/run-posix-gates.sh --regression
+      - name: Validate release package without uploading
+        run: |
+          tag="ci-${GITHUB_SHA}"
+          python3 support/stc32/tools/package_install.py \
+            "$PREFIX" "$DIST_DIR" --tag "$tag" --platform macos-arm64
+          python3 support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
+            --platform macos-arm64
+
+  windows-x86_64:
+    runs-on: windows-2025
+    timeout-minutes: 180
+    env:
+      JOBS: 2
+    steps:
+      - name: Preserve LF line endings
+        shell: pwsh
+        run: git config --global core.autocrlf input
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            bison
+            diffutils
+            flex
+            git
+            make
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-pyserial
+            mingw-w64-ucrt-x86_64-python-yaml
+            patch
+            python
+      - name: Configure build paths
+        shell: msys2 {0}
+        run: |
+          runner_temp_posix="$(cygpath -u "$RUNNER_TEMP")"
+          printf 'BUILD_DIR=%s/stc32-build\n' "$runner_temp_posix" >> "$GITHUB_ENV"
+          printf 'PREFIX=%s/stc32-install\n' "$runner_temp_posix" >> "$GITHUB_ENV"
+          printf 'DIST_DIR=%s/stc32-dist\n' "$runner_temp_posix" >> "$GITHUB_ENV"
+      - name: Validate source policy
+        shell: msys2 {0}
+        run: python support/stc32/tools/check_legal_review.py
+      - name: Build, install, and run product gates
+        shell: msys2 {0}
+        env:
+          STC32_REGRESSION_RUN_ID: platform-${{ github.run_id }}-${{ github.run_attempt }}
+        run: bash support/stc32/scripts/build-windows.sh --gates
+      - name: Verify install boundary
+        shell: msys2 {0}
+        run: >-
+          python support/stc32/tools/verify_install.py "$PREFIX"
+          --expect-host-os Windows --expect-host-arch AMD64
+      - name: Validate release package without uploading
+        shell: msys2 {0}
+        run: |
+          tag="ci-${GITHUB_SHA}"
+          python support/stc32/tools/package_install.py \
+            "$PREFIX" "$DIST_DIR" --tag "$tag" --platform windows-x86_64
+          python support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
+            --platform windows-x86_64
+
+  platform-builds:
+    if: always()
+    needs: [macos-arm64, windows-x86_64]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every platform
+        env:
+          MACOS_RESULT: ${{ needs.macos-arm64.result }}
+          WINDOWS_RESULT: ${{ needs.windows-x86_64.result }}
+        run: |
+          test "$MACOS_RESULT" = success
+          test "$WINDOWS_RESULT" = success
