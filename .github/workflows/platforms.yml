@@ -26,6 +26,11 @@ jobs:
       - name: Install build dependencies
         run: |
           brew install boost bison flex
+          python3 -m venv "$RUNNER_TEMP/stc32-python"
+          "$RUNNER_TEMP/stc32-python/bin/python3" -m pip install \
+            --disable-pip-version-check --only-binary=:all: --require-hashes \
+            -r .github/workflows/requirements-macos.txt
+          printf '%s/stc32-python/bin\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
           printf '%s/bin\n' "$(brew --prefix bison)" >> "$GITHUB_PATH"
           printf '%s/bin\n' "$(brew --prefix flex)" >> "$GITHUB_PATH"
       - name: Configure build paths

@@ -28,7 +28,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             bison build-essential flex libboost-dev libboost-graph-dev \
-            libreadline-dev libzstd-dev python3 zlib1g-dev
+            libreadline-dev libzstd-dev python3 python3-yaml zlib1g-dev
       - name: Configure build paths
         run: |
           printf 'BUILD_DIR=%s/stc32-build\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"

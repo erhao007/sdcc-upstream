@@ -62,11 +62,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             bison build-essential flex libboost-dev libboost-graph-dev \
-            libreadline-dev libzstd-dev python3 zlib1g-dev
+            libreadline-dev libzstd-dev python3 python3-yaml zlib1g-dev
       - name: Install macOS build dependencies
         if: runner.os == 'macOS'
         run: |
           brew install boost bison flex
+          python3 -m venv "$RUNNER_TEMP/stc32-python"
+          "$RUNNER_TEMP/stc32-python/bin/python3" -m pip install \
+            --disable-pip-version-check --only-binary=:all: --require-hashes \
+            -r .github/workflows/requirements-macos.txt
+          printf '%s/stc32-python/bin\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
           printf '%s/bin\n' "$(brew --prefix bison)" >> "$GITHUB_PATH"
           printf '%s/bin\n' "$(brew --prefix flex)" >> "$GITHUB_PATH"
       - name: Configure build paths
