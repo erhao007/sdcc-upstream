@@ -7,9 +7,10 @@ import argparse
 import hashlib
 import json
 import re
+import stat
 import tarfile
 import zipfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 TOKEN = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -42,9 +43,19 @@ def load_object(path: Path) -> dict:
     return value
 
 
-def safe_name(name: str) -> PurePosixPath:
+def safe_name(name: object) -> PurePosixPath:
+    if not isinstance(name, str):
+        raise SystemExit(f"unsafe archive member: {name!r}")
     relative = PurePosixPath(name)
-    if not name or relative.is_absolute() or ".." in relative.parts:
+    windows = PureWindowsPath(name)
+    if (
+        not name
+        or "\\" in name
+        or relative.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or ".." in relative.parts
+    ):
         raise SystemExit(f"unsafe archive member: {name!r}")
     return relative
 
@@ -69,6 +80,9 @@ def read_archive(path: Path) -> dict[PurePosixPath, bytes]:
                 relative = safe_name(member.filename)
                 if member.is_dir():
                     raise SystemExit(f"directory archive member: {relative}")
+                mode = (member.external_attr >> 16) & 0xFFFF
+                if member.create_system != 3 or not stat.S_ISREG(mode):
+                    raise SystemExit(f"non-file archive member: {relative}")
                 if relative in members:
                     raise SystemExit(f"duplicate archive member: {relative}")
                 members[relative] = archive.read(member)

@@ -109,7 +109,10 @@ jobs:
   windows-package:
     needs: legal-approval
     runs-on: windows-2025
-    timeout-minutes: 180
+    # The complete Windows build and five fresh regression lanes take more
+    # than four hours on the GitHub-hosted runner.  Keep the release budget in
+    # sync with the branch platform gate so an approved release can finish.
+    timeout-minutes: 360
     env:
       JOBS: 2
     steps:
@@ -204,11 +207,10 @@ jobs:
         run: |
           notes="Validated GitHub-hosted builds for Ubuntu 24.04 x86_64, macOS 15 arm64, and Windows Server 2025 x86_64. Each package includes complete install manifests and a SHA-256 checksum. This is E5 build and regression evidence only; it does not claim STC32G12K128 real-board E4 acceptance."
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/* \
-              --repo "$GITHUB_REPOSITORY" --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" dist/* \
-              --repo "$GITHUB_REPOSITORY" --verify-tag \
-              --title "OpenSTC32 toolchain $GITHUB_REF_NAME" \
-              --notes "$notes"
+            echo "refusing to mutate existing release: $GITHUB_REF_NAME" >&2
+            exit 1
           fi
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "OpenSTC32 toolchain $GITHUB_REF_NAME" \
+            --notes "$notes"

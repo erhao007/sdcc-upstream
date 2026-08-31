@@ -8,7 +8,7 @@ import hashlib
 import json
 import os
 import subprocess
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 METADATA = {
@@ -78,7 +78,15 @@ def safe_relative(value: object) -> PurePosixPath:
     if not isinstance(value, str) or not value:
         raise SystemExit(f"invalid artifact path: {value!r}")
     relative = PurePosixPath(value)
-    if relative.is_absolute() or ".." in relative.parts or relative in METADATA:
+    windows = PureWindowsPath(value)
+    if (
+        "\\" in value
+        or relative.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or ".." in relative.parts
+        or relative in METADATA
+    ):
         raise SystemExit(f"unsafe artifact path: {value}")
     return relative
 

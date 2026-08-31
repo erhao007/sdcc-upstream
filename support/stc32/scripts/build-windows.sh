@@ -17,10 +17,10 @@
 # Usage (MSYS2 UCRT64 shell, inside the repository):
 #   bash scripts/build-windows.sh [--gates]
 #
-# --gates additionally runs the Windows gate suite: unit tests, opcode and
-# ISA contracts, assembler/backend checks, ABI, ST-4A..ST-5 SDK gates,
-# ST-6A, and the five regression lanes (framework python is forced to the
-# MSYS python because native ucrt64 python exceeds the Win32 32K
+# --gates additionally runs the standalone public toolchain suite: release
+# boundary unit tests, opcode and ISA contracts, assembler/backend checks,
+# ABI/runtime tests, and the five regression lanes (framework python is forced
+# to the MSYS python because native ucrt64 python exceeds the Win32 32K
 # argv+environment spawn limit used by the framework's collation rules).
 set -euo pipefail
 
@@ -69,6 +69,7 @@ export STC32_TOOLCHAIN_ROOT="$PREFIX"
 # repository's Factory/DFU/BLE product tests.  Its authoritative toolchain
 # gates are the explicit ISA, assembler/backend, ABI, runtime and regression
 # commands below.
+python -m unittest discover -s support/stc32/tests -p 'test_release_*.py'
 python support/stc32/tools/opcode_check.py
 # Keep the ISA decode report out of the source tree; verify_install.py
 # requires a clean checkout (run-posix-gates.sh redirects it the same way).
