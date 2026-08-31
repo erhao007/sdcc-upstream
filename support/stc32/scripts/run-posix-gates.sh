@@ -38,6 +38,7 @@ export STC32_TOOLCHAIN_ROOT="$PREFIX"
 echo "== STC32 core gates =="
 cd "$ROOT"
 python3 support/stc32/tools/check_legal_review.py
+python3 -m unittest discover -s support/stc32/tests -p 'test_release_*.py'
 python3 support/stc32/tools/opcode_check.py
 PYTHONPATH=tools/pylib python3 support/stc32/tools/run_isa_semantics.py
 python3 support/stc32/tools/run_runtime_tests.py
