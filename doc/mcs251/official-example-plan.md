@@ -16,8 +16,8 @@
 | Keil MCB251 ROM Checksum 条目 | 公开厂商索引/说明页 | <https://www.keil.com/download/docs/47.asp> | 仅用于确认 checksum 语义；未下载或解析包 | 公开语义参考，不构成源码再分发许可 |
 | STMicroelectronics/STC 官方示例索引 | 公开厂商索引 | <https://www.stcmicro.com/cn/slcx.html> | 仅观察公开示例类别；未抓取或复制源码 | 公开语义参考，许可边界未确认 |
 | STCAIMCU 公开示例索引/帖子 | 公开项目页面 | README 中逐项列出的 `stcaimcu.com` 链接 | 仅用于独立选择行为断言；未导入原始项目 | 公开语义参考，许可边界未确认 |
-| [PatZer0/STC32G12K128_Experiments](https://github.com/PatZer0/STC32G12K128_Experiments/tree/main) | 用户提供的公开 GitHub 示例聚合仓库 | 仓库页标注 GPL-3.0；README 同时声明包含原创和第三方代码、仅供学习参考且勿用于商业用途；访问 2026-09-01 | 仅核对仓库元数据、目录和许可证；未下载或读取示例源码、`Objects`、`Listings` 或 Keil 工程文件 | 候选来源；需作者/各第三方权利人确认 |
-| [`seekfree/STC32G12K128_Library`](https://gitee.com/seekfree/STC32G12K128_Library)（由上述仓库脚本引用） | 第三方上游库线索 | Gitee 仓库页标注 GPL-3.0；README 要求 MDK for C251，但未确认逐文件来源与再分发范围；访问 2026-09-01 | 只记录为上游线索；未下载、复制或解析其实现文件 | 不直接作为本仓样本来源 |
+| [PatZer0/STC32G12K128_Experiments](https://github.com/PatZer0/STC32G12K128_Experiments/tree/main) | 用户提供的公开 GitHub 示例聚合仓库 | 仓库页标注 GPL-3.0；README 同时声明包含原创和第三方代码、仅供学习参考且勿用于商业用途；观察到 `main`=`71f5a3c383970e80c25e0fa79966aca863cc7331`，访问 2026-09-01 | 仅核对仓库元数据、目录和许可证；未下载或读取示例源码、`Objects`、`Listings` 或 Keil 工程文件 | 候选来源；需作者/各第三方权利人确认 |
+| [`seekfree/STC32G12K128_Library`](https://gitee.com/seekfree/STC32G12K128_Library)（由上述仓库脚本引用） | 第三方上游库线索 | Gitee 仓库页标注 GPL-3.0；README 要求 MDK for C251，但未确认逐文件来源与再分发范围；观察到 `master`=`0ee3377e1585e63557a4dd285f9f7bddaa48d7c9`，访问 2026-09-01 | 只记录为上游线索；未下载、复制或解析其实现文件 | 不直接作为本仓样本来源 |
 | 用户或贡献者提供的真实 C251/8051 项目 | 待授权真实样本 | 必须由权利人确认可提取最小样本和允许的使用/再分发范围 | 仅在确认后抽取去业务化 fixture，并记录来源哈希和授权 | MT-4A 关闭阻碍，待确认 |
 
 仓内原创文件可以作为开发种子，但它们不能替代“至少一组拥有合法使用权的
