@@ -16,3 +16,11 @@ components:
     modified: yes
     redistribution_decision: included with this SDCC-derived repository
     reviewer: pending legal/source audit before downstream repackaging
+  - name: zerog2k/stc_diyclock migration fixture source reference
+    source_url: https://github.com/zerog2k/stc_diyclock
+    version_or_commit: beb3b5139fe64a4b8bfc9a24539ed5c0cc8c5fe3
+    license: upstream repository declares MIT in LICENCE; file-level scope is partial
+    local_paths: support/stc32/tests/migration/cases/project/stc_diyclock
+    modified: yes
+    redistribution_decision: only the recorded de-businessized derivative; exclude adc/vendor/submodule/binary material
+    reviewer: pending file-level rights confirmation; not legal approval

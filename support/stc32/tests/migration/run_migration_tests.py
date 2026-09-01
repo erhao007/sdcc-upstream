@@ -181,6 +181,67 @@ def run_mechanical(case: dict, sdcc: Path, results: list[tuple[str, str]]) -> No
     results.append(("PASS", f"{tag} bare-reject + {token}->{replacement}"))
 
 
+def run_syntax_normalization(case: dict, sdcc: Path,
+                             results: list[tuple[str, str]]) -> None:
+    source = ROOT / "support" / "stc32" / "tests" / "migration" / case["source"]
+    original = source.read_text(encoding="utf-8")
+    legacy = original
+    try:
+        for normalization in case["legacy_replacements"]:
+            before = normalization["from"]
+            after = normalization["to"]
+            legacy, count = re.subn(re.escape(before), after, legacy, count=1)
+            if count != 1:
+                raise RuntimeError(
+                    f"expected exactly one normalization source {before!r}, replaced {count}"
+                )
+    except RuntimeError as error:
+        results.append(("FAIL", f"{case['id']}: {error}"))
+        return
+
+    with tempfile.TemporaryDirectory(prefix="mt4a-syntax-") as tmp:
+        directory = Path(tmp)
+        legacy_source = directory / source.name
+        legacy_source.write_text(legacy, encoding="utf-8")
+        legacy_rel = directory / "legacy.rel"
+        legacy_result = compile_one(
+            sdcc, legacy_source, legacy_rel, "small",
+            include_dirs=[source.parent],
+        )
+        tag = case["id"]
+        if legacy_result.returncode == 0:
+            results.append(("FAIL", f"{tag}: legacy suffix unexpectedly compiled"))
+            return
+        diagnostic = "\n".join(
+            line for line in (legacy_result.stdout + legacy_result.stderr).splitlines()
+            if "error" in line.lower() or "syntax error" in line.lower()
+        ).lower()
+        expected = case["diagnostic_token"].lower()
+        token_pattern = rf"['\"]{re.escape(expected)}['\"]"
+        if not re.search(token_pattern, diagnostic):
+            results.append((
+                "FAIL",
+                f"{tag}: missing diagnostic token {expected!r}: {output_tail(legacy_result)}",
+            ))
+            return
+
+        normalized_source = directory / f"normalized-{source.name}"
+        normalized_source.write_text(original, encoding="utf-8")
+        for model in MODEL_FLAGS:
+            normalized_rel = directory / f"normalized-{model}.rel"
+            normalized_result = compile_one(
+                sdcc, normalized_source, normalized_rel, model,
+                include_dirs=[source.parent],
+            )
+            if normalized_result.returncode != 0:
+                results.append((
+                    "FAIL",
+                    f"{tag} normalized [{model}]: {output_tail(normalized_result)}",
+                ))
+                return
+    results.append(("PASS", f"{tag} legacy-reject + suffix-normalization"))
+
+
 def check_control_map(ihx_path: Path) -> tuple[bool, str]:
     map_path = ihx_path.with_suffix(".map")
     if not map_path.is_file():
@@ -382,6 +443,8 @@ def main() -> int:
             run_positive(case, args.sdcc, results)
         elif kind == "mechanical-replacement":
             run_mechanical(case, args.sdcc, results)
+        elif kind == "syntax-normalization":
+            run_syntax_normalization(case, args.sdcc, results)
         elif kind == "behavior":
             run_behavior(case, args.sdcc, args.ucsim, args.skip_behavior, results)
         elif kind == "project-behavior":
