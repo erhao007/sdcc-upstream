@@ -39,5 +39,5 @@ runner 默认执行 `small`、`large`、`stack-auto` 三个模型。它会：
 `cases/project/cleanroom_app/` 是本任务直接编写的去业务化小项目，不来自任何
 GitHub、厂商 SDK 或 Keil 工程。`cases/project/stc_diyclock/` 是基于固定
 `zerog2k/stc_diyclock` `src/main.c` 的最小派生样例，许可证和排除范围见其
-`PROVENANCE.md`；当前仍标记为 `PARTIAL / FILE_AUDIT_REQUIRED`，不能把测试通过
-解释为 MT-4A 来源门禁已关闭。
+`PROVENANCE.md`，用户确认见 `AUTHORIZATION.md`。该确认闭合 MT-4A 的真实样本
+来源输入，但不能把测试通过解释为项目主审关闭、法律审查通过或 MT-4B 授权。

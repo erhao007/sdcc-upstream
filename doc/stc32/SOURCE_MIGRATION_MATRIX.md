@@ -81,10 +81,10 @@ SDCC 多文件应用；本地样例只保留去业务化的 `volatile __bit` 状
 |---|---|
 | `REAL_PROJECT` | `YES`：来源项目是实际 STC15 应用，而非教学单例 |
 | 仓库声明许可证 | `MIT / CONFIRMED`：根目录 `LICENCE` 已固定保存 |
-| 可提取文件范围 | `PARTIAL / FILE_AUDIT_REQUIRED`：只对 `src/main.c` 的最小派生范围建样例 |
+| 可提取文件范围 | `USER_CONFIRMED / MIT_SCOPED`：用户已于 2026-09-01 确认固定 `src/main.c` 的最小派生和公共再分发范围 |
 | `src/adc.c` | 排除：文件含 STC MCU International A/D demo attribution |
 | 厂商/设备/外设/子模块/二进制 | 排除：不导入、不作为来源样本 |
-| MT-4A 关闭资格 | `NOT YET`：仍需用户或权利人确认最小提取和公共再分发范围 |
+| MT-4A 来源门禁 | `SATISFIED`：确认记录见样例目录 `AUTHORIZATION.md`；不等于主审关闭或法律审查通过 |
 
 完整固定 revision、许可证、抽取边界和测试命令见该目录的 `PROVENANCE.md`。
 这一派生样例提供 E1/E2 源码与行为证据，但不证明 STC32G12K128 真板、E4、E5
@@ -98,7 +98,6 @@ SDCC 多文件应用；本地样例只保留去业务化的 `volatile __bit` 状
 - 本包的迁移样例是 `support/stc32/tests/migration/` 下的新原创文件；其
   SFR/SBIT 映射只存在于测试源，不形成公共 compat header。
 - 编译/汇编为 E1；uCsim 行为为 E2；本包不产生 E4 真板或 E5 跨平台结论。
-- 当前已有 `stc_diyclock` 真实项目的最小派生候选和固定来源记录，但其文件级
-  提取/再分发范围仍是 `PARTIAL / FILE_AUDIT_REQUIRED`。MT-4A 关闭前仍必须由
-  用户/权利人确认该最小范围，或确认另一组具有同等权利基础的真实 C251/8051
-  项目；不因仓内原创种子或本地测试通过而自动关闭该门禁。
+- 当前已有 `stc_diyclock` 真实项目的固定来源、MIT notice、最小派生边界和用户
+  确认记录。该确认于 2026-09-01 闭合 MT-4A 的真实样本来源输入，但不替代项目
+  主审关闭、qualified legal review、发布审核或 MT-4B 授权。

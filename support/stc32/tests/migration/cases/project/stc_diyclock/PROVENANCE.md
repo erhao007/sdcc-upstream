@@ -18,8 +18,11 @@ submodules, build products, Keil files, or binary artifacts.
 
 The repository-level MIT notice is evidence for the upstream author's material,
 not a conclusion that every file in the repository has the same provenance.
-This fixture therefore remains `PARTIAL / FILE_AUDIT_REQUIRED` for the MT-4A
-closure gate. This is an engineering record, not legal advice.
+On 2026-09-01 the project user explicitly confirmed the fixed `src/main.c`
+minimal-derivative and public-redistribution scope recorded in
+`AUTHORIZATION.md`, including all listed exclusions. The MT-4A source-input
+status is therefore `USER_CONFIRMED / MIT_SCOPED`. This is an engineering
+record, not legal advice or a qualified legal audit.
 
 ## Local extraction boundary
 
