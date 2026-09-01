@@ -19,6 +19,8 @@ runner 默认执行 `small`、`large`、`stack-auto` 三个模型。它会：
 - 在临时文件中只做 token 级机械替换，要求替换结果在三个模型编译成功；
 - 链接 `native_behavior.c` 并用 uCsim 检查 `abi_test_status == 0x55`，验证
   DATA/IDATA/XDATA/CODE/BIT 的最小读写语义；
+- 分别编译并链接原创 `cleanroom_app` 的两个 C 翻译单元，在三个模型下验证
+  头文件接口、跨文件调用、`__reentrant`、地址空间对象和 CODE 查表行为；
 - 编译三个 `DIAGNOSTIC_GAP` 样例，并明确记录它们当前仍被接受，不能视为
   支持。正式拒绝应由 MT-4B 更新测试契约。
 
@@ -26,3 +28,7 @@ runner 默认执行 `small`、`large`、`stack-auto` 三个模型。它会：
 为 SKIP，不能作为 MT-4A 关闭证据。完整来源和 clean-room 规则见
 [`doc/mcs251/official-example-plan.md`](../../../../doc/mcs251/official-example-plan.md)
 和 [`doc/stc32/SOURCE_MIGRATION_MATRIX.md`](../../../../doc/stc32/SOURCE_MIGRATION_MATRIX.md)。
+
+`cases/project/cleanroom_app/` 是本任务直接编写的去业务化小项目，不来自任何
+GitHub、厂商 SDK 或 Keil 工程。它可以作为 MT-4A 的合法开发和回归样本，但不
+替代关闭门禁要求的、经权利人确认可提取的真实 C251/8051 项目。

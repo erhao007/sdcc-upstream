@@ -12,6 +12,7 @@
 |---|---|---|---|---|
 | `device/examples/mcs251/*.c` | 仓内原创 SDCC 示例 | 本仓库既有 SDCC 文件许可和逐文件声明 | 作为语法/设备层种子；不声称是厂商项目 | 可使用，仍需逐文件许可复核 |
 | `src/mcs251/tests/official/*.c` | 仓内原创 clean-room 语义测试 | 语义参考链接见 `src/mcs251/tests/official/README.md` | 只保留独立重写的最小断言 | 可使用，仍需逐文件许可复核 |
+| `support/stc32/tests/migration/cases/project/cleanroom_app/` | 本任务直接编写的仓内原创多文件样本 | 仅依据本项目公开 ABI、SDCC 规范写法和测试自身的不变量；未使用外部实现源码 | 分别编译两个 C 翻译单元，链接后在 uCsim 验证跨文件行为 | 可使用的 clean-room 项目样本；不是外部真实项目授权 |
 | Keil C251 Download Files 的 MCB251 RAM Test 条目 | 公开厂商索引/说明页 | <https://www.keil.com/download/list/C251.htm>；条目页 <https://www.keil.com/download/docs/46.asp> | 仅观察公开描述；未下载或解析包 | 公开语义参考，不构成源码再分发许可 |
 | Keil MCB251 ROM Checksum 条目 | 公开厂商索引/说明页 | <https://www.keil.com/download/docs/47.asp> | 仅用于确认 checksum 语义；未下载或解析包 | 公开语义参考，不构成源码再分发许可 |
 | STMicroelectronics/STC 官方示例索引 | 公开厂商索引 | <https://www.stcmicro.com/cn/slcx.html> | 仅观察公开示例类别；未抓取或复制源码 | 公开语义参考，许可边界未确认 |
@@ -23,6 +24,19 @@
 仓内原创文件可以作为开发种子，但它们不能替代“至少一组拥有合法使用权的
 真实 C251/8051 项目”这一 MT-4A 关闭输入。公开网页可供阅读和事实核对，网页
 上的“可下载”或“官方”字样本身不等于允许复制或再分发实现代码。
+
+### 本任务直接编写的样本
+
+`cleanroom_app` 由本任务从空白文件直接编写，包含一个公共头、一个实现翻译
+单元和一个行为驱动翻译单元。它只模拟无外设依赖的数据采集流程，用于覆盖：
+
+- `__data`、`__idata`、`__xdata`、`__code` 和 `__bit` 对象；
+- `__reentrant` 函数、头文件声明和跨翻译单元调用；
+- 两个 `.rel` 的正式链接、ABI 测试控制区 map 检查和 uCsim 结果标记。
+
+样本没有寄存器地址、厂商头文件、startup、链接脚本、Keil 工程描述或第三方
+业务逻辑。其预期值由文件内常量和纯 C 运算独立确定。它用于继续 MT-4A 开发，
+不能被重新标注为“从真实项目提取”，也不能单独关闭真实项目来源门禁。
 
 ### 对该仓库的当前判定
 
@@ -60,7 +74,8 @@
   第三方实现代码。
 - `src/mcs251/tests/official/README.md` 中的十个现有测试继续视为仓内原创测试，
   其链接只是语义来源索引。`support/stc32/tests/migration/` 是本 MT-4A 新增的
-  独立 clean-room 迁移样例。
+  独立 clean-room 迁移样例，其中 `cases/project/cleanroom_app/` 是本任务直接
+  编写的多文件项目样本。
 - 现阶段不新增可复用的公共 compatibility header；SFR/SBIT 映射只在测试源文件
   内以原创宏演示，避免把未经真实样本验证的迁移规则固化为公共 API。
 - 待权利人确认至少一组真实项目及最小提取权限后，补录项目标识、授权主体/范围、
