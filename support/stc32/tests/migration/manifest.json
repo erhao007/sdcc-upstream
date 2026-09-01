@@ -1,0 +1,169 @@
+{
+  "schema": "stc32.migration-tests.v1",
+  "roadmap_id": "MT-4A",
+  "target": "mcs251",
+  "provenance": "doc/mcs251/official-example-plan.md",
+  "diagnostic_matching": "nonzero exit plus token; ignore path, line, column, and full message text",
+  "models": ["small", "large", "stack-auto"],
+  "cases": [
+    {
+      "id": "native-qualifiers",
+      "kind": "positive",
+      "source": "cases/positive/native_qualifiers.c",
+      "models": ["small", "large", "stack-auto"]
+    },
+    {
+      "id": "compat-sfr-sbit",
+      "kind": "positive",
+      "source": "cases/positive/compat_sfr_sbit.c",
+      "models": ["small", "large", "stack-auto"]
+    },
+    {
+      "id": "native-interrupt",
+      "kind": "positive",
+      "source": "cases/positive/native_interrupt.c",
+      "models": ["small", "large", "stack-auto"],
+      "assembly_regex": "(?im)\\breti\\b"
+    },
+    {
+      "id": "native-interrupt-using",
+      "kind": "positive",
+      "source": "cases/positive/native_interrupt_using.c",
+      "models": ["small", "large", "stack-auto"],
+      "assembly_regex": "(?im)\\breti\\b"
+    },
+    {
+      "id": "native-reentrant",
+      "kind": "positive",
+      "source": "cases/positive/native_reentrant.c",
+      "models": ["small", "large", "stack-auto"]
+    },
+    {
+      "id": "native-naked-asm",
+      "kind": "positive",
+      "source": "cases/positive/native_naked_asm.c",
+      "models": ["small", "large", "stack-auto"],
+      "assembly_regex": "(?im)\\bnop\\b"
+    },
+    {
+      "id": "native-behavior",
+      "kind": "behavior",
+      "source": "cases/behavior/native_behavior.c",
+      "models": ["small", "large", "stack-auto"],
+      "expected_status": "0x55",
+      "timeout_steps": 3000000
+    },
+    {
+      "id": "bare-data",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_data.c",
+      "token": "data",
+      "replacement": "__data",
+      "diagnostic_token": "data"
+    },
+    {
+      "id": "bare-idata",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_idata.c",
+      "token": "idata",
+      "replacement": "__idata",
+      "diagnostic_token": "idata"
+    },
+    {
+      "id": "bare-xdata",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_xdata.c",
+      "token": "xdata",
+      "replacement": "__xdata",
+      "diagnostic_token": "xdata"
+    },
+    {
+      "id": "bare-code",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_code.c",
+      "token": "code",
+      "replacement": "__code",
+      "diagnostic_token": "code"
+    },
+    {
+      "id": "bare-bit",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_bit.c",
+      "token": "bit",
+      "replacement": "__bit",
+      "diagnostic_token": "bit"
+    },
+    {
+      "id": "bare-sbit",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_sbit.c",
+      "token": "sbit",
+      "replacement": "__sbit",
+      "diagnostic_token": "sbit"
+    },
+    {
+      "id": "bare-sfr",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_sfr.c",
+      "token": "sfr",
+      "replacement": "__sfr",
+      "diagnostic_token": "sfr"
+    },
+    {
+      "id": "bare-interrupt",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_interrupt.c",
+      "token": "interrupt",
+      "replacement": "__interrupt",
+      "diagnostic_token": "interrupt"
+    },
+    {
+      "id": "bare-using",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_using.c",
+      "token": "using",
+      "replacement": "__using",
+      "diagnostic_token": "using"
+    },
+    {
+      "id": "bare-reentrant",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_reentrant.c",
+      "token": "reentrant",
+      "replacement": "__reentrant",
+      "diagnostic_token": "reentrant"
+    },
+    {
+      "id": "bare-naked",
+      "kind": "mechanical-replacement",
+      "source": "cases/negative/bare_naked.c",
+      "token": "naked",
+      "replacement": "__naked",
+      "diagnostic_token": "naked"
+    },
+    {
+      "id": "gap-invalid-interrupt-vector",
+      "kind": "diagnostic-gap",
+      "source": "cases/gap/invalid_interrupt_vector.c",
+      "models": ["small", "large", "stack-auto"],
+      "expected_compile": true,
+      "status": "DIAGNOSTIC_GAP"
+    },
+    {
+      "id": "gap-invalid-using-bank",
+      "kind": "diagnostic-gap",
+      "source": "cases/gap/invalid_using_bank.c",
+      "models": ["small", "large", "stack-auto"],
+      "expected_compile": true,
+      "status": "DIAGNOSTIC_GAP"
+    },
+    {
+      "id": "gap-naked-c-body",
+      "kind": "diagnostic-gap",
+      "source": "cases/gap/naked_c_body.c",
+      "models": ["small", "large", "stack-auto"],
+      "expected_compile": true,
+      "status": "DIAGNOSTIC_GAP"
+    }
+  ]
+}
