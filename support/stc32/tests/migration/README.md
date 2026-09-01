@@ -17,6 +17,8 @@ runner 默认执行 `small`、`large`、`stack-auto` 三个模型。它会：
 - 编译双下划线正例，并对 ISR/naked 样例检查生成汇编中的可观察标记；
 - 编译每个裸拼写负例，要求非零退出码和 manifest 中的稳定诊断 token；
 - 在临时文件中只做 token 级机械替换，要求替换结果在三个模型编译成功；
+- 将旧式 `sfr name = address` / `sbit name = address` 单独归类为兼容头路径，
+  要求旧声明被拒绝、测试内原创地址映射在三个模型生成非空目标文件；
 - 链接 `native_behavior.c` 并用 uCsim 检查 `abi_test_status == 0x55`，验证
   DATA/IDATA/XDATA/CODE/BIT 的最小读写语义；
 - 分别编译并链接原创 `cleanroom_app` 的两个 C 翻译单元，在三个模型下验证
