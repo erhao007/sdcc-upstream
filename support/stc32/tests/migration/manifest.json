@@ -54,6 +54,17 @@
       "timeout_steps": 3000000
     },
     {
+      "id": "cleanroom-multifile-project",
+      "kind": "project-behavior",
+      "sources": [
+        "cases/project/cleanroom_app/main.c",
+        "cases/project/cleanroom_app/cleanroom_app.c"
+      ],
+      "models": ["small", "large", "stack-auto"],
+      "expected_status": "0x55",
+      "timeout_steps": 3000000
+    },
+    {
       "id": "bare-data",
       "kind": "mechanical-replacement",
       "source": "cases/negative/bare_data.c",

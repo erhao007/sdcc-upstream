@@ -24,16 +24,16 @@ SDCC 的双下划线扩展，用户目标名 `stc32` 与内部端口 `mcs251` �
 
 | 旧源码项 | SDCC 规范写法 | 迁移分类 | 现状/边界 | 预期诊断与样例 | 行为验证 |
 |---|---|---|---|---|---|
-| `data` | `__data` | 机械替换 | `__data` 原生；裸 `data` 被当作普通标识符/错误上下文，不直接支持 | `bare-data`：编译失败，诊断 token `data` | `native-qualifiers` 的 direct DATA 对象；`native_behavior` 读写回读 |
-| `idata` | `__idata` | 机械替换 | `__idata` 原生；不把 8051 裸拼写加入全局词法 | `bare-idata`：失败，诊断 token `idata` | `native-qualifiers` 编译；`native_behavior` 读写回读 |
-| `xdata` | `__xdata` | 机械替换 | `__xdata` 原生，指针/对象遵守 ABI 1.0 的 24 位平铺表示 | `bare-xdata`：失败，诊断 token `xdata` | `native-qualifiers` 编译；`native_behavior` uCsim XDATA 回读 |
-| `code` | `__code` | 机械替换 | `__code` 原生；不能把裸 `code` 当成兼容关键字 | `bare-code`：失败，诊断 token `code` | `native-qualifiers` 编译；`native_behavior` 读取常量表 |
-| `bit` | `__bit` | 机械替换 | `__bit` 原生，返回/状态语义仍受 ABI/实现边界约束 | `bare-bit`：失败，诊断 token `bit` | `native-qualifiers` 编译；`native_behavior` set/clear/read |
+| `data` | `__data` | 机械替换 | `__data` 原生；裸 `data` 被当作普通标识符/错误上下文，不直接支持 | `bare-data`：编译失败，诊断 token `data` | `native-qualifiers` 的 direct DATA 对象；`native_behavior` 及 `cleanroom-multifile-project` 回读 |
+| `idata` | `__idata` | 机械替换 | `__idata` 原生；不把 8051 裸拼写加入全局词法 | `bare-idata`：失败，诊断 token `idata` | `native-qualifiers` 编译；`native_behavior` 及 `cleanroom-multifile-project` 回读 |
+| `xdata` | `__xdata` | 机械替换 | `__xdata` 原生，指针/对象遵守 ABI 1.0 的 24 位平铺表示 | `bare-xdata`：失败，诊断 token `xdata` | `native-qualifiers` 编译；两个 uCsim 行为样本的 XDATA 回读 |
+| `code` | `__code` | 机械替换 | `__code` 原生；不能把裸 `code` 当成兼容关键字 | `bare-code`：失败，诊断 token `code` | `native-qualifiers` 编译；两个行为样本读取常量表 |
+| `bit` | `__bit` | 机械替换 | `__bit` 原生，返回/状态语义仍受 ABI/实现边界约束 | `bare-bit`：失败，诊断 token `bit` | `native-qualifiers` 编译；两个行为样本 set/clear/read |
 | `sbit` | `__sbit __at (address)` | 兼容头 | 需要项目地址声明映射；测试只用原创 `MIGRATION_SBIT(name,address)` 宏，不提交公共头 | `bare-sbit`：失败，诊断 token `sbit` | `compat-sfr-sbit` 目标编译；SFR 电气行为不由 uCsim/本包外推 |
 | `sfr` | `__sfr __at (address)` | 兼容头 | 需要项目地址声明映射；测试只用原创 `MIGRATION_SFR(name,address)` 宏，不复制厂商头 | `bare-sfr`：失败，诊断 token `sfr` | `compat-sfr-sbit` 目标编译；真实寄存器行为仍需设备/板级证据 |
 | `interrupt` | `__interrupt(vector)` | 机械替换 | 合法向量的双下划线形式原生；硬件 4 字节帧、RETI 和保存责任遵守 ABI 1.0 | `bare-interrupt`：失败，诊断 token `interrupt`；`__interrupt(64)` 当前接受，记录为 `DIAGNOSTIC_GAP`，转 MT-4B | `native-interrupt` 生成 `reti` 的汇编检查；合法 ISR 的 uCsim 行为属于 ABI runner |
 | `using` | `__using(bank)` | 机械替换 | 合法寄存器组的双下划线形式原生；当前 `__using(8)` 接受但未形成稳定拒绝 | `bare-using`：失败，诊断 token `using`；`__using(8)` 为 `DIAGNOSTIC_GAP`，转 MT-4B | `native-interrupt-using` 编译/汇编；非法 bank 只记录 gap，不宣称行为正确 |
-| `reentrant` | `__reentrant` | 机械替换 | 双下划线形式原生；SPX、递归、stack-auto 边界遵守 ABI 1.0，不承诺 Keil 栈 ABI | `bare-reentrant`：失败，诊断 token `reentrant` | `native-reentrant` 三模型目标编译；完整栈行为由 ABI runner 覆盖 |
+| `reentrant` | `__reentrant` | 机械替换 | 双下划线形式原生；SPX、递归、stack-auto 边界遵守 ABI 1.0，不承诺 Keil 栈 ABI | `bare-reentrant`：失败，诊断 token `reentrant` | `native-reentrant` 三模型目标编译；`cleanroom-multifile-project` 三模型跨文件调用；完整栈边界由 ABI runner 覆盖 |
 | `naked` | `__naked` | 机械替换 | 仅对显式汇编/手工返回体作迁移建议；普通 C 语句体当前可能接受但不能视为有语义 | `bare-naked`：失败，诊断 token `naked`；含普通 C 语句的 `__naked` 为 `DIAGNOSTIC_GAP`，转 MT-4B | `native-naked-asm` 汇编体；`gap-naked-c-body` 保留为待修复诊断缺口 |
 
 ## 明确不支持的输入
@@ -55,6 +55,15 @@ SDCC 的双下划线扩展，用户目标名 `stc32` 与内部端口 `mcs251` �
 诊断类别，不把易变的完整英文错误句子当作 API。正例则必须完成编译；gap 样例
 当前预期仍能编译，以防止本阶段误把现状写成已拒绝。未来 MT-4B 增加稳定拒绝后，
 应同步更新该 gap 的测试契约，不在本包顺手修改前端。
+
+## 仓内原创项目样本
+
+`cleanroom-multifile-project` 对应
+`support/stc32/tests/migration/cases/project/cleanroom_app/`。它不是从候选 GitHub
+仓库提取，而是本任务直接编写的两个 C 翻译单元和一个公共头。runner 对每个
+模型先分别生成 `.rel`，再链接、核对 ABI 控制区和 DSEG 起点，最后由 uCsim
+检查 `abi_test_status == 0x55`。因此它补充的是项目形态的 E1/E2 证据，不产生
+外部来源授权、E4 真板或 E5 跨平台结论。
 
 ## 来源、证据和未闭合项
 

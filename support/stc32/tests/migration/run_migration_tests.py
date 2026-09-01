@@ -58,6 +58,7 @@ def run(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedP
 def compiler_command(sdcc: Path, source: Path, output: Path,
                      model: str, *, assembly: bool = False,
                      include_abi: bool = False,
+                     include_dirs: list[Path] | None = None,
                      link: bool = False) -> list[str]:
     command = [str(sdcc), "-mmcs251"]
     if assembly:
@@ -66,6 +67,8 @@ def compiler_command(sdcc: Path, source: Path, output: Path,
         command.append("-c")
     if include_abi:
         command.extend(["--data-loc", "0x38", "-I", str(ABI_TEST_DIR)])
+    for include_dir in include_dirs or []:
+        command.extend(["-I", str(include_dir)])
     command.extend(["-o", str(output), str(source)])
     command.extend(MODEL_FLAGS[model])
     return command
@@ -79,11 +82,13 @@ def output_tail(result: subprocess.CompletedProcess[str]) -> str:
 def compile_one(sdcc: Path, source: Path, output: Path, model: str,
                 *, assembly: bool = False,
                 include_abi: bool = False,
+                include_dirs: list[Path] | None = None,
                 link: bool = False) -> subprocess.CompletedProcess[str]:
     return run(compiler_command(
         sdcc, source, output, model,
         assembly=assembly,
         include_abi=include_abi,
+        include_dirs=include_dirs,
         link=link,
     ))
 
@@ -273,6 +278,72 @@ def run_behavior(case: dict, sdcc: Path, ucsim: Path | None,
             results.append(("PASS" if ok else "FAIL", f"{tag}: {reason}" if reason else tag))
 
 
+def run_project_behavior(case: dict, sdcc: Path, ucsim: Path | None,
+                         skip_behavior: bool,
+                         results: list[tuple[str, str]]) -> None:
+    if skip_behavior:
+        results.append(("SKIP", f"{case['id']}: behavior explicitly skipped"))
+        return
+    if ucsim is None or not ucsim.is_file():
+        results.append(("FAIL", f"{case['id']}: uCsim is required for behavior evidence"))
+        return
+
+    sources = [SCRIPT_DIR / source for source in case.get("sources", [])]
+    if len(sources) < 2:
+        results.append(("FAIL", f"{case['id']}: project case needs at least two sources"))
+        return
+    missing = [str(source) for source in sources if not source.is_file()]
+    if missing:
+        results.append(("FAIL", f"{case['id']}: source missing: {', '.join(missing)}"))
+        return
+
+    for model in case.get("models", []):
+        tag = f"{case['id']} [{model}]"
+        with tempfile.TemporaryDirectory(prefix="mt4a-project-") as tmp:
+            directory = Path(tmp)
+            rel_paths: list[Path] = []
+            compile_failed = False
+            include_dirs = sorted({source.parent for source in sources})
+            include_dirs.append(ABI_TEST_DIR)
+            for index, source in enumerate(sources):
+                rel_path = directory / f"{index:02d}-{source.stem}.rel"
+                compile_result = compile_one(
+                    sdcc, source, rel_path, model, include_dirs=include_dirs
+                )
+                if compile_result.returncode != 0:
+                    results.append((
+                        "FAIL",
+                        f"{tag}: compile {source.name}: {output_tail(compile_result)}",
+                    ))
+                    compile_failed = True
+                    break
+                rel_paths.append(rel_path)
+            if compile_failed:
+                continue
+
+            ihx_path = directory / f"{case['id']}-{model}.ihx"
+            link_command = [
+                str(sdcc), "-mmcs251", "--data-loc", "0x38",
+                *MODEL_FLAGS[model], "-o", str(ihx_path),
+                *(str(path) for path in rel_paths),
+            ]
+            link_result = run(link_command)
+            if link_result.returncode != 0:
+                results.append(("FAIL", f"{tag}: link: {output_tail(link_result)}"))
+                continue
+            ok, reason = check_control_map(ihx_path)
+            if not ok:
+                results.append(("FAIL", f"{tag}: {reason}"))
+                continue
+            try:
+                ok, reason = run_ucsim(
+                    ucsim, ihx_path, case["timeout_steps"], case["expected_status"]
+                )
+            except subprocess.TimeoutExpired:
+                ok, reason = False, "uCsim timed out"
+            results.append(("PASS" if ok else "FAIL", f"{tag}: {reason}" if reason else tag))
+
+
 def run_gap(case: dict, sdcc: Path, results: list[tuple[str, str]]) -> None:
     source = ROOT / "support" / "stc32" / "tests" / "migration" / case["source"]
     for model in case.get("models", []):
@@ -313,6 +384,10 @@ def main() -> int:
             run_mechanical(case, args.sdcc, results)
         elif kind == "behavior":
             run_behavior(case, args.sdcc, args.ucsim, args.skip_behavior, results)
+        elif kind == "project-behavior":
+            run_project_behavior(
+                case, args.sdcc, args.ucsim, args.skip_behavior, results
+            )
         elif kind == "diagnostic-gap":
             run_gap(case, args.sdcc, results)
         else:
