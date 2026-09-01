@@ -1,0 +1,7 @@
+repository: https://github.com/zerog2k/stc_diyclock
+commit: beb3b5139fe64a4b8bfc9a24539ed5c0cc8c5fe3
+upstream_path: src/main.c
+license_path: LICENCE
+source_sha256: f0045989073f4b3a718acb8142e0bfda281cdfac2ac65d30d8c94e73b3a73ed8
+license_sha256: efe24cfeb6bd94aa08ddacec960fdbacd5843eb985fe5c10405432e4b4ad6b4b
+accessed: 2026-09-01

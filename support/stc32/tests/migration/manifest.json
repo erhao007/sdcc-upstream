@@ -33,6 +33,24 @@
       "assembly_regex": "(?im)\\breti\\b"
     },
     {
+      "id": "real-stc-diyclock-main",
+      "kind": "positive",
+      "source": "cases/project/stc_diyclock/real_main_excerpt.c",
+      "models": ["small", "large", "stack-auto"],
+      "assembly_regex": "(?im)\\breti\\b"
+    },
+    {
+      "id": "stc-diyclock-attribute-syntax",
+      "kind": "syntax-normalization",
+      "source": "cases/project/stc_diyclock/real_main_excerpt.c",
+      "models": ["small", "large", "stack-auto"],
+      "legacy_replacements": [
+        {"from": "__interrupt (1)", "to": "__interrupt 1"},
+        {"from": "__using (1)", "to": "__using 1"}
+      ],
+      "diagnostic_token": "1"
+    },
+    {
       "id": "native-reentrant",
       "kind": "positive",
       "source": "cases/positive/native_reentrant.c",
@@ -59,6 +77,17 @@
       "sources": [
         "cases/project/cleanroom_app/main.c",
         "cases/project/cleanroom_app/cleanroom_app.c"
+      ],
+      "models": ["small", "large", "stack-auto"],
+      "expected_status": "0x55",
+      "timeout_steps": 3000000
+    },
+    {
+      "id": "stc-diyclock-derived-project",
+      "kind": "project-behavior",
+      "sources": [
+        "cases/project/stc_diyclock/main.c",
+        "cases/project/stc_diyclock/real_main_excerpt.c"
       ],
       "models": ["small", "large", "stack-auto"],
       "expected_status": "0x55",

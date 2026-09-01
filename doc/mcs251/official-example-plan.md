@@ -19,6 +19,7 @@
 | STCAIMCU 公开示例索引/帖子 | 公开项目页面 | README 中逐项列出的 `stcaimcu.com` 链接 | 仅用于独立选择行为断言；未导入原始项目 | 公开语义参考，许可边界未确认 |
 | [PatZer0/STC32G12K128_Experiments](https://github.com/PatZer0/STC32G12K128_Experiments/tree/main) | 用户提供的公开 GitHub 示例聚合仓库 | 仓库页标注 GPL-3.0；README 同时声明包含原创和第三方代码、仅供学习参考且勿用于商业用途；观察到 `main`=`71f5a3c383970e80c25e0fa79966aca863cc7331`，访问 2026-09-01 | 仅核对仓库元数据、目录和许可证；未下载或读取示例源码、`Objects`、`Listings` 或 Keil 工程文件 | 候选来源；需作者/各第三方权利人确认 |
 | [`seekfree/STC32G12K128_Library`](https://gitee.com/seekfree/STC32G12K128_Library)（由上述仓库脚本引用） | 第三方上游库线索 | Gitee 仓库页标注 GPL-3.0；README 要求 MDK for C251，但未确认逐文件来源与再分发范围；观察到 `master`=`0ee3377e1585e63557a4dd285f9f7bddaa48d7c9`，访问 2026-09-01 | 只记录为上游线索；未下载、复制或解析其实现文件 | 不直接作为本仓样本来源 |
+| [`zerog2k/stc_diyclock`](https://github.com/zerog2k/stc_diyclock) | 用户提供的公开真实 STC15/SDCC 应用 | `main`=`beb3b5139fe64a4b8bfc9a24539ed5c0cc8c5fe3`；根目录 `LICENCE` 为 MIT；`src/main.c` 文件头标注 Jens Jensen 2016；访问 2026-09-01 | 只提取经记录的最小去业务化源代码形态；不导入整仓、厂商头、外设实现、子模块或二进制 | 真实项目候选已接入；`PARTIAL / FILE_AUDIT_REQUIRED`，待用户/权利人确认最小公共提取范围 |
 | 用户或贡献者提供的真实 C251/8051 项目 | 待授权真实样本 | 必须由权利人确认可提取最小样本和允许的使用/再分发范围 | 仅在确认后抽取去业务化 fixture，并记录来源哈希和授权 | MT-4A 关闭阻碍，待确认 |
 
 仓内原创文件可以作为开发种子，但它们不能替代“至少一组拥有合法使用权的
@@ -51,6 +52,21 @@
 在确认前，本项目只保留上述公开元数据记录，不提取该仓库源码，不分析其中的 Keil/厂商
 头文件、库、startup、对象、Listings 或二进制。
 
+### `zerog2k/stc_diyclock` 的最小派生边界
+
+该仓库是一个已归档的 STC15 DIY 时钟固件项目，README 公开说明使用 SDCC 和
+传统 `make` 构建。固定的 `main` revision、上游 `LICENCE` 和本地保留文本见
+`support/stc32/tests/migration/cases/project/stc_diyclock/`。其 `src/main.c`
+包含与本矩阵直接相关的 `__bit`、`__interrupt 1 __using 1` 和 inline assembly
+形态；本阶段只以其中的前两类源代码形态制作最小派生 fixture。
+
+根目录 MIT 许可是该仓库声明的许可基础，但不自动覆盖仓库中所有文件。尤其
+`src/adc.c` 含 STC MCU International A/D demo attribution，因此排除；设备头、
+外设驱动、子模块和构建产物也全部排除。当前工程判定为
+`REAL_PROJECT=YES`、`REPOSITORY_LICENSE=MIT/CONFIRMED`、
+`EXTRACTION_RIGHTS=PARTIAL/FILE_AUDIT_REQUIRED`，不是法律意见，也不是 MT-4A
+关闭批准。
+
 ## clean-room 规则
 
 1. 样本作者只使用公开手册、公开网页的事实信息，或权利人明确授权的真实源文件；
@@ -78,6 +94,6 @@
   编写的多文件项目样本。
 - 现阶段不新增可复用的公共 compatibility header；SFR/SBIT 映射只在测试源文件
   内以原创宏演示，避免把未经真实样本验证的迁移规则固化为公共 API。
-- 待权利人确认至少一组真实项目及最小提取权限后，补录项目标识、授权主体/范围、
-  原始输入哈希（不提交原始文件）、抽取规则和对应矩阵行。该输入未确认前，MT-4A
-  不能关闭。
+- `stc_diyclock` 已补录项目标识、固定 revision、许可证文本、排除范围、抽取规则
+  和对应矩阵行；但其最小提取/公共再分发范围仍待用户或权利人确认。该确认未完成
+  前，MT-4A 不能关闭。
