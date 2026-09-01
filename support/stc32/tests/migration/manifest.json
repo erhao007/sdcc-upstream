@@ -135,19 +135,19 @@
     },
     {
       "id": "bare-sbit",
-      "kind": "mechanical-replacement",
+      "kind": "compat-header",
       "source": "cases/negative/bare_sbit.c",
-      "token": "sbit",
-      "replacement": "__sbit",
-      "diagnostic_token": "sbit"
+      "mapped_source": "cases/positive/compat_sfr_sbit.c",
+      "diagnostic_token": "sbit",
+      "models": ["small", "large", "stack-auto"]
     },
     {
       "id": "bare-sfr",
-      "kind": "mechanical-replacement",
+      "kind": "compat-header",
       "source": "cases/negative/bare_sfr.c",
-      "token": "sfr",
-      "replacement": "__sfr",
-      "diagnostic_token": "sfr"
+      "mapped_source": "cases/positive/compat_sfr_sbit.c",
+      "diagnostic_token": "sfr",
+      "models": ["small", "large", "stack-auto"]
     },
     {
       "id": "bare-interrupt",

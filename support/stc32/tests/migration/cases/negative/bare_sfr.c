@@ -1,1 +1,1 @@
-sfr __at (0x80) migration_sfr;
+sfr migration_sfr = 0x80;

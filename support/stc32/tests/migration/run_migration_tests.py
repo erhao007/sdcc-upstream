@@ -93,6 +93,31 @@ def compile_one(sdcc: Path, source: Path, output: Path, model: str,
     ))
 
 
+def artifact_error(result: subprocess.CompletedProcess[str], output: Path) -> str | None:
+    if result.returncode != 0:
+        return output_tail(result)
+    if not output.is_file():
+        return f"expected artifact is missing: {output.name}"
+    if output.stat().st_size == 0:
+        return f"expected artifact is empty: {output.name}"
+    return None
+
+
+def rejection_error(result: subprocess.CompletedProcess[str],
+                    expected_token: str) -> str | None:
+    if result.returncode == 0:
+        return "legacy spelling unexpectedly compiled"
+    diagnostic = "\n".join(
+        line for line in (result.stdout + result.stderr).splitlines()
+        if "error" in line.lower() or "syntax error" in line.lower()
+    ).lower()
+    expected = expected_token.lower()
+    token_pattern = rf"['\"]{re.escape(expected)}['\"]"
+    if not re.search(token_pattern, diagnostic):
+        return f"missing diagnostic token {expected!r}: {output_tail(result)}"
+    return None
+
+
 def replace_token(text: str, token: str, replacement: str) -> str:
     pattern = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(token)}(?![A-Za-z0-9_])")
     replaced, count = pattern.subn(replacement, text)
@@ -122,16 +147,18 @@ def run_positive(case: dict, sdcc: Path, results: list[tuple[str, str]]) -> None
             asm_path = directory / f"{case['id']}-{model}.asm"
             rel_path = directory / f"{case['id']}-{model}.rel"
             asm_result = compile_one(sdcc, source, asm_path, model, assembly=True)
-            if asm_result.returncode != 0:
-                results.append(("FAIL", f"{tag}: -S: {output_tail(asm_result)}"))
+            reason = artifact_error(asm_result, asm_path)
+            if reason:
+                results.append(("FAIL", f"{tag}: -S: {reason}"))
                 continue
             ok, reason = check_assembly(case, asm_path)
             if not ok:
                 results.append(("FAIL", f"{tag}: {reason}"))
                 continue
             rel_result = compile_one(sdcc, source, rel_path, model)
-            if rel_result.returncode != 0:
-                results.append(("FAIL", f"{tag}: -c: {output_tail(rel_result)}"))
+            reason = artifact_error(rel_result, rel_path)
+            if reason:
+                results.append(("FAIL", f"{tag}: -c: {reason}"))
                 continue
             results.append(("PASS", tag))
 
@@ -154,31 +181,42 @@ def run_mechanical(case: dict, sdcc: Path, results: list[tuple[str, str]]) -> No
         legacy_rel = directory / "legacy.rel"
         legacy_result = compile_one(sdcc, source, legacy_rel, "small")
         tag = case["id"]
-        if legacy_result.returncode == 0:
-            results.append(("FAIL", f"{tag}: bare spelling unexpectedly compiled"))
-            return
-        diagnostic = "\n".join(
-            line for line in (legacy_result.stdout + legacy_result.stderr).splitlines()
-            if "error" in line.lower() or "syntax error" in line.lower()
-        ).lower()
-        expected = case["diagnostic_token"].lower()
-        token_pattern = rf"['\"]{re.escape(expected)}['\"]"
-        if not re.search(token_pattern, diagnostic):
-            results.append((
-                "FAIL",
-                f"{tag}: missing diagnostic token {expected!r}: {output_tail(legacy_result)}",
-            ))
+        reason = rejection_error(legacy_result, case["diagnostic_token"])
+        if reason:
+            results.append(("FAIL", f"{tag}: {reason}"))
             return
         for model in MODEL_FLAGS:
             migrated_rel = directory / f"migrated-{model}.rel"
             migrated_result = compile_one(sdcc, migrated_source, migrated_rel, model)
-            if migrated_result.returncode != 0:
-                results.append((
-                    "FAIL",
-                    f"{tag} replacement [{model}]: {output_tail(migrated_result)}",
-                ))
+            reason = artifact_error(migrated_result, migrated_rel)
+            if reason:
+                results.append(("FAIL", f"{tag} replacement [{model}]: {reason}"))
                 return
     results.append(("PASS", f"{tag} bare-reject + {token}->{replacement}"))
+
+
+def run_compat_header(case: dict, sdcc: Path,
+                      results: list[tuple[str, str]]) -> None:
+    source = SCRIPT_DIR / case["source"]
+    mapped_source = SCRIPT_DIR / case["mapped_source"]
+    with tempfile.TemporaryDirectory(prefix="mt4a-compat-") as tmp:
+        directory = Path(tmp)
+        legacy_result = compile_one(
+            sdcc, source, directory / "legacy.rel", "small"
+        )
+        tag = case["id"]
+        reason = rejection_error(legacy_result, case["diagnostic_token"])
+        if reason:
+            results.append(("FAIL", f"{tag}: {reason}"))
+            return
+        for model in case.get("models", []):
+            mapped_rel = directory / f"mapped-{model}.rel"
+            mapped_result = compile_one(sdcc, mapped_source, mapped_rel, model)
+            reason = artifact_error(mapped_result, mapped_rel)
+            if reason:
+                results.append(("FAIL", f"{tag} compat-header [{model}]: {reason}"))
+                return
+    results.append(("PASS", f"{tag} legacy-reject + compat-header"))
 
 
 def run_syntax_normalization(case: dict, sdcc: Path,
@@ -209,20 +247,9 @@ def run_syntax_normalization(case: dict, sdcc: Path,
             include_dirs=[source.parent],
         )
         tag = case["id"]
-        if legacy_result.returncode == 0:
-            results.append(("FAIL", f"{tag}: legacy suffix unexpectedly compiled"))
-            return
-        diagnostic = "\n".join(
-            line for line in (legacy_result.stdout + legacy_result.stderr).splitlines()
-            if "error" in line.lower() or "syntax error" in line.lower()
-        ).lower()
-        expected = case["diagnostic_token"].lower()
-        token_pattern = rf"['\"]{re.escape(expected)}['\"]"
-        if not re.search(token_pattern, diagnostic):
-            results.append((
-                "FAIL",
-                f"{tag}: missing diagnostic token {expected!r}: {output_tail(legacy_result)}",
-            ))
+        reason = rejection_error(legacy_result, case["diagnostic_token"])
+        if reason:
+            results.append(("FAIL", f"{tag}: {reason}"))
             return
 
         normalized_source = directory / f"normalized-{source.name}"
@@ -233,11 +260,9 @@ def run_syntax_normalization(case: dict, sdcc: Path,
                 sdcc, normalized_source, normalized_rel, model,
                 include_dirs=[source.parent],
             )
-            if normalized_result.returncode != 0:
-                results.append((
-                    "FAIL",
-                    f"{tag} normalized [{model}]: {output_tail(normalized_result)}",
-                ))
+            reason = artifact_error(normalized_result, normalized_rel)
+            if reason:
+                results.append(("FAIL", f"{tag} normalized [{model}]: {reason}"))
                 return
     results.append(("PASS", f"{tag} legacy-reject + suffix-normalization"))
 
@@ -323,8 +348,9 @@ def run_behavior(case: dict, sdcc: Path, ucsim: Path | None,
             compile_result = compile_one(
                 sdcc, source, ihx_path, model, include_abi=True, link=True
             )
-            if compile_result.returncode != 0:
-                results.append(("FAIL", f"{tag}: link: {output_tail(compile_result)}"))
+            reason = artifact_error(compile_result, ihx_path)
+            if reason:
+                results.append(("FAIL", f"{tag}: link: {reason}"))
                 continue
             ok, reason = check_control_map(ihx_path)
             if not ok:
@@ -371,10 +397,11 @@ def run_project_behavior(case: dict, sdcc: Path, ucsim: Path | None,
                 compile_result = compile_one(
                     sdcc, source, rel_path, model, include_dirs=include_dirs
                 )
-                if compile_result.returncode != 0:
+                reason = artifact_error(compile_result, rel_path)
+                if reason:
                     results.append((
                         "FAIL",
-                        f"{tag}: compile {source.name}: {output_tail(compile_result)}",
+                        f"{tag}: compile {source.name}: {reason}",
                     ))
                     compile_failed = True
                     break
@@ -389,8 +416,9 @@ def run_project_behavior(case: dict, sdcc: Path, ucsim: Path | None,
                 *(str(path) for path in rel_paths),
             ]
             link_result = run(link_command)
-            if link_result.returncode != 0:
-                results.append(("FAIL", f"{tag}: link: {output_tail(link_result)}"))
+            reason = artifact_error(link_result, ihx_path)
+            if reason:
+                results.append(("FAIL", f"{tag}: link: {reason}"))
                 continue
             ok, reason = check_control_map(ihx_path)
             if not ok:
@@ -412,10 +440,11 @@ def run_gap(case: dict, sdcc: Path, results: list[tuple[str, str]]) -> None:
         with tempfile.TemporaryDirectory(prefix="mt4a-gap-") as tmp:
             asm_path = Path(tmp) / f"{case['id']}-{model}.asm"
             result = compile_one(sdcc, source, asm_path, model, assembly=True)
-            if result.returncode != 0:
+            reason = artifact_error(result, asm_path)
+            if reason:
                 results.append((
                     "FAIL",
-                    f"{tag}: current expected acceptance changed: {output_tail(result)}",
+                    f"{tag}: current expected acceptance changed: {reason}",
                 ))
             else:
                 results.append(("PASS", tag))
@@ -443,6 +472,8 @@ def main() -> int:
             run_positive(case, args.sdcc, results)
         elif kind == "mechanical-replacement":
             run_mechanical(case, args.sdcc, results)
+        elif kind == "compat-header":
+            run_compat_header(case, args.sdcc, results)
         elif kind == "syntax-normalization":
             run_syntax_normalization(case, args.sdcc, results)
         elif kind == "behavior":
