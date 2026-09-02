@@ -38,11 +38,22 @@ def load_manifest() -> dict:
     return manifest
 
 
+def resolve_executable(path: Path) -> Path:
+    """Resolve extensionless tool paths on Windows/MSYS2 installations."""
+    if path.is_file():
+        return path
+    if path.suffix.lower() != ".exe":
+        windows_path = path.with_name(path.name + ".exe")
+        if windows_path.is_file():
+            return windows_path
+    return path
+
+
 def default_toolchain_binary(name: str) -> Path:
     configured_root = os.environ.get("STC32_TOOLCHAIN_ROOT")
     if configured_root:
-        return Path(configured_root) / "bin" / name
-    return ROOT / "build" / "install" / "bin" / name
+        return resolve_executable(Path(configured_root) / "bin" / name)
+    return resolve_executable(ROOT / "build" / "install" / "bin" / name)
 
 
 def run(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -460,6 +471,8 @@ def main() -> int:
         help="skip the required uCsim behavior cases; result is explicitly SKIP",
     )
     args = parser.parse_args()
+    args.sdcc = resolve_executable(args.sdcc)
+    args.ucsim = resolve_executable(args.ucsim)
     manifest = load_manifest()
     if not args.sdcc.is_file():
         print(f"FAIL toolchain: sdcc not found: {args.sdcc}")
