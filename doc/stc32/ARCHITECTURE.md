@@ -114,7 +114,7 @@ STC32 的 PORT 需定义:模型(model small 起步,对应 XSmall memory model)�
 
 ## 9. 建议开发顺序(与项目计划一致)
 
-1. **sdas251 + disassembler**(先有 ISA 数据库 `isa/mcs251.yaml`,assembler/disassembler/simulator 共享)
+1. **sdas251 + disassembler**(先有 ISA 数据库 `support/stc32/isa/mcs251.yaml`,assembler/disassembler/simulator 共享)
 2. **ucsim mcs251 CPU core**(逐指令状态机测试)
 3. **ABI 冻结文档**(docs/ABI.md)
 4. **最小 C backend**(src/mcs251/,uint8_t 起步；用户仍可用 -mstc32)

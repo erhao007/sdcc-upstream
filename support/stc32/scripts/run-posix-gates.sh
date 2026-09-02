@@ -65,6 +65,9 @@ if [[ "$PREFIX" != "$build_install" ]]; then
 fi
 make -C "$BUILD_DIR/src/mcs251" check
 
+echo "== source migration gates =="
+python3 support/stc32/tests/migration/run_migration_tests.py
+
 if (( ! run_regressions )); then
   echo "POSIX core gates passed"
   exit 0
