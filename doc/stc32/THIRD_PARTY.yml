@@ -9,7 +9,7 @@ components:
     redistribution_decision: retain existing SDCC/mixed-license notices
     reviewer: pending upstream review for future contribution
   - name: STC32 ISA reference data
-    source_url: public Intel MCS-251 and STC32G documentation; see isa/mcs251.yaml
+    source_url: public Intel MCS-251 and STC32G documentation; see support/stc32/isa/mcs251.yaml
     version_or_commit: frozen with stc32-mt3-closed-20260829
     license: project-authored data with source references; verify each upstream contribution
     local_paths: support/stc32/isa

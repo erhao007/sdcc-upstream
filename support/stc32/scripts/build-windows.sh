@@ -94,6 +94,8 @@ make -C "$BUILD_DIR/src/mcs251" check || mcs251_check_rc=$?
 echo "mcs251-backend-check-rc=$mcs251_check_rc"
 python support/stc32/tools/run_abi_tests.py
 python support/stc32/tools/run_runtime_tests.py
+echo "== source migration gates =="
+python support/stc32/tests/migration/run_migration_tests.py
 
 echo "== regression lanes =="
 cd "$BUILD_DIR/support/regression"

@@ -42,8 +42,8 @@ INC/DEC(A/Rn/dir8)、CLR/CPL(A/CY)、WR/DR 大端元组、#0data16/#1data16 装�
 
 ## 注意
 
-- 模拟器解码规则与汇编器编码(isa/mcs251.yaml)的对应关系记录在
-  `upstream/sim/ucsim/src/sims/s51.src/uc251cl.h` 头部注释。
+- 模拟器解码规则与汇编器编码(`support/stc32/isa/mcs251.yaml`)的对应关系记录在
+  `sim/ucsim/src/sims/s51.src/uc251cl.h` 头部注释。
 - 测试程序刻意把算术结果存入内存后再做 WR/DR 操作,避免 DR0(R0-R3)
   重叠寄存器干扰断言。
 
@@ -58,7 +58,7 @@ ACC=0x00(mul 0x42*0)。
 
 ## 严格 ISA 探测(269 形式,自动生成)
 
-`tools/ucsim_isa_probe.py` 从 `isa/mcs251.yaml` 逐条生成
+`support/stc32/tools/ucsim_isa_probe.py` 从 `support/stc32/isa/mcs251.yaml` 逐条生成
 `<form> + sjmp self` 最小镜像,对 uCsim(-t251)检查四件事:
 
 1. **反汇编**:`dc 0` 的助记符与 YAML 一致;
@@ -68,7 +68,7 @@ ACC=0x00(mul 0x42*0)。
    停止(退出码 106),崩溃或错解为其他指令记为 FAIL。
 
 ```bash
-PYTHONPATH=tools/pylib python3 tools/ucsim_isa_probe.py --strict
+PYTHONPATH=tools/pylib python3 support/stc32/tools/ucsim_isa_probe.py --strict
 # PASS 268  GAP 0  SKIP 1  FAIL 0  (total 269)
 ```
 
