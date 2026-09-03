@@ -6,15 +6,21 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
-import subprocess
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+from install_identity import (
+    ARTIFACT_MANIFEST,
+    ARTIFACT_SCHEMA,
+    METADATA_PATHS,
+    RUNTIME_MODELS,
+    SOURCE_REPOSITORY,
+    TOOLCHAIN_SCHEMA,
+    TOOL_COMMANDS,
+    records_sha256,
+    source_state,
+)
 
-METADATA = {
-    PurePosixPath("share/openstc32/toolchain.json"),
-    PurePosixPath("share/openstc32/toolchain-artifacts.json"),
-}
+METADATA = {PurePosixPath(path.as_posix()) for path in METADATA_PATHS}
 
 
 def sha256(path: Path) -> str:
@@ -29,49 +35,6 @@ def load_json(path: Path) -> dict:
     if not isinstance(value, dict):
         raise SystemExit(f"expected JSON object: {path}")
     return value
-
-
-def source_state(source_root: Path) -> tuple[str, str, bool]:
-    try:
-        head = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
-            cwd=source_root,
-            stderr=subprocess.DEVNULL,
-        ).strip()
-        diff = subprocess.check_output(
-            ["git", "diff", "--binary", "HEAD"], cwd=source_root
-        )
-        untracked = subprocess.check_output(
-            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
-            cwd=source_root,
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise SystemExit(f"cannot inspect source state at {source_root}") from exc
-
-    names = sorted(name for name in untracked.split(b"\0") if name)
-    payload = bytearray(b"HEAD\0")
-    payload.extend(head)
-    payload.extend(b"\0DIFF\0")
-    payload.extend(diff)
-    for name in names:
-        file_path = source_root / os.fsdecode(name)
-        if file_path.is_file():
-            content = file_path.read_bytes()
-            marker = b"FILE"
-        else:
-            content = b""
-            marker = b"NONFILE"
-        payload.extend(b"\0UNTRACKED\0")
-        payload.extend(marker)
-        payload.extend(len(name).to_bytes(8, "big"))
-        payload.extend(name)
-        payload.extend(len(content).to_bytes(8, "big"))
-        payload.extend(content)
-    return (
-        head.decode(),
-        hashlib.sha256(payload).hexdigest(),
-        bool(diff or names),
-    )
 
 
 def safe_relative(value: object) -> PurePosixPath:
@@ -91,6 +54,22 @@ def safe_relative(value: object) -> PurePosixPath:
     return relative
 
 
+def verify_file_record(prefix: Path, record: object, label: str) -> PurePosixPath:
+    if not isinstance(record, dict):
+        raise SystemExit(f"invalid {label} record")
+    relative = safe_relative(record.get("path"))
+    path = prefix.joinpath(*relative.parts)
+    if path.is_symlink() or not path.is_file():
+        raise SystemExit(f"missing or unsafe {label}: {relative}")
+    data = path.read_bytes()
+    if (
+        record.get("size") != len(data)
+        or record.get("sha256") != hashlib.sha256(data).hexdigest()
+    ):
+        raise SystemExit(f"{label} mismatch: {relative}")
+    return relative
+
+
 def verify(
     prefix: Path,
     source_root: Path,
@@ -104,6 +83,10 @@ def verify(
     artifact_path = prefix / "share/openstc32/toolchain-artifacts.json"
     toolchain = load_json(toolchain_path)
     artifact = load_json(artifact_path)
+    if toolchain.get("schema") != TOOLCHAIN_SCHEMA:
+        raise SystemExit("unsupported toolchain manifest schema")
+    if artifact.get("schema") != ARTIFACT_SCHEMA:
+        raise SystemExit("unsupported artifact manifest schema")
 
     listed: set[PurePosixPath] = set()
     entries = artifact.get("files")
@@ -125,6 +108,8 @@ def verify(
         ):
             raise SystemExit(f"artifact mismatch: {relative}")
         listed.add(relative)
+    if artifact.get("files_sha256") != records_sha256(entries):
+        raise SystemExit("artifact file-set digest mismatch")
 
     actual: set[PurePosixPath] = set()
     for path in prefix.rglob("*"):
@@ -143,7 +128,6 @@ def verify(
         )
 
     expected_identity = {
-        "schema": 1,
         "target": "stc32",
         "architecture": "mcs251",
         "chip": "STC32G12K128",
@@ -151,11 +135,90 @@ def verify(
     for key, expected in expected_identity.items():
         if toolchain.get(key) != expected or artifact.get(key) != expected:
             raise SystemExit(f"manifest identity mismatch for {key}")
+    pair_fields = (
+        "target", "architecture", "chip", "host_os", "host_arch",
+        "sdcc_version", "source", "source_commit", "source_dirty",
+        "source_state_sha256", "compatibility", "built_at_utc",
+    )
+    for key in pair_fields:
+        if toolchain.get(key) != artifact.get(key):
+            raise SystemExit(f"manifest pair mismatch for {key}")
+
+    source = toolchain.get("source")
+    if not isinstance(source, dict) or set(source) != {"root", "upstream"}:
+        raise SystemExit("toolchain manifest has invalid source identity")
+    source_identity_root = source.get("root")
+    source_upstream = source.get("upstream")
+    if not isinstance(source_identity_root, dict) or source_identity_root != source_upstream:
+        raise SystemExit("source root/upstream identity mismatch")
+    expected_source_keys = {"repository", "commit", "dirty", "state_sha256"}
+    if set(source_identity_root) != expected_source_keys:
+        raise SystemExit("source identity has missing or unknown fields")
+    if source_identity_root.get("repository") != SOURCE_REPOSITORY:
+        raise SystemExit("unexpected source repository")
+    if (
+        source_identity_root.get("commit") != toolchain.get("source_commit")
+        or source_identity_root.get("dirty") != toolchain.get("source_dirty")
+        or source_identity_root.get("state_sha256") != toolchain.get("source_state_sha256")
+    ):
+        raise SystemExit("source identity aliases diverge")
+
+    expected_compatibility = {
+        "abi": {"major": 1, "minor": 0},
+        "memory_models": [
+            {"model": values["memory_model"],
+             "stack_auto": values["stack_auto"]}
+            for values in RUNTIME_MODELS.values()
+        ],
+    }
+    if toolchain.get("compatibility") != expected_compatibility:
+        raise SystemExit("incompatible ABI or memory-model manifest")
+
+    tools = toolchain.get("tools")
+    if not isinstance(tools, dict) or set(tools) != set(TOOL_COMMANDS):
+        raise SystemExit("toolchain manifest has incomplete host-tool identity")
+    for role, (name, _arguments, _codes, _marker) in TOOL_COMMANDS.items():
+        record = tools[role]
+        relative = verify_file_record(prefix, record, f"{role} tool")
+        if relative not in {
+            PurePosixPath("bin") / name,
+            PurePosixPath("bin") / f"{name}.exe",
+        }:
+            raise SystemExit(f"unexpected {role} tool path: {relative}")
+        if not isinstance(record.get("version"), str) or not record["version"].strip():
+            raise SystemExit(f"missing {role} tool version")
+
+    runtimes = toolchain.get("runtimes")
+    if not isinstance(runtimes, dict) or set(runtimes) != set(RUNTIME_MODELS):
+        raise SystemExit("toolchain manifest has incomplete runtime identity")
+    for model, attributes in RUNTIME_MODELS.items():
+        record = runtimes[model]
+        relative = verify_file_record(prefix, record, f"runtime {model}")
+        expected_path = PurePosixPath(
+            f"share/sdcc/lib/{model}/libsdcc.lib")
+        if relative != expected_path or any(
+                record.get(key) != value for key, value in attributes.items()):
+            raise SystemExit(f"runtime compatibility mismatch: {model}")
+
+    headers = toolchain.get("headers")
+    if not isinstance(headers, dict) or headers.get("root") != "share/sdcc/include/mcs251":
+        raise SystemExit("toolchain manifest has invalid header identity")
+    header_entries = headers.get("files")
+    if not isinstance(header_entries, list) or not header_entries:
+        raise SystemExit("toolchain manifest has no headers")
+    header_paths = {
+        verify_file_record(prefix, record, "header") for record in header_entries
+    }
+    actual_headers = {
+        PurePosixPath(path.relative_to(prefix).as_posix())
+        for path in (prefix / headers["root"]).rglob("*") if path.is_file()
+    }
+    if header_paths != actual_headers:
+        raise SystemExit("header file boundary mismatch")
+    if headers.get("files_sha256") != records_sha256(header_entries):
+        raise SystemExit("header file-set digest mismatch")
 
     head, state_sha256, source_dirty = source_state(source_root)
-    for key in ("source_commit", "source_state_sha256", "host_os", "host_arch", "sdcc_version"):
-        if not toolchain.get(key) or toolchain.get(key) != artifact.get(key):
-            raise SystemExit(f"manifest pair mismatch for {key}")
     if expected_host_os and toolchain["host_os"] != expected_host_os:
         raise SystemExit(
             f"unexpected host OS: {toolchain['host_os']} (expected {expected_host_os})"
@@ -175,7 +238,7 @@ def verify(
         raise SystemExit("toolchain source-state hash does not match current source tree")
     if toolchain.get("source_dirty") is not False or artifact.get("source_dirty") is not False:
         raise SystemExit("toolchain manifest records a dirty source tree")
-    if toolchain.get("artifact_manifest") != "share/openstc32/toolchain-artifacts.json":
+    if toolchain.get("artifact_manifest") != ARTIFACT_MANIFEST.as_posix():
         raise SystemExit("unexpected artifact manifest path")
     if toolchain.get("artifact_manifest_sha256") != sha256(artifact_path):
         raise SystemExit("toolchain manifest does not bind artifact manifest")

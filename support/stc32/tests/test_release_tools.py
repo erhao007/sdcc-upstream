@@ -16,6 +16,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path, PurePosixPath
+from unittest import mock
 
 
 STC32_ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +25,7 @@ REPOSITORY = STC32_ROOT.parents[1]
 sys.path.insert(0, str(TOOLS))
 
 import package_install  # noqa: E402
+import install_identity  # noqa: E402
 import verify_install  # noqa: E402
 import verify_release_assets  # noqa: E402
 
@@ -80,10 +82,24 @@ class ReleaseToolTests(unittest.TestCase):
         self.host_os = host_os
         self.host_arch = host_arch
 
-        executable = self.prefix / "bin" / "sdcc"
-        executable.parent.mkdir(parents=True)
-        executable.write_bytes(b"synthetic-sdcc\n")
-        executable.chmod(0o755)
+        for role, (name, _arguments, _codes, _marker) in \
+                install_identity.TOOL_COMMANDS.items():
+            executable = self.prefix / "bin" / name
+            executable.parent.mkdir(parents=True, exist_ok=True)
+            executable.write_bytes(f"synthetic-{role}\n".encode())
+            executable.chmod(0o755)
+        for model in install_identity.RUNTIME_MODELS:
+            runtime = (
+                self.prefix / "share" / "sdcc" / "lib" / model / "libsdcc.lib"
+            )
+            runtime.parent.mkdir(parents=True, exist_ok=True)
+            runtime.write_bytes(f"synthetic-{model}\n".encode())
+        header = (
+            self.prefix / "share" / "sdcc" / "include" / "mcs251" /
+            "stc32g12k128.h"
+        )
+        header.parent.mkdir(parents=True, exist_ok=True)
+        header.write_bytes(b"synthetic-device-header\n")
         self._write_manifests()
 
     def _write_manifests(self) -> None:
@@ -105,26 +121,75 @@ class ReleaseToolTests(unittest.TestCase):
                     "sha256": sha256_bytes(data),
                 }
             )
+        source_checkout = {
+            "repository": install_identity.SOURCE_REPOSITORY,
+            "commit": self.head,
+            "dirty": False,
+            "state_sha256": self.state_sha256,
+        }
+        compatibility = {
+            "abi": {"major": 1, "minor": 0},
+            "memory_models": [
+                {"model": values["memory_model"],
+                 "stack_auto": values["stack_auto"]}
+                for values in install_identity.RUNTIME_MODELS.values()
+            ],
+        }
         identity = {
-            "schema": 1,
             "target": "stc32",
             "architecture": "mcs251",
             "chip": "STC32G12K128",
             "host_os": self.host_os,
             "host_arch": self.host_arch,
             "sdcc_version": "synthetic test toolchain",
+            "source": {
+                "root": dict(source_checkout),
+                "upstream": dict(source_checkout),
+            },
             "source_commit": self.head,
             "source_dirty": False,
             "source_state_sha256": self.state_sha256,
+            "compatibility": compatibility,
+            "built_at_utc": "2026-01-01T00:00:00+00:00",
         }
-        artifact = {**identity, "files": files}
+        artifact = {
+            "schema": install_identity.ARTIFACT_SCHEMA,
+            **identity,
+            "files": files,
+            "files_sha256": install_identity.records_sha256(files),
+        }
         artifact_path = metadata_dir / "toolchain-artifacts.json"
         artifact_path.write_text(
             json.dumps(artifact, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        tools = {}
+        for role, (name, _arguments, _codes, _marker) in \
+                install_identity.TOOL_COMMANDS.items():
+            record = install_identity.file_record(
+                self.prefix / "bin" / name, self.prefix)
+            record["version"] = f"synthetic {role} version"
+            tools[role] = record
+        runtimes = {}
+        for model, attributes in install_identity.RUNTIME_MODELS.items():
+            path = self.prefix / "share" / "sdcc" / "lib" / model / "libsdcc.lib"
+            runtimes[model] = {
+                **attributes,
+                **install_identity.file_record(path, self.prefix),
+            }
+        header_records = [install_identity.file_record(
+            self.prefix / "share" / "sdcc" / "include" / "mcs251" /
+            "stc32g12k128.h", self.prefix)]
         toolchain = {
+            "schema": install_identity.TOOLCHAIN_SCHEMA,
             **identity,
+            "tools": tools,
+            "runtimes": runtimes,
+            "headers": {
+                "root": "share/sdcc/include/mcs251",
+                "files": header_records,
+                "files_sha256": install_identity.records_sha256(header_records),
+            },
             "artifact_manifest": "share/openstc32/toolchain-artifacts.json",
             "artifact_manifest_sha256": hashlib.sha256(
                 artifact_path.read_bytes()
@@ -176,7 +241,10 @@ class ReleaseToolTests(unittest.TestCase):
         verified = verify_install.verify(
             self.prefix, self.source, self.host_os, self.host_arch
         )
-        self.assertEqual(verified, 1)
+        artifact = json.loads((
+            self.prefix / "share/openstc32/toolchain-artifacts.json"
+        ).read_text(encoding="utf-8"))
+        self.assertEqual(verified, len(artifact["files"]))
         self._run_packager()
         result = self._run_verifier()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -217,6 +285,30 @@ class ReleaseToolTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("missing release asset", result.stderr)
 
+    def test_generator_writes_v2_complete_identity(self) -> None:
+        metadata = self.prefix / "share" / "openstc32"
+        for name in ("toolchain.json", "toolchain-artifacts.json"):
+            (metadata / name).unlink()
+
+        def fake_tool_record(prefix, name, _arguments, _codes, _marker):
+            record = install_identity.file_record(prefix / "bin" / name, prefix)
+            record["version"] = f"synthetic {name} version"
+            return record
+
+        with mock.patch.object(
+                install_identity, "tool_record", side_effect=fake_tool_record):
+            manifest_path, artifact_path, count = install_identity.build_manifests(
+                self.source, self.prefix)
+        toolchain = json.loads(manifest_path.read_text(encoding="utf-8"))
+        artifacts = json.loads(artifact_path.read_text(encoding="utf-8"))
+        self.assertEqual(toolchain["schema"], install_identity.TOOLCHAIN_SCHEMA)
+        self.assertEqual(artifacts["schema"], install_identity.ARTIFACT_SCHEMA)
+        self.assertEqual(set(toolchain["tools"]), set(install_identity.TOOL_COMMANDS))
+        self.assertEqual(set(toolchain["runtimes"]), set(install_identity.RUNTIME_MODELS))
+        self.assertEqual(toolchain["source"]["root"], toolchain["source"]["upstream"])
+        self.assertFalse(toolchain["source_dirty"])
+        self.assertEqual(count, len(artifacts["files"]))
+
     def test_install_rejects_extra_dirty_and_unsafe_paths(self) -> None:
         extra = self.prefix / "unlisted.bin"
         extra.write_bytes(b"not in manifest")
@@ -244,6 +336,41 @@ class ReleaseToolTests(unittest.TestCase):
         artifact["files"][0]["path"] = "..\\escape.exe"
         artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
         with self.assertRaisesRegex(SystemExit, "unsafe artifact path"):
+            verify_install.verify(self.prefix, self.source)
+
+    def test_install_rejects_legacy_missing_and_incompatible_identity(self) -> None:
+        metadata = self.prefix / "share" / "openstc32"
+        toolchain_path = metadata / "toolchain.json"
+        artifact_path = metadata / "toolchain-artifacts.json"
+
+        toolchain = json.loads(toolchain_path.read_text(encoding="utf-8"))
+        toolchain["schema"] = 1
+        toolchain_path.write_text(json.dumps(toolchain), encoding="utf-8")
+        with self.assertRaisesRegex(SystemExit, "unsupported toolchain manifest schema"):
+            verify_install.verify(self.prefix, self.source)
+
+        self._write_manifests()
+        toolchain = json.loads(toolchain_path.read_text(encoding="utf-8"))
+        toolchain["tools"].pop("linker")
+        toolchain_path.write_text(json.dumps(toolchain), encoding="utf-8")
+        with self.assertRaisesRegex(SystemExit, "incomplete host-tool identity"):
+            verify_install.verify(self.prefix, self.source)
+
+        self._write_manifests()
+        toolchain = json.loads(toolchain_path.read_text(encoding="utf-8"))
+        artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+        toolchain["compatibility"]["abi"]["major"] = 2
+        artifact["compatibility"]["abi"]["major"] = 2
+        toolchain_path.write_text(json.dumps(toolchain), encoding="utf-8")
+        artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+        with self.assertRaisesRegex(SystemExit, "incompatible ABI"):
+            verify_install.verify(self.prefix, self.source)
+
+        self._write_manifests()
+        artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+        artifact["files_sha256"] = "0" * 64
+        artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+        with self.assertRaisesRegex(SystemExit, "artifact file-set digest mismatch"):
             verify_install.verify(self.prefix, self.source)
 
     def test_archive_reader_rejects_unsafe_and_special_members(self) -> None:

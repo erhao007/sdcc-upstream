@@ -20,6 +20,7 @@ from pathlib import Path
 # source tree immediately before its clean-tree check.
 sys.dont_write_bytecode = True
 from verify_install import verify
+from install_identity import RELEASE_SCHEMA
 
 
 TOKEN = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -136,7 +137,7 @@ def main() -> None:
     toolchain = json.loads(toolchain_source.read_text(encoding="utf-8"))
 
     release_metadata = {
-        "schema": 1,
+        "schema": RELEASE_SCHEMA,
         "tag": args.tag,
         "platform": args.platform,
         "package": package.name,
@@ -149,6 +150,7 @@ def main() -> None:
         "toolchain_manifest_sha256": digest(toolchain_sidecar),
         "artifact_manifest": artifacts_sidecar.name,
         "artifact_manifest_sha256": digest(artifacts_sidecar),
+        "compatibility": toolchain["compatibility"],
         "source_date_epoch": epoch,
     }
     metadata_path = output_dir / f"{stem}.release.json"
