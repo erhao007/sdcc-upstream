@@ -295,8 +295,10 @@ class ReleaseToolTests(unittest.TestCase):
             record["version"] = f"synthetic {name} version"
             return record
 
-        with mock.patch.object(
-                install_identity, "tool_record", side_effect=fake_tool_record):
+        with mock.patch.dict(
+                os.environ, {"STC32_SOURCE_COMMIT": self.head}), \
+                mock.patch.object(
+                    install_identity, "tool_record", side_effect=fake_tool_record):
             manifest_path, artifact_path, count = install_identity.build_manifests(
                 self.source, self.prefix)
         toolchain = json.loads(manifest_path.read_text(encoding="utf-8"))
