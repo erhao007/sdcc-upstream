@@ -1,11 +1,12 @@
 # STC32/MCS-251 Source Mode 迁移矩阵
 
-状态：MT-4A 工作矩阵草案；不是 Tier 0/1 契约，也不表示 MT-4A 已关闭。
+状态：MT-4A 已合并；本分支记录 MT-4B 的诊断实现，未表示 MT-4B 已关闭。
 
 目标是把公开 C251/8051 C 源码迁移到 SDCC 的 MCS-251 Source Mode，降低源码
 迁移成本；不承诺 Keil ABI、OMF-251、对象、库或工程文件兼容。规范写法是
 SDCC 的双下划线扩展，用户目标名 `stc32` 与内部端口 `mcs251` 仍是同一工具链。
-对象和调用边界遵守 `doc/stc32/ABI.md` ABI 1.0；本包不修改 ABI、前端或 ISA。
+对象和调用边界遵守 `doc/stc32/ABI.md` ABI 1.0；本分支不修改 ABI 或 ISA，
+只在 MCS-251 前端增加明确的 fail-closed 诊断。
 
 ## 分类含义
 
@@ -17,8 +18,8 @@ SDCC 的双下划线扩展，用户目标名 `stc32` 与内部端口 `mcs251` �
 | 明确不支持 | 没有合法且等价的 Source Mode 映射，必须拒绝或由另一个 Roadmap 任务处理；不得静默忽略。 |
 
 “迁移分类”描述旧源码到本工具链的处理方式；“规范写法状态”描述对应的
-双下划线形式。无效向量、寄存器组等当前已知问题另列为 `DIAGNOSTIC_GAP`，
-不能被正例通过掩盖。
+双下划线形式。超出目标范围的向量、寄存器组和 `__naked` C 语句体必须由稳定
+诊断拒绝，不能被正例通过掩盖。
 
 ## 逐项矩阵
 
@@ -31,10 +32,10 @@ SDCC 的双下划线扩展，用户目标名 `stc32` 与内部端口 `mcs251` �
 | `bit` | `__bit` | 机械替换 | `__bit` 原生，返回/状态语义仍受 ABI/实现边界约束 | `bare-bit`：失败，诊断 token `bit` | `native-qualifiers` 编译；两个行为样本 set/clear/read |
 | `sbit` | `__sbit __at (address)` | 兼容头 | 需要项目地址声明映射；测试只用原创 `MIGRATION_SBIT(name,address)` 宏，不提交公共头 | `bare-sbit`：失败，诊断 token `sbit` | `compat-sfr-sbit` 目标编译；SFR 电气行为不由 uCsim/本包外推 |
 | `sfr` | `__sfr __at (address)` | 兼容头 | 需要项目地址声明映射；测试只用原创 `MIGRATION_SFR(name,address)` 宏，不复制厂商头 | `bare-sfr`：失败，诊断 token `sfr` | `compat-sfr-sbit` 目标编译；真实寄存器行为仍需设备/板级证据 |
-| `interrupt` | `__interrupt(vector)` | 机械替换 | 合法向量的双下划线形式原生；旧项目的 `__interrupt 1` 还需把参数归一化为 `__interrupt (1)`；硬件 4 字节帧、RETI 和保存责任遵守 ABI 1.0 | `bare-interrupt`：失败，诊断 token `interrupt`；`__interrupt(64)` 当前接受，记录为 `DIAGNOSTIC_GAP`，转 MT-4B | `native-interrupt` 与 `real-stc-diyclock-main` 生成 `reti` 的汇编检查；合法 ISR 的 uCsim 行为属于 ABI runner |
-| `using` | `__using(bank)` | 机械替换 | 合法寄存器组的双下划线形式原生；旧项目的 `__using 1` 还需把参数归一化为 `__using (1)`；当前 `__using(8)` 接受但未形成稳定拒绝 | `bare-using`：失败，诊断 token `using`；`__using(8)` 为 `DIAGNOSTIC_GAP`，转 MT-4B | `native-interrupt-using` 与 `real-stc-diyclock-main` 编译/汇编；非法 bank 只记录 gap，不宣称行为正确 |
+| `interrupt` | `__interrupt(vector)` | 机械替换 | STC32G12K128 的 49 个 Source Mode 中断源使用向量 `0..48`；旧项目的 `__interrupt 1` 还需把参数归一化为 `__interrupt (1)`；硬件 4 字节帧、RETI 和保存责任遵守 ABI 1.0 | `bare-interrupt`：失败，诊断 token `interrupt`；`__interrupt(64)`：非零退出，稳定诊断 token `__interrupt` | `native-interrupt` 与 `real-stc-diyclock-main` 生成 `reti` 的汇编检查；合法 ISR 的 uCsim 行为属于 ABI runner |
+| `using` | `__using(bank)` | 机械替换 | Source Mode 使用四个 PSW 选择寄存器组 `0..3`；旧项目的 `__using 1` 还需把参数归一化为 `__using (1)` | `bare-using`：失败，诊断 token `using`；`__using(8)`：非零退出，稳定诊断 token `__using` | `native-interrupt-using` 与 `real-stc-diyclock-main` 编译/汇编；非法 bank 由稳定诊断拒绝 |
 | `reentrant` | `__reentrant` | 机械替换 | 双下划线形式原生；SPX、递归、stack-auto 边界遵守 ABI 1.0，不承诺 Keil 栈 ABI | `bare-reentrant`：失败，诊断 token `reentrant` | `native-reentrant` 三模型目标编译；`cleanroom-multifile-project` 三模型跨文件调用；完整栈边界由 ABI runner 覆盖 |
-| `naked` | `__naked` | 机械替换 | 仅对显式汇编/手工返回体作迁移建议；普通 C 语句体当前可能接受但不能视为有语义 | `bare-naked`：失败，诊断 token `naked`；含普通 C 语句的 `__naked` 为 `DIAGNOSTIC_GAP`，转 MT-4B | `native-naked-asm` 汇编体；`gap-naked-c-body` 保留为待修复诊断缺口 |
+| `naked` | `__naked` | 机械替换 | 仅支持显式 inline assembly/手工返回体；函数体中的 C 局部声明、表达式、控制流和标签均拒绝 | `bare-naked`：失败，诊断 token `naked`；含普通 C 语句的 `__naked`：非零退出，稳定诊断 token `__naked` | `native-naked-asm` 汇编体；`diagnostic-naked-c-body` 验证不生成被静默丢弃的 C 语句 |
 
 ## 明确不支持的输入
 
@@ -46,15 +47,14 @@ SDCC 的双下划线扩展，用户目标名 `stc32` 与内部端口 `mcs251` �
 | Keil C251 ABI、库二进制互链、专有 runtime | 明确不支持；ABI 1.0 只保证本项目定义的 Source Mode ABI。 |
 | Keil/STC 专有头文件、startup、linker 配置和反编译实现 | 明确不支持导入或复制；需要基于公开事实独立重写。 |
 | 未授权真实项目源码、无法确认再分发范围的厂商包 | 明确不支持作为仓内样本来源；保留为待审计线索。 |
-| `__naked` 中普通 C 语句、当前未拒绝的 `__interrupt(64)`、`__using(8)` | 当前实现分别记录为 `DIAGNOSTIC_GAP`，不当作可迁移行为；正式稳定拒绝路由至 MT-4B。 |
+| `__naked` 中普通 C 语句、超出 `0..48` 的 `__interrupt`、超出 `0..3` 的 `__using` | 明确不支持；MT-4B 以非零退出和稳定属性 token 拒绝，不生成可被误用的目标代码。 |
 
 ## 诊断基线
 
 `support/stc32/tests/migration/run_migration_tests.py` 对负例检查“非零退出码 +
 预期 token”，忽略临时路径、行号、列号和版本化文本。这样固定的是可审计的
-诊断类别，不把易变的完整英文错误句子当作 API。正例则必须完成编译；gap 样例
-当前预期仍能编译，以防止本阶段误把现状写成已拒绝。未来 MT-4B 增加稳定拒绝后，
-应同步更新该 gap 的测试契约，不在本包顺手修改前端。
+诊断类别，不把易变的完整英文错误句子当作 API。正例则必须完成编译；MT-4B
+负例必须稳定拒绝，避免把此前未处理且后端无法安全实现的语法误标为支持。
 
 ## 仓内原创项目样本
 
@@ -100,4 +100,4 @@ SDCC 多文件应用；本地样例只保留去业务化的 `volatile __bit` 状
 - 编译/汇编为 E1；uCsim 行为为 E2；本包不产生 E4 真板或 E5 跨平台结论。
 - 当前已有 `stc_diyclock` 真实项目的固定来源、MIT notice、最小派生边界和用户
   确认记录。该确认于 2026-09-01 闭合 MT-4A 的真实样本来源输入，但不替代项目
-  主审关闭、qualified legal review、发布审核或 MT-4B 授权。
+  主审关闭、qualified legal review 或发布审核。

@@ -27,6 +27,7 @@
 %{
 #include <stdio.h>
 #include <stdarg.h>
+#include <limits.h>
 #include <string.h>
 #include "SDCCglobl.h"
 #include "SDCCattr.h"
@@ -70,6 +71,37 @@ STACK_DCL(blockNum,int,MAX_NEST_LEVEL*3)
 
 value *cenum = NULL;        /* current enumeration  type chain*/
 bool uselessDecl = true;
+
+/* Validate Source Mode attributes at their full literal width before any
+ * host-sized conversion can make an invalid value look like a valid one. */
+static bool
+mcs251SourceAttributeValueInRange (const value *val,
+                                   unsigned long long max,
+                                   unsigned long long *rawValue)
+{
+  unsigned long long raw;
+
+  if (!val || !val->etype || SPEC_SCLS (val->etype) != S_LITERAL)
+    {
+      *rawValue = 0;
+      return false;
+    }
+
+  raw = ullFromVal (val);
+  *rawValue = raw;
+
+  if ((!SPEC_USIGN (val->etype) &&
+       (TYPE_TARGET_LONGLONG) raw < 0) || raw > max)
+    return false;
+
+  return true;
+}
+
+static unsigned
+mcs251SourceAttributeDiagnosticValue (unsigned long long raw)
+{
+  return raw > (unsigned long long) UINT_MAX ? UINT_MAX : (unsigned) raw;
+}
 
 #define YYDEBUG 1
 
@@ -2738,8 +2770,26 @@ function_attributes
 
 function_attribute
    :  USING '(' constant_expr ')' {
+                        value *val = constExprValue($3, true);
+                        unsigned long long raw = 0;
+                        int bank = 0;
+                        if (TARGET_IS_MCS251)
+                          {
+                            if (mcs251SourceAttributeValueInRange(
+                                  val, MCS251_SOURCE_REGISTER_BANK_COUNT - 1, &raw))
+                              bank = (int) raw;
+                            else
+                              {
+                                werror(E_MCS251_REGISTER_BANK_RANGE,
+                                       mcs251SourceAttributeDiagnosticValue(raw));
+                                /* Do not let an invalid bank reach RegBankUsed[]
+                                   or code generation after the diagnostic. */
+                              }
+                          }
+                        else
+                          bank = (int) ulFromVal(val);
                         $$ = newLink(SPECIFIER);
-                        FUNC_REGBANK($$) = (int) ulFromVal(constExprValue($3, true));
+                        FUNC_REGBANK($$) = bank;
                      }
    |  REENTRANT      {  $$ = newLink (SPECIFIER);
                         FUNC_ISREENT($$)=1;
@@ -2915,13 +2965,30 @@ Interrupt_storage
    | INTERRUPT '(' constant_expr ')'
         { 
           value *val = constExprValue($3, true);
-          int intno = (int) ulFromVal(val);
-          if (val && (intno >= 0) && (intno <= INTNO_MAX))
-            $$ = intno;
+          unsigned long long raw = 0;
+          int intno = 0;
+          if (TARGET_IS_MCS251)
+            {
+              if (mcs251SourceAttributeValueInRange(
+                    val, MCS251_SOURCE_INTERRUPT_MAX, &raw))
+                $$ = (int) raw;
+              else
+                {
+                  werror(E_MCS251_INTERRUPT_RANGE,
+                         mcs251SourceAttributeDiagnosticValue(raw));
+                  $$ = INTNO_UNSPEC;
+                }
+            }
           else
             {
-              werror(E_INT_BAD_INTNO, intno);
-              $$ = INTNO_UNSPEC;
+              intno = (int) ulFromVal(val);
+              if (val && (intno >= 0) && (intno <= INTNO_MAX))
+                $$ = intno;
+              else
+                {
+                  werror(E_INT_BAD_INTNO, intno);
+                  $$ = INTNO_UNSPEC;
+                }
             }
         }
    ;

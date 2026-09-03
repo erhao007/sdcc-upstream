@@ -77,6 +77,13 @@ enum target {
 #define TARGET_IS_PIC16    (port->id == TARGET_ID_PIC16)
 #define TARGET_IS_MCS251     (port->id == TARGET_ID_MCS251)
 
+/* STC32G12K128 Source Mode exposes 49 interrupt sources, numbered 0..48,
+   and four PSW-selected register banks, numbered 0..3.  Keep these limits
+   next to the target predicates so parser and semantic checks share one
+   target envelope without widening the generic SDCC interrupt ABI. */
+#define MCS251_SOURCE_INTERRUPT_MAX       48
+#define MCS251_SOURCE_REGISTER_BANK_COUNT 4
+
 #define TARGET_MCS51_LIKE  (TARGET_IS_MCS51 || TARGET_IS_MCS251 || TARGET_IS_DS390 || TARGET_IS_DS400)
 #define TARGET_RABBIT_LIKE (TARGET_IS_R2K || TARGET_IS_R2KA || TARGET_IS_R3KA || TARGET_IS_R4K || TARGET_IS_R5K || TARGET_IS_R6K)
 #define TARGET_Z80_LIKE    (TARGET_IS_Z80 || TARGET_IS_Z180 || TARGET_IS_SM83 || TARGET_IS_TLCS90 || TARGET_IS_EZ80 || TARGET_IS_Z80N || TARGET_IS_R800 || TARGET_RABBIT_LIKE)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MT-4A source migration matrix tests.
+"""MT-4A/MT-4B source migration matrix tests.
 
 The runner intentionally tests source-level treatment only.  It does not load
 vendor packages and it never treats a compiler's current acceptance of a
@@ -444,18 +444,20 @@ def run_project_behavior(case: dict, sdcc: Path, ucsim: Path | None,
             results.append(("PASS" if ok else "FAIL", f"{tag}: {reason}" if reason else tag))
 
 
-def run_gap(case: dict, sdcc: Path, results: list[tuple[str, str]]) -> None:
+def run_diagnostic(case: dict, sdcc: Path, results: list[tuple[str, str]]) -> None:
     source = ROOT / "support" / "stc32" / "tests" / "migration" / case["source"]
     for model in case.get("models", []):
         tag = f"{case['id']} [{model}] status={case['status']}"
-        with tempfile.TemporaryDirectory(prefix="mt4a-gap-") as tmp:
-            asm_path = Path(tmp) / f"{case['id']}-{model}.asm"
-            result = compile_one(sdcc, source, asm_path, model, assembly=True)
-            reason = artifact_error(result, asm_path)
+        with tempfile.TemporaryDirectory(prefix="mt4b-diagnostic-") as tmp:
+            output_path = Path(tmp) / f"{case['id']}-{model}.asm"
+            result = compile_one(sdcc, source, output_path, model, assembly=True)
+            reason = rejection_error(result, case["diagnostic_token"])
             if reason:
+                results.append(("FAIL", f"{tag}: {reason}"))
+            elif output_path.is_file() and output_path.stat().st_size:
                 results.append((
                     "FAIL",
-                    f"{tag}: current expected acceptance changed: {reason}",
+                    f"{tag}: diagnostic unexpectedly produced a non-empty artifact",
                 ))
             else:
                 results.append(("PASS", tag))
@@ -495,8 +497,8 @@ def main() -> int:
             run_project_behavior(
                 case, args.sdcc, args.ucsim, args.skip_behavior, results
             )
-        elif kind == "diagnostic-gap":
-            run_gap(case, args.sdcc, results)
+        elif kind == "diagnostic":
+            run_diagnostic(case, args.sdcc, results)
         else:
             results.append(("FAIL", f"{case['id']}: unknown kind {kind!r}"))
 

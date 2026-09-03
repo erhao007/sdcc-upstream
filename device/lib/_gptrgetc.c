@@ -45,7 +45,9 @@ _gptrgetc (char *gptr) __naked
 /* This is the new version with pointers up to 16 bits.
    B cannot be trashed */
 
+#if !defined(__SDCC_mcs251)
     gptr; /* hush the compiler */
+#endif
 
     __asm
 #ifdef __SDCC_mcs251
@@ -98,7 +100,9 @@ _gptrgetc (char *gptr) __naked
 void
 _gptrgetc (char *gptr) __naked
 {
+#if !defined(__SDCC_mcs251)
     gptr; /* hush the compiler */
+#endif
 
     __asm
     ;   save values passed

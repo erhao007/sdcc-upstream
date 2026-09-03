@@ -50,7 +50,9 @@ _gptrput (char *gptr, char c) __naked
 /* This is the banked version with pointers up to 22 bits.
    B cannot be trashed */
 
+#if !defined(__SDCC_mcs251)
     gptr; c; /* hush the compiler */
+#endif
 
     __asm
     ;
@@ -104,7 +106,9 @@ _gptrput (char *gptr, char c) __naked
 /* This is the non-banked version with pointers up to 14 bits.
    Assumes B is free to be used */
 
+#if !defined(__SDCC_mcs251)
     gptr; c; /* hush the compiler */
+#endif
 
     __asm
     ;
@@ -156,7 +160,9 @@ _gptrput (char *gptr, char c) __naked
 /* This is the new version with pointers up to 16 bits.
    B cannot be trashed */
 
+#if !defined(__SDCC_mcs251)
     gptr; c; /* hush the compiler */
+#endif
 
     __asm
 #ifdef __SDCC_mcs251
@@ -215,7 +221,9 @@ _gptrputWord (int *gptr, int w) __naked
 /* The ds390 can write two bytes in one go.
    B cannot be trashed */
 
+#if !defined(__SDCC_mcs251)
     gptr; w; /* hush the compiler */
+#endif
 
     __asm
     ;

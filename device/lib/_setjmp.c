@@ -46,7 +46,6 @@
 int
 __setjmp (jmp_buf buf) __naked
 {
-    (void)buf;
     __asm
         ; Atomically snapshot SPX and its ECALL frame.  Carry remembers EA.
         setb    c
@@ -122,7 +121,6 @@ mcs251_setjmp_irq_off$:
 static _Noreturn void
 __mcs251_longjmp_restore (jmp_buf buf) __naked
 {
-    (void)buf;
     __asm
         ; Carry remembers the interrupt-enable state while SPX is replaced.
         setb    c
