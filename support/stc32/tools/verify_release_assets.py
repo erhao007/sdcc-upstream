@@ -12,6 +12,15 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+from install_identity import (
+    ARTIFACT_SCHEMA,
+    RELEASE_SCHEMA,
+    RUNTIME_MODELS,
+    SOURCE_REPOSITORY,
+    TOOLCHAIN_SCHEMA,
+    TOOL_COMMANDS,
+    records_sha256,
+)
 
 TOKEN = re.compile(r"^[A-Za-z0-9._-]+$")
 PLATFORMS = {
@@ -91,6 +100,19 @@ def read_archive(path: Path) -> dict[PurePosixPath, bytes]:
     return members
 
 
+def verify_record(record: object, members: dict[PurePosixPath, bytes],
+                  label: str) -> PurePosixPath:
+    if not isinstance(record, dict):
+        raise SystemExit(f"invalid {label} record")
+    relative = safe_name(record.get("path"))
+    data = members.get(relative)
+    if data is None:
+        raise SystemExit(f"missing packaged {label}: {relative}")
+    if record.get("size") != len(data) or record.get("sha256") != digest_bytes(data):
+        raise SystemExit(f"packaged {label} mismatch: {relative}")
+    return relative
+
+
 def verify_platform(asset_dir: Path, tag: str, commit: str, platform: str) -> None:
     stem = f"openstc32-toolchain-{tag}-{platform}"
     host_os, host_arch, extension = PLATFORMS[platform]
@@ -105,7 +127,7 @@ def verify_platform(asset_dir: Path, tag: str, commit: str, platform: str) -> No
     checksum_path = asset_dir / f"{package.name}.sha256"
 
     expected = {
-        "schema": 1,
+        "schema": RELEASE_SCHEMA,
         "tag": tag,
         "platform": platform,
         "source_commit": commit,
@@ -141,12 +163,15 @@ def verify_platform(asset_dir: Path, tag: str, commit: str, platform: str) -> No
         raise SystemExit(f"invalid manifest JSON for {platform}: {exc}") from exc
     if not isinstance(toolchain, dict) or not isinstance(artifacts, dict):
         raise SystemExit(f"manifest is not an object: {platform}")
+    if toolchain.get("schema") != TOOLCHAIN_SCHEMA:
+        raise SystemExit(f"unsupported toolchain manifest schema: {platform}")
+    if artifacts.get("schema") != ARTIFACT_SCHEMA:
+        raise SystemExit(f"unsupported artifact manifest schema: {platform}")
     if toolchain.get("source_commit") != commit or artifacts.get("source_commit") != commit:
         raise SystemExit(f"source binding mismatch: {platform}")
     if toolchain.get("source_dirty") is not False or artifacts.get("source_dirty") is not False:
         raise SystemExit(f"dirty source recorded in release asset: {platform}")
     pair_fields = (
-        "schema",
         "target",
         "architecture",
         "chip",
@@ -156,6 +181,9 @@ def verify_platform(asset_dir: Path, tag: str, commit: str, platform: str) -> No
         "source_commit",
         "source_dirty",
         "source_state_sha256",
+        "source",
+        "compatibility",
+        "built_at_utc",
     )
     for field in pair_fields:
         if toolchain.get(field) != artifacts.get(field):
@@ -167,6 +195,35 @@ def verify_platform(asset_dir: Path, tag: str, commit: str, platform: str) -> No
         raise SystemExit(f"manifest platform identity mismatch: {platform}")
     if release.get("source_state_sha256") != toolchain.get("source_state_sha256"):
         raise SystemExit(f"release source-state mismatch: {platform}")
+    if release.get("compatibility") != toolchain.get("compatibility"):
+        raise SystemExit(f"release compatibility mismatch: {platform}")
+
+    source = toolchain.get("source")
+    if not isinstance(source, dict) or set(source) != {"root", "upstream"}:
+        raise SystemExit(f"invalid source identity: {platform}")
+    source_root = source.get("root")
+    source_upstream = source.get("upstream")
+    if not isinstance(source_root, dict) or source_root != source_upstream:
+        raise SystemExit(f"source root/upstream mismatch: {platform}")
+    if (
+        set(source_root) != {"repository", "commit", "dirty", "state_sha256"}
+        or source_root.get("repository") != SOURCE_REPOSITORY
+        or source_root.get("commit") != commit
+        or source_root.get("dirty") is not False
+        or source_root.get("state_sha256") != toolchain.get("source_state_sha256")
+    ):
+        raise SystemExit(f"invalid source checkout identity: {platform}")
+
+    expected_compatibility = {
+        "abi": {"major": 1, "minor": 0},
+        "memory_models": [
+            {"model": values["memory_model"],
+             "stack_auto": values["stack_auto"]}
+            for values in RUNTIME_MODELS.values()
+        ],
+    }
+    if toolchain.get("compatibility") != expected_compatibility:
+        raise SystemExit(f"incompatible ABI or memory-model manifest: {platform}")
     if toolchain.get("artifact_manifest") != "share/openstc32/toolchain-artifacts.json":
         raise SystemExit(f"unexpected artifact manifest path: {platform}")
     if toolchain.get("artifact_manifest_sha256") != digest_bytes(artifacts_bytes):
@@ -188,6 +245,8 @@ def verify_platform(asset_dir: Path, tag: str, commit: str, platform: str) -> No
         if relative in METADATA_PATHS or relative in artifact_paths:
             raise SystemExit(f"unsafe or duplicate artifact path: {platform}/{relative}")
         artifact_paths.add(relative)
+    if artifacts.get("files_sha256") != records_sha256(entries):
+        raise SystemExit(f"artifact file-set digest mismatch: {platform}")
     expected_members = METADATA_PATHS | artifact_paths
     if set(members) != expected_members:
         raise SystemExit(
@@ -199,6 +258,48 @@ def verify_platform(asset_dir: Path, tag: str, commit: str, platform: str) -> No
         data = members[relative]
         if entry.get("size") != len(data) or entry.get("sha256") != digest_bytes(data):
             raise SystemExit(f"packaged artifact mismatch: {platform}/{relative}")
+
+    tools = toolchain.get("tools")
+    if not isinstance(tools, dict) or set(tools) != set(TOOL_COMMANDS):
+        raise SystemExit(f"incomplete host-tool identity: {platform}")
+    for role, (name, _arguments, _codes, _marker) in TOOL_COMMANDS.items():
+        record = tools[role]
+        relative = verify_record(record, members, f"{role} tool")
+        if relative not in {
+            PurePosixPath("bin") / name,
+            PurePosixPath("bin") / f"{name}.exe",
+        } or not isinstance(record.get("version"), str) or not record["version"].strip():
+            raise SystemExit(f"invalid {role} tool identity: {platform}")
+
+    runtimes = toolchain.get("runtimes")
+    if not isinstance(runtimes, dict) or set(runtimes) != set(RUNTIME_MODELS):
+        raise SystemExit(f"incomplete runtime identity: {platform}")
+    for model, attributes in RUNTIME_MODELS.items():
+        record = runtimes[model]
+        relative = verify_record(record, members, f"runtime {model}")
+        if (
+            relative != PurePosixPath(f"share/sdcc/lib/{model}/libsdcc.lib")
+            or any(record.get(key) != value for key, value in attributes.items())
+        ):
+            raise SystemExit(f"runtime compatibility mismatch: {platform}/{model}")
+
+    headers = toolchain.get("headers")
+    if not isinstance(headers, dict) or headers.get("root") != "share/sdcc/include/mcs251":
+        raise SystemExit(f"invalid header identity: {platform}")
+    header_entries = headers.get("files")
+    if not isinstance(header_entries, list) or not header_entries:
+        raise SystemExit(f"missing header identity: {platform}")
+    header_paths = {
+        verify_record(record, members, "header") for record in header_entries
+    }
+    actual_headers = {
+        path for path in members
+        if path.parts[:4] == ("share", "sdcc", "include", "mcs251")
+    }
+    if header_paths != actual_headers:
+        raise SystemExit(f"header file boundary mismatch: {platform}")
+    if headers.get("files_sha256") != records_sha256(header_entries):
+        raise SystemExit(f"header file-set digest mismatch: {platform}")
     print(f"verified release assets: {platform} files={len(members)}")
 
 

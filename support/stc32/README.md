@@ -16,9 +16,13 @@ bash support/stc32/scripts/build-toolchain.sh
 
 The driver configures `--enable-mcs251-port`, installs into `build/install`,
 rebuilds all MCS-251 library models, and writes
-`build/install/share/openstc32/toolchain.json`.  Set `BUILD_DIR`, `PREFIX`,
-`JOBS`, or `FORCE_CONFIGURE=1` to override local paths.  Windows-native builds
-use `bash support/stc32/scripts/build-windows.sh --gates` from an MSYS2 UCRT64
+`build/install/share/openstc32/toolchain.json` plus the complete
+`toolchain-artifacts.json` file boundary.  The MT-5C v2 identity records the
+source root/upstream state, compiler/assembler/linker/simulator versions and
+SHA-256, all four MCS-251 runtimes, installed headers, ABI 1.0 and the four
+memory-model combinations.  Set `BUILD_DIR`, `PREFIX`, `JOBS`, or
+`FORCE_CONFIGURE=1` to override local paths.  Windows-native builds use
+`bash support/stc32/scripts/build-windows.sh --gates` from an MSYS2 UCRT64
 shell.
 
 ## Gates
@@ -57,7 +61,10 @@ deterministic platform package plus checksum and manifest sidecars, and
 `tools/verify_release_assets.py` reopens the archive and verifies every file
 before any workflow artifact or GitHub Release can be published.  Branch CI
 performs this package validation without uploading binaries; tagged publishing
-also requires the separate qualified-legal-review gate.
+also requires the separate qualified-legal-review gate.  Schema v1, missing
+tool/runtime/header identities, dirty source identities, incompatible ABI or
+memory-model declarations, and any selected or complete-file hash drift are
+rejected rather than interpreted as legacy-compatible input.
 
 ## Ownership and provenance
 
