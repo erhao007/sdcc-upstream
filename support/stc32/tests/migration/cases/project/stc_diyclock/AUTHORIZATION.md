@@ -19,5 +19,6 @@ The confirmation explicitly excludes:
 This record satisfies the MT-4A engineering input requiring the user to
 confirm a publicly usable real-project sample source. It applies only to the
 fixture and exclusions described here and in `PROVENANCE.md`. It is not a
-qualified legal opinion, release approval, Roadmap closure, or authorization
-to start MT-4B.
+qualified legal opinion, release approval, or Roadmap closure. It is not an
+MT-4B authorization token; the separately recorded `CONTINUE MT-4B`
+control-plane token governs task start.

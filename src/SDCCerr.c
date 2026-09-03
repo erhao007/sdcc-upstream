@@ -794,6 +794,12 @@ struct
   {E_BUILTIN_OVERFLOW_TYPES, ERROR_LEVEL_ERROR,
      "%s requires two integer operands and a pointer to a writable "
      "standard integer object", 0},
+  {E_MCS251_INTERRUPT_RANGE, ERROR_LEVEL_ERROR,
+     "'__interrupt' vector '%u' is outside the STC32 Source Mode range 0..48", 0},
+  {E_MCS251_REGISTER_BANK_RANGE, ERROR_LEVEL_ERROR,
+     "'__using' register bank '%u' is outside the STC32 Source Mode range 0..3", 0},
+  {E_MCS251_NAKED_BODY, ERROR_LEVEL_ERROR,
+     "'__naked' function '%s' may only contain inline assembly", 0},
 };
 
 /* -------------------------------------------------------------------------------

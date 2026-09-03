@@ -392,6 +392,9 @@ enum {
   E_BUILTIN_EXPECT_INTEGRAL     = 362, // __builtin_expect arguments must be integral
   E_AUTO_TYPE_DECLARATION       = 363, // invalid __auto_type declaration
   E_BUILTIN_OVERFLOW_TYPES      = 364, // invalid generic overflow builtin arguments
+  E_MCS251_INTERRUPT_RANGE      = 365, // __interrupt vector outside the STC32 Source Mode range
+  E_MCS251_REGISTER_BANK_RANGE  = 366, // __using register bank outside the STC32 Source Mode range
+  E_MCS251_NAKED_BODY           = 367, // __naked body contains non-assembly statements
 
   // If you get a merge conflict here, some #pragma disable_warning in support/valdiag and support/regression will likely need to be adapted to the resolution. Check there!
 

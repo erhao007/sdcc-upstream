@@ -8390,6 +8390,40 @@ createFunctionDecl (symbol *name)
 /*                  is generated function by function, later when  */
 /*                  add inter-procedural analysis this will change */
 /*-----------------------------------------------------------------*/
+static bool
+mcs251NakedBodyContainsC (const ast *tree)
+{
+  if (!tree)
+    return false;
+
+  if (tree->type != EX_OP)
+    return true;
+
+  switch (tree->opval.op)
+    {
+    case INLINEASM:
+      return false;
+
+    case BLOCK:
+      /* Function parameters are recorded on the outer body block with the
+         function's parameter scope.  They are valid inputs to inline asm;
+         declarations introduced by the naked body itself use its block. */
+      for (symbol *decl = tree->values.sym; decl; decl = decl->next)
+        if (decl->block == tree->block)
+          return true;
+      return mcs251NakedBodyContainsC (tree->right);
+
+    case NULLOP:
+      return mcs251NakedBodyContainsC (tree->left) ||
+             mcs251NakedBodyContainsC (tree->right);
+
+    default:
+      /* Assignment, calls, control flow, labels and all other AST
+         operations are ordinary C semantics and cannot be discarded. */
+      return true;
+    }
+}
+
 ast *
 createFunction (symbol * name, ast * body)
 {
@@ -8409,6 +8443,13 @@ createFunction (symbol * name, ast * body)
     {
       body = newNode (BLOCK, NULL, NULL);
       body->block = ++blockNo;
+    }
+
+  if (TARGET_IS_MCS251 && FUNC_ISNAKED (name->type) &&
+      mcs251NakedBodyContainsC (body))
+    {
+      werrorfl (name->fileDef, name->lineDef, E_MCS251_NAKED_BODY, name->name);
+      return NULL;
     }
 
   noLineno++;

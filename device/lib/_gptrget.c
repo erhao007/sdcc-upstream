@@ -52,7 +52,9 @@ _gptrget (char *gptr) __naked
 /* This is the banked version with pointers up to 23 bits.
    B cannot be trashed */
 
+#if !defined(__SDCC_mcs251)
     gptr; /* hush the compiler */
+#endif
 
     __asm
     ;
@@ -117,7 +119,9 @@ _gptrget (char *gptr) __naked
 /* This is the non-banked version with pointers up to 15 bits.
    Assumes B is free to be used */
 
+#if !defined(__SDCC_mcs251)
     gptr; /* hush the compiler */
+#endif
 
     __asm
     ;
@@ -175,7 +179,9 @@ _gptrget (char *gptr) __naked
 /* This is the new version with pointers up to 16 bits.
    B cannot be trashed */
 
+#if !defined(__SDCC_mcs251)
     gptr; /* hush the compiler */
+#endif
 
     __asm
 #ifdef __SDCC_mcs251

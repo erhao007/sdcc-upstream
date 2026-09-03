@@ -1,6 +1,6 @@
 {
   "schema": "stc32.migration-tests.v1",
-  "roadmap_id": "MT-4A",
+  "roadmap_id": "MT-4B",
   "target": "mcs251",
   "provenance": "doc/mcs251/official-example-plan.md",
   "diagnostic_matching": "nonzero exit plus token; ignore path, line, column, and full message text",
@@ -29,6 +29,13 @@
       "id": "native-interrupt-using",
       "kind": "positive",
       "source": "cases/positive/native_interrupt_using.c",
+      "models": ["small", "large", "stack-auto"],
+      "assembly_regex": "(?im)\\breti\\b"
+    },
+    {
+      "id": "native-attribute-boundaries",
+      "kind": "positive",
+      "source": "cases/positive/native_attribute_boundaries.c",
       "models": ["small", "large", "stack-auto"],
       "assembly_regex": "(?im)\\breti\\b"
     },
@@ -182,28 +189,60 @@
       "diagnostic_token": "naked"
     },
     {
-      "id": "gap-invalid-interrupt-vector",
-      "kind": "diagnostic-gap",
+      "id": "diagnostic-invalid-interrupt-vector",
+      "kind": "diagnostic",
       "source": "cases/gap/invalid_interrupt_vector.c",
       "models": ["small", "large", "stack-auto"],
-      "expected_compile": true,
-      "status": "DIAGNOSTIC_GAP"
+      "diagnostic_token": "__interrupt",
+      "status": "STABLE_DIAGNOSTIC"
     },
     {
-      "id": "gap-invalid-using-bank",
-      "kind": "diagnostic-gap",
+      "id": "diagnostic-invalid-interrupt-vector-wide-positive",
+      "kind": "diagnostic",
+      "source": "cases/gap/invalid_interrupt_vector_wide_positive.c",
+      "models": ["small", "large", "stack-auto"],
+      "diagnostic_token": "__interrupt",
+      "status": "STABLE_DIAGNOSTIC"
+    },
+    {
+      "id": "diagnostic-invalid-interrupt-vector-wide-negative",
+      "kind": "diagnostic",
+      "source": "cases/gap/invalid_interrupt_vector_wide_negative.c",
+      "models": ["small", "large", "stack-auto"],
+      "diagnostic_token": "__interrupt",
+      "status": "STABLE_DIAGNOSTIC"
+    },
+    {
+      "id": "diagnostic-invalid-using-bank",
+      "kind": "diagnostic",
       "source": "cases/gap/invalid_using_bank.c",
       "models": ["small", "large", "stack-auto"],
-      "expected_compile": true,
-      "status": "DIAGNOSTIC_GAP"
+      "diagnostic_token": "__using",
+      "status": "STABLE_DIAGNOSTIC"
     },
     {
-      "id": "gap-naked-c-body",
-      "kind": "diagnostic-gap",
+      "id": "diagnostic-invalid-using-bank-wide-positive",
+      "kind": "diagnostic",
+      "source": "cases/gap/invalid_using_bank_wide_positive.c",
+      "models": ["small", "large", "stack-auto"],
+      "diagnostic_token": "__using",
+      "status": "STABLE_DIAGNOSTIC"
+    },
+    {
+      "id": "diagnostic-invalid-using-bank-wide-negative",
+      "kind": "diagnostic",
+      "source": "cases/gap/invalid_using_bank_wide_negative.c",
+      "models": ["small", "large", "stack-auto"],
+      "diagnostic_token": "__using",
+      "status": "STABLE_DIAGNOSTIC"
+    },
+    {
+      "id": "diagnostic-naked-c-body",
+      "kind": "diagnostic",
       "source": "cases/gap/naked_c_body.c",
       "models": ["small", "large", "stack-auto"],
-      "expected_compile": true,
-      "status": "DIAGNOSTIC_GAP"
+      "diagnostic_token": "__naked",
+      "status": "STABLE_DIAGNOSTIC"
     }
   ]
 }

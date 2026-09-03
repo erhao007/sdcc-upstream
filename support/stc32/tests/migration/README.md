@@ -1,7 +1,7 @@
-# MT-4A migration tests
+# MT-4A/MT-4B migration tests
 
-这是 MT-4A 的最小迁移测试包。它只验证公开源码层的 SDCC 双下划线写法、
-裸拼写的机械替换路径和当前已知诊断缺口；不提供公共 compatibility header，
+这是 MT-4A/MT-4B 的最小迁移测试包。它只验证公开源码层的 SDCC 双下划线写法、
+裸拼写的机械替换路径和 fail-closed 诊断；不提供公共 compatibility header，
 也不导入 Keil/STC 的源文件或二进制。
 
 从仓库根目录使用当前安装树运行：
@@ -28,8 +28,8 @@ runner 默认执行 `small`、`large`、`stack-auto` 三个模型。它会：
   经 provenance 记录的最小源代码形态，不包含厂商头、外设实现或二进制；
 - 对该项目原始的无括号属性后缀执行语法归一化测试：旧后缀要求非零退出和稳定
   token，规范括号后缀要求三个模型编译成功；这不是编译器前端修复；
-- 编译三个 `DIAGNOSTIC_GAP` 样例，并明确记录它们当前仍被接受，不能视为
-  支持。正式拒绝应由 MT-4B 更新测试契约。
+- 编译三个 MT-4B 负例，要求非零退出码和分别对应 `__interrupt`、`__using`、
+  `__naked` 的稳定诊断 token；它们不能静默生成目标文件。
 
 没有 uCsim 时可以传 `--skip-behavior` 做词法/编译诊断开发，但该结果只能标记
 为 SKIP，不能作为 MT-4A 关闭证据。完整来源和 clean-room 规则见
@@ -40,4 +40,5 @@ runner 默认执行 `small`、`large`、`stack-auto` 三个模型。它会：
 GitHub、厂商 SDK 或 Keil 工程。`cases/project/stc_diyclock/` 是基于固定
 `zerog2k/stc_diyclock` `src/main.c` 的最小派生样例，许可证和排除范围见其
 `PROVENANCE.md`，用户确认见 `AUTHORIZATION.md`。该确认闭合 MT-4A 的真实样本
-来源输入，但不能把测试通过解释为项目主审关闭、法律审查通过或 MT-4B 授权。
+来源输入，但不能把测试通过解释为项目主审关闭或法律审查通过；MT-4B 是否已授权以
+项目控制面单独签发的 `CONTINUE MT-4B` 令牌为准。
