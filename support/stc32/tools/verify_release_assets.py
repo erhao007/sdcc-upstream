@@ -32,6 +32,10 @@ METADATA_PATHS = {
     PurePosixPath("share/openstc32/toolchain.json"),
     PurePosixPath("share/openstc32/toolchain-artifacts.json"),
 }
+VALIDATION_SCHEMA = "openstc32.package-validation.v1"
+MT5D_EXAMPLE = (
+    Path(__file__).resolve().parents[1] / "tests/package/mt5d_smoke.c"
+)
 
 
 def digest_bytes(data: bytes) -> str:
@@ -303,12 +307,125 @@ def verify_platform(asset_dir: Path, tag: str, commit: str, platform: str) -> No
     print(f"verified release assets: {platform} files={len(members)}")
 
 
+def verify_validation(asset_dir: Path, tag: str, commit: str, platform: str) -> None:
+    stem = f"openstc32-toolchain-{tag}-{platform}"
+    validation_path = asset_dir / f"{stem}.validation.json"
+    validation = load_object(validation_path)
+    release = load_object(asset_dir / f"{stem}.release.json")
+    toolchain = load_object(asset_dir / f"{stem}.toolchain.json")
+    package_name = release["package"]
+    expected = {
+        "schema": VALIDATION_SCHEMA,
+        "roadmap_id": "MT-5D",
+        "platform": platform,
+        "package": package_name,
+        "package_sha256": release["package_sha256"],
+        "source_commit": commit,
+        "source_state_sha256": release["source_state_sha256"],
+    }
+    for key, value in expected.items():
+        if validation.get(key) != value:
+            raise SystemExit(f"package validation mismatch for {platform}/{key}")
+
+    host_os, host_arch, _ = PLATFORMS[platform]
+    host = validation.get("host")
+    if (
+        not isinstance(host, dict)
+        or host.get("system") != host_os
+        or str(host.get("machine", "")).lower() != host_arch.lower()
+        or any(not isinstance(host.get(key), str) or not host[key].strip()
+               for key in ("release", "version", "platform"))
+    ):
+        raise SystemExit(f"package validation host mismatch: {platform}")
+
+    native = validation.get("native_compiler")
+    installed = validation.get("installed_compiler")
+    compiler_record = toolchain["tools"]["compiler"]
+    if (
+        not isinstance(native, dict)
+        or native.get("returncode") != 0
+        or not isinstance(native.get("version"), str)
+        or not native["version"].strip()
+    ):
+        raise SystemExit(f"invalid native compiler evidence: {platform}")
+    if (
+        not isinstance(installed, dict)
+        or installed.get("returncode") != 0
+        or installed.get("version") != toolchain.get("sdcc_version")
+        or installed.get("sha256") != compiler_record.get("sha256")
+    ):
+        raise SystemExit(f"invalid installed compiler evidence: {platform}")
+
+    commands = validation.get("commands")
+    expected_names = [
+        "installed-compiler-version",
+        "native-compiler-version",
+        "compile-clean-room-example",
+    ]
+    if (
+        not isinstance(commands, list)
+        or not all(isinstance(entry, dict) for entry in commands)
+        or [entry.get("name") for entry in commands] != expected_names
+    ):
+        raise SystemExit(f"invalid package command evidence: {platform}")
+    for entry in commands:
+        argv = entry.get("argv")
+        if entry.get("returncode") != 0 or not isinstance(argv, list) or not argv:
+            raise SystemExit(f"failed package command evidence: {platform}")
+        for value in argv:
+            if not isinstance(value, str) or not value:
+                raise SystemExit(f"invalid package command argument: {platform}")
+            windows = PureWindowsPath(value)
+            if value.startswith("/") or windows.is_absolute() or windows.drive:
+                raise SystemExit(f"absolute path in package command evidence: {platform}")
+    if native.get("command") != commands[1]["argv"]:
+        raise SystemExit(f"native compiler command evidence mismatch: {platform}")
+    if installed.get("command") != commands[0]["argv"]:
+        raise SystemExit(f"installed compiler command evidence mismatch: {platform}")
+
+    packaged_compiler = f"<unpacked-prefix>/{compiler_record['path']}"
+    expected_installed_command = [packaged_compiler, "--version"]
+    expected_compile_command = [
+        packaged_compiler,
+        "-mstc32",
+        "--model-small",
+        "--code-loc",
+        "0xFF0000",
+        "<work-dir>/mt5d_smoke.c",
+        "-o",
+        "<work-dir>/mt5d_smoke.ihx",
+    ]
+    if commands[0]["argv"] != expected_installed_command:
+        raise SystemExit(f"unexpected installed compiler command: {platform}")
+    if (
+        commands[1]["argv"][-1:] != ["--version"]
+        or not commands[1]["argv"][0].startswith("<native-compiler>/")
+    ):
+        raise SystemExit(f"unexpected native compiler command: {platform}")
+    if commands[2]["argv"] != expected_compile_command:
+        raise SystemExit(f"unexpected clean-room compile command: {platform}")
+
+    example = validation.get("example")
+    example_sha256 = digest(MT5D_EXAMPLE)
+    if (
+        not isinstance(example, dict)
+        or example.get("source") != "support/stc32/tests/package/mt5d_smoke.c"
+        or example.get("source_sha256") != example_sha256
+        or not re.fullmatch(r"[0-9a-f]{64}", str(example.get("output_sha256", "")))
+        or example.get("output") != "<work-dir>/mt5d_smoke.ihx"
+        or example.get("code_start") != 0xFF0000
+    ):
+        raise SystemExit(f"invalid package example evidence: {platform}")
+    print(f"verified unpacked-package evidence: {platform}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("asset_dir", type=Path)
     parser.add_argument("--tag", required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--platform", action="append", choices=sorted(PLATFORMS), required=True)
+    parser.add_argument("--require-validation", action="store_true")
     args = parser.parse_args()
     if not TOKEN.fullmatch(args.tag):
         raise SystemExit(f"unsafe release tag: {args.tag!r}")
@@ -319,6 +436,9 @@ def main() -> None:
         raise SystemExit("duplicate platform request")
     for platform in requested:
         verify_platform(args.asset_dir.resolve(), args.tag, args.source_commit, platform)
+        if args.require_validation:
+            verify_validation(
+                args.asset_dir.resolve(), args.tag, args.source_commit, platform)
     expected_assets: set[str] = set()
     for platform in requested:
         stem = f"openstc32-toolchain-{args.tag}-{platform}"
@@ -332,6 +452,8 @@ def main() -> None:
                 f"{stem}.release.json",
             }
         )
+        if args.require_validation:
+            expected_assets.add(f"{stem}.validation.json")
     asset_dir = args.asset_dir.resolve()
     actual_assets = {path.name for path in asset_dir.iterdir() if path.is_file()}
     if actual_assets != expected_assets:

@@ -98,6 +98,16 @@ jobs:
           python3 support/stc32/tools/verify_release_assets.py \
             "$DIST_DIR" --tag "$GITHUB_REF_NAME" \
             --source-commit "$GITHUB_SHA" --platform "${{ matrix.platform }}"
+          python3 support/stc32/tools/validate_package_install.py \
+            "$DIST_DIR" --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA" --platform "${{ matrix.platform }}" \
+            --native-compiler cc --forbid-path "$GITHUB_WORKSPACE" \
+            --forbid-path "$RUNNER_TEMP" --forbid-path "$BUILD_DIR" \
+            --forbid-path "$PREFIX"
+          python3 support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA" --platform "${{ matrix.platform }}" \
+            --require-validation
       - name: Upload validated workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -163,12 +173,25 @@ jobs:
       - name: Package and verify release assets
         shell: msys2 {0}
         run: |
+          source_windows="$(cygpath -w "$GITHUB_WORKSPACE")"
+          build_windows="$(cygpath -w "$BUILD_DIR")"
           python support/stc32/tools/package_install.py \
             "$PREFIX" "$DIST_DIR" \
             --tag "$GITHUB_REF_NAME" --platform windows-x86_64
           python support/stc32/tools/verify_release_assets.py \
             "$DIST_DIR" --tag "$GITHUB_REF_NAME" \
             --source-commit "$GITHUB_SHA" --platform windows-x86_64
+          python support/stc32/tools/validate_package_install.py \
+            "$DIST_DIR" --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA" --platform windows-x86_64 \
+            --native-compiler gcc --forbid-path "$GITHUB_WORKSPACE" \
+            --forbid-path "$BUILD_DIR" --forbid-path "$PREFIX" \
+            --forbid-path "$RUNNER_TEMP" --forbid-path "$source_windows" \
+            --forbid-path "$build_windows"
+          python support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA" --platform windows-x86_64 \
+            --require-validation
       - name: Upload validated workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -200,7 +223,7 @@ jobs:
             dist --tag "$GITHUB_REF_NAME" --source-commit "$GITHUB_SHA" \
             --platform linux-x86_64 \
             --platform macos-arm64 \
-            --platform windows-x86_64
+            --platform windows-x86_64 --require-validation
       - name: Publish one complete GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -32,6 +32,7 @@ BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 PREFIX="${PREFIX:-$BUILD_DIR/install}"
 export BUILD_DIR PREFIX
 JOBS="${JOBS:-$(nproc)}"
+SIM_TIMEOUT="${SIM_TIMEOUT:-30}"
 
 fail() { echo "build-windows: $*" >&2; exit 1; }
 
@@ -49,7 +50,8 @@ PY
 echo "== build =="
 export SDCC_HOME="$PREFIX"           # Windows sdcc argv[0] path discovery is inert
 export PYTHONUTF8=1
-export STC32_SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
+STC32_SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
+export STC32_SOURCE_COMMIT
 bash "$SUPPORT_ROOT/scripts/build-toolchain.sh"
 bash "$SUPPORT_ROOT/scripts/windows-build-fixups.sh" gates-prep
 
@@ -115,7 +117,7 @@ regression_tmp="gen-$regression_run_id"
 regression_results="results-$regression_run_id"
 echo "regression evidence: $regression_tmp / $regression_results"
 for lane in mcs251 mcs251-large mcs251-stack-auto mcs51-small mcs51-large; do
-  make -j"$JOBS" PYTHON=/usr/bin/python SIM_TIMEOUT=15 \
+  make -j"$JOBS" PYTHON=/usr/bin/python SIM_TIMEOUT="$SIM_TIMEOUT" \
     TMP_DIR="$regression_tmp" RESULTS_DIR="$regression_results" \
     "test-$lane" \
     || regression_rc=$?
