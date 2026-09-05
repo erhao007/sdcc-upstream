@@ -31,8 +31,23 @@ if [[ "$(uname -s)" == MINGW* ]]; then
   path_map_flags+=" -ffile-prefix-map=$root_native=."
   path_map_flags+=" -ffile-prefix-map=$build_native=.build"
 fi
-configure_cflags="${CFLAGS-} $path_map_flags"
-configure_cxxflags="${CXXFLAGS-} $path_map_flags"
+# An explicitly supplied CFLAGS/CXXFLAGS value tells Autoconf that the caller
+# supplied the complete host flags and suppresses its normal GCC defaults
+# (-g -O2). Keep those defaults when the caller did not provide an override;
+# otherwise the SDCC host binary is built unoptimized and the target-library
+# rebuild becomes several times slower on CI.
+if [[ "${CFLAGS+x}" == x ]]; then
+  host_cflags="$CFLAGS"
+else
+  host_cflags="-g -O2"
+fi
+if [[ "${CXXFLAGS+x}" == x ]]; then
+  host_cxxflags="$CXXFLAGS"
+else
+  host_cxxflags="-g -O2"
+fi
+configure_cflags="${host_cflags:+$host_cflags }$path_map_flags"
+configure_cxxflags="${host_cxxflags:+$host_cxxflags }$path_map_flags"
 configure_key="$(printf '%s\n%s\n%s\n%s\n%s\n' \
   "$PREFIX" "$CONFIGURE_PREFIX" "$CONFIGURE_POLICY" \
   "$configure_cflags" "$configure_cxxflags")"
@@ -172,7 +187,10 @@ if [[ "$(uname -s)" == MINGW* ]]; then
   library_jobs=1
 fi
 make -B -C "$BUILD_DIR/device/lib" -j"$library_jobs" model-mcs251
-rm -rf "$INSTALL_STAGE"
+# Bypass a caller-provided rm function/alias.  Some developer shells define
+# rm as a wrapper that mishandles option-first invocations; the release driver
+# must always execute the platform utility directly.
+command rm -rf "$INSTALL_STAGE"
 make -C "$BUILD_DIR" install DESTDIR="$INSTALL_STAGE"
 make -C "$BUILD_DIR/device/lib" -j"$JOBS" install DESTDIR="$INSTALL_STAGE"
 
@@ -192,7 +210,7 @@ if [[ -e "$PREFIX" ]]; then
 fi
 mkdir -p "$(dirname "$PREFIX")"
 mv "$staged_prefix" "$PREFIX"
-rm -rf "$INSTALL_STAGE"
+command rm -rf "$INSTALL_STAGE"
 
 if [[ "$(uname -s)" == MINGW* ]]; then
   bash "$SUPPORT_ROOT/scripts/windows-build-fixups.sh" post-install
