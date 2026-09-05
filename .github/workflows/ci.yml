@@ -56,6 +56,14 @@ jobs:
           python3 support/stc32/tools/verify_release_assets.py \
             "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
             --platform linux-x86_64
+          python3 support/stc32/tools/validate_package_install.py \
+            "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
+            --platform linux-x86_64 --native-compiler cc \
+            --forbid-path "$GITHUB_WORKSPACE" --forbid-path "$RUNNER_TEMP" \
+            --forbid-path "$BUILD_DIR" --forbid-path "$PREFIX"
+          python3 support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
+            --platform linux-x86_64 --require-validation
       - name: Upload regression diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

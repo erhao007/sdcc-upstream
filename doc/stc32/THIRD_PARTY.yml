@@ -24,3 +24,11 @@ components:
     modified: yes
     redistribution_decision: only the recorded de-businessized derivative; exclude adc/vendor/submodule/binary material
     reviewer: user-confirmed MT-4A sample scope; qualified legal review remains separate
+  - name: MSYS2 UCRT64 runtime DLL closure for Windows packages
+    source_url: https://packages.msys2.org/
+    version_or_commit: resolved per build in share/openstc32/windows-runtime-components.tsv
+    license: GCC runtime exception/GPL notices, LGPL, MIT, zlib, and BSD notices copied from the owning MSYS2 packages
+    local_paths: Windows package bin/*.dll and share/openstc32/licenses/msys2-ucrt64
+    modified: no
+    redistribution_decision: include only DLLs imported by packaged PE tools and their transitive UCRT64 runtime dependencies; retain owning-package license texts; tagged release remains blocked on qualified legal review
+    reviewer: pending qualified legal review

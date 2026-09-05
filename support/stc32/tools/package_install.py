@@ -9,6 +9,7 @@ import hashlib
 import json
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -55,6 +56,21 @@ def installed_files(prefix: Path) -> list[Path]:
     return sorted(files, key=lambda path: path.relative_to(prefix).as_posix())
 
 
+def archive_mode(path: Path, prefix: Path) -> int:
+    """Return deterministic portable permissions for an installed file."""
+    relative = path.relative_to(prefix)
+    executable = bool(path.stat().st_mode & stat.S_IXUSR)
+    if (
+        relative.parts
+        and relative.parts[0] == "bin"
+        and relative.suffix.lower() not in {".dll", ".el"}
+    ):
+        # Windows does not persist POSIX execute bits reliably.  Every host
+        # tool in bin/ is executable; DLLs and Emacs support files are data.
+        executable = True
+    return 0o755 if executable else 0o644
+
+
 def write_tar_gz(prefix: Path, output: Path, epoch: int) -> None:
     with output.open("wb") as raw:
         with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=epoch) as compressed:
@@ -66,7 +82,7 @@ def write_tar_gz(prefix: Path, output: Path, epoch: int) -> None:
                     # so expand every entry instead of emitting TAR links.
                     info = tarfile.TarInfo(relative)
                     info.size = path.stat().st_size
-                    info.mode = path.stat().st_mode & 0o777
+                    info.mode = archive_mode(path, prefix)
                     info.type = tarfile.REGTYPE
                     info.uid = 0
                     info.gid = 0
@@ -93,7 +109,7 @@ def write_zip(prefix: Path, output: Path, epoch: int) -> None:
             info = zipfile.ZipInfo(relative, date_time=date_time)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.create_system = 3
-            info.external_attr = (path.stat().st_mode & 0xFFFF) << 16
+            info.external_attr = (stat.S_IFREG | archive_mode(path, prefix)) << 16
             archive.writestr(info, path.read_bytes(), compresslevel=9)
 
 

@@ -58,6 +58,14 @@ jobs:
           python3 support/stc32/tools/verify_release_assets.py \
             "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
             --platform macos-arm64
+          python3 support/stc32/tools/validate_package_install.py \
+            "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
+            --platform macos-arm64 --native-compiler cc \
+            --forbid-path "$GITHUB_WORKSPACE" --forbid-path "$RUNNER_TEMP" \
+            --forbid-path "$BUILD_DIR" --forbid-path "$PREFIX"
+          python3 support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
+            --platform macos-arm64 --require-validation
 
   windows-x86_64:
     runs-on: windows-2025
@@ -117,11 +125,22 @@ jobs:
         shell: msys2 {0}
         run: |
           tag="ci-${GITHUB_SHA}"
+          source_windows="$(cygpath -w "$GITHUB_WORKSPACE")"
+          build_windows="$(cygpath -w "$BUILD_DIR")"
           python support/stc32/tools/package_install.py \
             "$PREFIX" "$DIST_DIR" --tag "$tag" --platform windows-x86_64
           python support/stc32/tools/verify_release_assets.py \
             "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
             --platform windows-x86_64
+          python support/stc32/tools/validate_package_install.py \
+            "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
+            --platform windows-x86_64 --native-compiler gcc \
+            --forbid-path "$GITHUB_WORKSPACE" --forbid-path "$BUILD_DIR" \
+            --forbid-path "$PREFIX" --forbid-path "$RUNNER_TEMP" \
+            --forbid-path "$source_windows" --forbid-path "$build_windows"
+          python support/stc32/tools/verify_release_assets.py \
+            "$DIST_DIR" --tag "$tag" --source-commit "$GITHUB_SHA" \
+            --platform windows-x86_64 --require-validation
 
   platform-builds:
     if: always()
