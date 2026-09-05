@@ -26,6 +26,7 @@ sys.path.insert(0, str(TOOLS))
 
 import package_install  # noqa: E402
 import install_identity  # noqa: E402
+import validate_package_install  # noqa: E402
 import verify_install  # noqa: E402
 import verify_release_assets  # noqa: E402
 
@@ -200,13 +201,13 @@ class ReleaseToolTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def _run_packager(self) -> subprocess.CompletedProcess[str]:
+    def _run_packager(self, output: Path | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 sys.executable,
                 str(TOOLS / "package_install.py"),
                 str(self.prefix),
-                str(self.output),
+                str(output or self.output),
                 "--tag",
                 "test-release",
                 "--platform",
@@ -219,9 +220,9 @@ class ReleaseToolTests(unittest.TestCase):
             capture_output=True,
         )
 
-    def _run_verifier(self, commit: str | None = None) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [
+    def _run_verifier(self, commit: str | None = None,
+                      require_validation: bool = False) -> subprocess.CompletedProcess[str]:
+        command = [
                 sys.executable,
                 str(TOOLS / "verify_release_assets.py"),
                 str(self.output),
@@ -231,11 +232,80 @@ class ReleaseToolTests(unittest.TestCase):
                 commit or self.head,
                 "--platform",
                 self.platform,
-            ],
+            ]
+        if require_validation:
+            command.append("--require-validation")
+        return subprocess.run(
+            command,
             check=False,
             text=True,
             capture_output=True,
         )
+
+    def _write_validation(self) -> Path:
+        stem = f"openstc32-toolchain-test-release-{self.platform}"
+        release = json.loads((self.output / f"{stem}.release.json").read_text())
+        toolchain = json.loads((self.output / f"{stem}.toolchain.json").read_text())
+        validation = {
+            "schema": validate_package_install.SCHEMA,
+            "roadmap_id": "MT-5D",
+            "validated_at_utc": "2026-01-01T00:00:00+00:00",
+            "platform": self.platform,
+            "package": release["package"],
+            "package_sha256": release["package_sha256"],
+            "source_commit": self.head,
+            "source_state_sha256": release["source_state_sha256"],
+            "host": {
+                "system": self.host_os,
+                "machine": self.host_arch,
+                "release": "synthetic-release",
+                "version": "synthetic-version",
+                "platform": "synthetic-platform",
+            },
+            "native_compiler": {
+                "command": ["<native-compiler>/cc", "--version"],
+                "returncode": 0,
+                "version": "synthetic native compiler",
+            },
+            "installed_compiler": {
+                "command": ["<unpacked-prefix>/bin/sdcc", "--version"],
+                "returncode": 0,
+                "version": toolchain["sdcc_version"],
+                "sha256": toolchain["tools"]["compiler"]["sha256"],
+            },
+            "commands": [
+                {
+                    "name": "installed-compiler-version",
+                    "argv": ["<unpacked-prefix>/bin/sdcc", "--version"],
+                    "returncode": 0,
+                },
+                {
+                    "name": "native-compiler-version",
+                    "argv": ["<native-compiler>/cc", "--version"],
+                    "returncode": 0,
+                },
+                {
+                    "name": "compile-clean-room-example",
+                    "argv": [
+                        "<unpacked-prefix>/bin/sdcc", "-mstc32", "--model-small",
+                        "--code-loc", "0xFF0000", "<work-dir>/mt5d_smoke.c",
+                        "-o", "<work-dir>/mt5d_smoke.ihx",
+                    ],
+                    "returncode": 0,
+                },
+            ],
+            "example": {
+                "source": "support/stc32/tests/package/mt5d_smoke.c",
+                "source_sha256": sha256_bytes(
+                    validate_package_install.EXAMPLE.read_bytes()),
+                "output": "<work-dir>/mt5d_smoke.ihx",
+                "output_sha256": "2" * 64,
+                "code_start": 0xFF0000,
+            },
+        }
+        path = self.output / f"{stem}.validation.json"
+        path.write_text(json.dumps(validation), encoding="utf-8")
+        return path
 
     def test_valid_package_and_asset_boundary_failures(self) -> None:
         verified = verify_install.verify(
@@ -284,6 +354,74 @@ class ReleaseToolTests(unittest.TestCase):
         result = self._run_verifier()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("missing release asset", result.stderr)
+
+    def test_package_is_deterministic_and_rejects_build_paths(self) -> None:
+        self._run_packager()
+        second = self.root / "dist-second"
+        self._run_packager(second)
+        first_package = next(self.output.glob("*.tar.gz"), None) or next(
+            self.output.glob("*.zip"))
+        second_package = second / first_package.name
+        self.assertEqual(first_package.read_bytes(), second_package.read_bytes())
+
+        members = verify_release_assets.read_archive(first_package)
+        executables = validate_package_install.executable_members(first_package)
+        self.assertIn(PurePosixPath("bin/sdcc"), executables)
+        validate_package_install.verify_package_hygiene(members, [str(self.source)])
+        polluted = dict(members)
+        polluted[PurePosixPath("bin/polluted")] = str(self.source).encode()
+        with self.assertRaisesRegex(SystemExit, "absolute build path"):
+            validate_package_install.verify_package_hygiene(
+                polluted, [str(self.source)])
+        polluted = dict(members)
+        polluted[PurePosixPath("share/openstc32/build.log")] = b"log"
+        with self.assertRaisesRegex(SystemExit, "temporary file"):
+            validate_package_install.verify_package_hygiene(polluted, [])
+        polluted = dict(members)
+        polluted[PurePosixPath("lib/stale.la")] = b"libdir='/tmp/stale'"
+        with self.assertRaisesRegex(SystemExit, "build metadata"):
+            validate_package_install.verify_package_hygiene(polluted, [])
+
+    def test_validation_sidecar_is_required_and_bound(self) -> None:
+        self._run_packager()
+        missing = self._run_verifier(require_validation=True)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("cannot read JSON", missing.stderr)
+
+        validation_path = self._write_validation()
+        valid = self._run_verifier(require_validation=True)
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+
+        validation = json.loads(validation_path.read_text())
+        validation["commands"][2]["returncode"] = 1
+        validation_path.write_text(json.dumps(validation), encoding="utf-8")
+        failed = self._run_verifier(require_validation=True)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("failed package command evidence", failed.stderr)
+
+        validation["commands"][2]["returncode"] = 0
+        validation["commands"][2]["argv"][0] = "/tmp/stale/sdcc"
+        validation_path.write_text(json.dumps(validation), encoding="utf-8")
+        failed = self._run_verifier(require_validation=True)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("absolute path in package command evidence", failed.stderr)
+
+        validation = json.loads(validation_path.read_text())
+        validation["commands"][2]["argv"][0] = (
+            validation["commands"][0]["argv"][0])
+        validation["commands"][2]["argv"][1] = "-mmcs51"
+        validation_path.write_text(json.dumps(validation), encoding="utf-8")
+        failed = self._run_verifier(require_validation=True)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("unexpected clean-room compile command", failed.stderr)
+
+    def test_package_smoke_ihex_parser_is_fail_closed(self) -> None:
+        path = self.root / "sample.ihx"
+        path.write_text(":0200000400FFFB\n:010000005AA5\n:00000001FF\n")
+        self.assertEqual(validate_package_install.parse_ihex_start(path), 0xFF0000)
+        path.write_text(":0200000400FFFB\n:010000005AA4\n:00000001FF\n")
+        with self.assertRaisesRegex(SystemExit, "invalid IHX record"):
+            validate_package_install.parse_ihex_start(path)
 
     def test_generator_writes_v2_complete_identity(self) -> None:
         metadata = self.prefix / "share" / "openstc32"
@@ -450,6 +588,94 @@ class ReleaseToolTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 360", windows_job)
         self.assertNotIn("gh release upload", workflow)
         self.assertIn("refusing to mutate existing release", workflow)
+        self.assertIn("validate_package_install.py", workflow)
+        self.assertIn("--require-validation", workflow)
+        for name in ("ci.yml", "platforms.yml"):
+            branch_workflow = (REPOSITORY / ".github/workflows" / name).read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("validate_package_install.py", branch_workflow)
+            self.assertIn("--require-validation", branch_workflow)
+            self.assertIn('--forbid-path "$PREFIX"', branch_workflow)
+            self.assertIn('--forbid-path "$RUNNER_TEMP"', branch_workflow)
+
+        build_script = (
+            REPOSITORY / "support/stc32/scripts/build-toolchain.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('CONFIGURE_PREFIX="/opt/openstc32"', build_script)
+        self.assertIn('CONFIGURE_POLICY="relocatable-v2-disable-nls-zstd"',
+                      build_script)
+        self.assertIn('--prefix="$CONFIGURE_PREFIX"', build_script)
+        self.assertIn('--disable-nls', build_script)
+        self.assertIn('--without-zstd', build_script)
+        self.assertIn('install DESTDIR="$INSTALL_STAGE"', build_script)
+        self.assertIn('cpp_configargs="$BUILD_DIR/support/cpp/gcc/configargs.h"',
+                      build_script)
+        self.assertIn('if [[ "${CFLAGS+x}" == x ]]; then', build_script)
+        self.assertIn('host_cflags="-g -O2"', build_script)
+        self.assertIn('host_cxxflags="-g -O2"', build_script)
+        self.assertIn('command rm -rf "$INSTALL_STAGE"', build_script)
+        self.assertIn('unset COMPILER_PATH', build_script)
+        self.assertIn('export COMPILER_PATH="$saved_compiler_path"',
+                      build_script)
+        self.assertIn("-name '*.la' -delete", build_script)
+        self.assertIn('shutil.which("strip")', build_script)
+        self.assertIn('options = ["-S"] if platform.system() == "Darwin"',
+                      build_script)
+        self.assertIn('b"!<ar"', build_script)
+        self.assertIn('suffix == ".a"', build_script)
+        self.assertIn('suffix in {".exe", ".dll"}', build_script)
+        self.assertIn('subprocess.run([strip, *options, str(path)], check=True)',
+                      build_script)
+        self.assertIn("refusing to replace non-empty install prefix", build_script)
+
+        windows_fixups = (
+            REPOSITORY / "support/stc32/scripts/windows-build-fixups.sh"
+        ).read_text(encoding="utf-8")
+        post_host_tools = windows_fixups.split("post-host-tools)", 1)[1].split(
+            "post-install)", 1
+        )[0]
+        self.assertIn('extensionless_copies "$BUILD_DIR/bin"',
+                      post_host_tools)
+        self.assertIn('copy_exact "$BUILD_DIR/bin/sdcc.exe" "$BUILD_DIR/bin/sdcc"',
+                      post_host_tools)
+        self.assertIn('copy_exact "$BUILD_DIR/bin/sdcpp.exe" "$BUILD_DIR/bin/sdcpp"',
+                      post_host_tools)
+        self.assertIn('[System.IO.File]::WriteAllBytes', windows_fixups)
+        self.assertNotIn('rm -f "$BUILD_DIR/bin/sdcc"', post_host_tools)
+        for runtime_dll in (
+            "zlib1.dll",
+            "libzstd.dll",
+            "libgcc_s_seh-1.dll",
+            "libstdc++-6.dll",
+            "libwinpthread-1.dll",
+            "libiconv-2.dll",
+        ):
+            self.assertIn(runtime_dll, windows_fixups)
+        self.assertIn('for binary in "$dir"/*.exe "$dir"/*.dll',
+                      windows_fixups)
+        self.assertIn("windows-runtime-components.tsv", windows_fixups)
+        self.assertIn('/ucrt64/share/licenses/$license_name', windows_fixups)
+        self.assertIn('cp -a "$license_source"/. "$license_target/"',
+                      windows_fixups)
+        self.assertIn("mingw-w64-ucrt-x86_64-gcc-libs", windows_fixups)
+        self.assertIn("mingw-w64-ucrt-x86_64-libwinpthread", windows_fixups)
+        self.assertIn("mingw-w64-ucrt-x86_64-libiconv", windows_fixups)
+        self.assertIn("mingw-w64-ucrt-x86_64-zlib", windows_fixups)
+
+        posix_gates = (
+            REPOSITORY / "support/stc32/scripts/run-posix-gates.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('export SDCC_HOME="$PREFIX"', posix_gates)
+        self.assertIn('SIM_TIMEOUT="${SIM_TIMEOUT:-30}"', posix_gates)
+
+        windows_build = (
+            REPOSITORY / "support/stc32/scripts/build-windows.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('SIM_TIMEOUT="${SIM_TIMEOUT:-30}"', windows_build)
+        self.assertIn('SIM_TIMEOUT="$SIM_TIMEOUT"', windows_build)
+        self.assertIn('library_jobs=1', build_script)
+        self.assertIn('-j"$library_jobs" model-mcs251', build_script)
 
 
 if __name__ == "__main__":

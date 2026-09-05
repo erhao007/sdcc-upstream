@@ -59,12 +59,30 @@ outputs are not part of the source snapshot.
 it to the current clean Git source state.  `tools/package_install.py` creates a
 deterministic platform package plus checksum and manifest sidecars, and
 `tools/verify_release_assets.py` reopens the archive and verifies every file
-before any workflow artifact or GitHub Release can be published.  Branch CI
-performs this package validation without uploading binaries; tagged publishing
-also requires the separate qualified-legal-review gate.  Schema v1, missing
-tool/runtime/header identities, dirty source identities, incompatible ABI or
-memory-model declarations, and any selected or complete-file hash drift are
-rejected rather than interpreted as legacy-compatible input.
+before any workflow artifact or GitHub Release can be published.
+`tools/validate_package_install.py` then extracts the package into a fresh
+directory, rejects temporary files and caller-supplied source/build paths, runs
+the packaged compiler without `SDCC_HOME` or `COMPILER_PATH`, and compiles the
+clean-room `tests/package/mt5d_smoke.c` example at `0xFF0000`.  Its MT-5D JSON
+sidecar records the host/native compiler, packaged SDCC version, normalized
+commands and exit codes, example hash, package SHA-256 and source identity;
+final asset validation requires that sidecar.  Branch CI performs this complete
+package validation without uploading binaries; tagged publishing also requires
+the separate qualified-legal-review gate.  Schema v1, missing tool/runtime/header
+identities, dirty source identities, incompatible ABI or memory-model
+declarations, failed unpacked commands, and any selected or complete-file hash
+drift are rejected rather than interpreted as legacy-compatible input.
+The build uses `/opt/openstc32` only as a stable logical configure prefix and
+uses `DESTDIR` to stage each platform tree before moving it to the requested
+empty `PREFIX`; transient runner paths are therefore neither the package layout
+nor an embedded installation identity.  A non-empty `PREFIX` is rejected so a
+clean package cannot silently inherit stale files from an earlier installation.
+Windows packages carry only the discovered UCRT64 runtime-DLL dependency closure.
+The exact MSYS2 package versions are recorded in
+`share/openstc32/windows-runtime-components.tsv`, and the matching package
+license texts are copied below `share/openstc32/licenses/msys2-ucrt64/` before
+the complete-file identity is generated.  This traceability does not replace
+the qualified legal review required by the tagged release workflow.
 
 ## Ownership and provenance
 

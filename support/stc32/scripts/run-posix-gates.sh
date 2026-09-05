@@ -9,7 +9,10 @@ ROOT="$(cd "$SUPPORT_ROOT/../.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 PREFIX="${PREFIX:-$BUILD_DIR/install}"
 JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '2')}"
-SIM_TIMEOUT="${SIM_TIMEOUT:-15}"
+# The mcs51-large Dilithium NTT regression needs about 16 seconds on the
+# supported Ubuntu x86_64 native builder.  Keep a bounded timeout, but leave
+# enough headroom that host speed is not mistaken for a target regression.
+SIM_TIMEOUT="${SIM_TIMEOUT:-30}"
 
 fail() {
   echo "run-posix-gates: $*" >&2
@@ -34,6 +37,10 @@ esac
 [[ -d "$BUILD_DIR/src/mcs251" ]] || fail "configured build tree not found: $BUILD_DIR"
 
 export STC32_TOOLCHAIN_ROOT="$PREFIX"
+# Backend self-checks intentionally execute the build-tree compiler.  With the
+# relocatable package's stable configure prefix, bind its header/library lookup
+# to the freshly verified install tree instead of an implicit build path.
+export SDCC_HOME="$PREFIX"
 
 echo "== STC32 core gates =="
 cd "$ROOT"
