@@ -611,6 +611,10 @@ class ReleaseToolTests(unittest.TestCase):
         self.assertIn('install DESTDIR="$INSTALL_STAGE"', build_script)
         self.assertIn('cpp_configargs="$BUILD_DIR/support/cpp/gcc/configargs.h"',
                       build_script)
+        self.assertIn('if [[ "${CFLAGS+x}" == x ]]; then', build_script)
+        self.assertIn('host_cflags="-g -O2"', build_script)
+        self.assertIn('host_cxxflags="-g -O2"', build_script)
+        self.assertIn('command rm -rf "$INSTALL_STAGE"', build_script)
         self.assertIn('unset COMPILER_PATH', build_script)
         self.assertIn('export COMPILER_PATH="$saved_compiler_path"',
                       build_script)
