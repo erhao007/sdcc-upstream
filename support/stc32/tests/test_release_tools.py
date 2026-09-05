@@ -619,6 +619,14 @@ class ReleaseToolTests(unittest.TestCase):
         self.assertIn('export COMPILER_PATH="$saved_compiler_path"',
                       build_script)
         self.assertIn("-name '*.la' -delete", build_script)
+        self.assertIn('shutil.which("strip")', build_script)
+        self.assertIn('options = ["-S"] if platform.system() == "Darwin"',
+                      build_script)
+        self.assertIn('b"!<ar"', build_script)
+        self.assertIn('suffix == ".a"', build_script)
+        self.assertIn('suffix in {".exe", ".dll"}', build_script)
+        self.assertIn('subprocess.run([strip, *options, str(path)], check=True)',
+                      build_script)
         self.assertIn("refusing to replace non-empty install prefix", build_script)
 
         windows_fixups = (
