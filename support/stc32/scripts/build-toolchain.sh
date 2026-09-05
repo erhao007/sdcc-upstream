@@ -201,6 +201,49 @@ test -d "$staged_prefix"
 # host binaries use the stable configure prefix, so exclude them from the
 # relocatable installation before its complete-file manifest is generated.
 find "$staged_prefix" -type f -name '*.la' -delete
+# Keep the build tree debuggable, but remove host debug sections from the
+# relocatable installation.  GCC/Clang prefix maps cover __FILE__ and DWARF
+# source paths; nested binutils builds can still retain their absolute build
+# directory in platform-specific debug records.  Detect host executables,
+# libraries, and standard ar archives by magic so scripts and ASxxxx target
+# runtime archives are never passed to the host strip tool.  SDCC target
+# archives use the standard ar container too, but have a .lib suffix; only
+# native .a archives are eligible here.
+python3 - "$staged_prefix" <<'PY'
+from pathlib import Path
+import platform
+import shutil
+import subprocess
+import sys
+
+prefix = Path(sys.argv[1])
+strip = shutil.which("strip")
+if not strip:
+    raise SystemExit("host strip tool is required for a relocatable installation")
+
+binary_magics = {
+    b"\x7fELF",
+    b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",
+    b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
+    b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
+    b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca",
+}
+options = ["-S"] if platform.system() == "Darwin" else ["--strip-debug"]
+stripped = 0
+for path in sorted(candidate for candidate in prefix.rglob("*") if candidate.is_file()):
+    with path.open("rb") as stream:
+        magic = stream.read(4)
+    suffix = path.suffix.lower()
+    is_native_archive = magic == b"!<ar" and suffix == ".a"
+    is_pe_image = magic.startswith(b"MZ") and suffix in {".exe", ".dll"}
+    if magic not in binary_magics and not is_native_archive and not is_pe_image:
+        continue
+    subprocess.run([strip, *options, str(path)], check=True)
+    stripped += 1
+if not stripped:
+    raise SystemExit("relocatable installation contains no strippable host binaries")
+print(f"Stripped debug sections from {stripped} installed host binaries")
+PY
 if [[ -e "$PREFIX" ]]; then
   if [[ -n "$(find "$PREFIX" -mindepth 1 -print -quit 2>/dev/null)" ]]; then
     echo "refusing to replace non-empty install prefix: $PREFIX" >&2
