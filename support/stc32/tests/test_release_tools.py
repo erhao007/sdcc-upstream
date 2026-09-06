@@ -712,7 +712,8 @@ class ReleaseToolTests(unittest.TestCase):
                        "STANDARD_EXEC_PREFIX", "GCC_INCLUDE_DIR",
                        "NATIVE_SYSTEM_HEADER_DIR"):
             self.assertIn(define, path_maps)
-        self.assertIn('"$msys_root_native" "${host_path_roots[@]}"', build_script)
+        self.assertIn('"$msys_root_native" ${host_path_roots[@]+"${host_path_roots[@]}"}',
+                      build_script)
         self.assertIn('command rm -rf "$INSTALL_STAGE"', build_script)
         self.assertIn('unset COMPILER_PATH', build_script)
         self.assertIn('export COMPILER_PATH="$saved_compiler_path"',
