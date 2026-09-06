@@ -154,24 +154,24 @@ fi
 python3 "$SUPPORT_ROOT/tools/sanitize_generated_paths.py" \
   --source-root "$ROOT" --build-root "$BUILD_DIR" \
   "${generated_path_files[@]}"
+# COMPILER_PATH is required by the already-built native sdcpp.exe so it can
+# find cc1 on Windows.  It must not leak into either host-GCC rebuild below:
+# GCC would otherwise select support/cpp/gcc/as (its in-tree wrapper), whose
+# original assembler is unset in this standalone build, and try to execute
+# the first -I option as a command.
+restore_compiler_path=0
+if [[ "$(uname -s)" == MINGW* && -n "${COMPILER_PATH+x}" ]]; then
+  saved_compiler_path="$COMPILER_PATH"
+  unset COMPILER_PATH
+  restore_compiler_path=1
+fi
 if [[ -f "$cpp_configargs" ]]; then
-  # COMPILER_PATH is required by the already-built native sdcpp.exe so it can
-  # find cc1 on Windows.  It must not leak into the host-GCC rebuild below:
-  # GCC would otherwise select support/cpp/gcc/as (its in-tree wrapper), whose
-  # original assembler is unset in this standalone build, and try to execute
-  # the first -I option as a command.
-  restore_compiler_path=0
-  if [[ "$(uname -s)" == MINGW* && -n "${COMPILER_PATH+x}" ]]; then
-    saved_compiler_path="$COMPILER_PATH"
-    unset COMPILER_PATH
-    restore_compiler_path=1
-  fi
   make -C "$BUILD_DIR/support/cpp" -j"$JOBS"
-  if ((restore_compiler_path)); then
-    export COMPILER_PATH="$saved_compiler_path"
-  fi
 fi
 make -C "$BUILD_DIR/src" -j"$JOBS"
+if ((restore_compiler_path)); then
+  export COMPILER_PATH="$saved_compiler_path"
+fi
 if [[ "$(uname -s)" == MINGW* ]]; then
   # Refresh the extensionless copies used by the Windows target-library and
   # regression harnesses after rebuilding both sdcc.exe and sdcpp.exe.
