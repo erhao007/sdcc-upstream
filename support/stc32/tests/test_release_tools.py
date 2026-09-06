@@ -25,6 +25,7 @@ REPOSITORY = STC32_ROOT.parents[1]
 sys.path.insert(0, str(TOOLS))
 
 import package_install  # noqa: E402
+import check_install_hygiene  # noqa: E402
 import install_identity  # noqa: E402
 import sanitize_generated_paths  # noqa: E402
 import validate_package_install  # noqa: E402
@@ -44,6 +45,32 @@ def sha256_bytes(data: bytes) -> str:
 
 
 class GeneratedPathSanitizerTests(unittest.TestCase):
+    def test_host_prefix_is_removed_from_recorded_configure_flags(self) -> None:
+        content = ('CFLAGS=-ffile-prefix-map=D:/a/_temp/msys64/ucrt64=.host '
+                   'CXXFLAGS=-ffile-prefix-map=/ucrt64=.host')
+        sanitized = sanitize_generated_paths.sanitize_text(
+            content, [("D:/a/_temp/msys64/ucrt64", ".host"),
+                      ("/ucrt64", ".host")])
+        self.assertNotIn("msys64", sanitized)
+        self.assertNotIn("/ucrt64", sanitized)
+        self.assertEqual(sanitized.count("-ffile-prefix-map=.host=.host"), 2)
+
+    def test_early_hygiene_rejects_native_path_and_reports_location(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary)
+            with self.assertRaisesRegex(SystemExit, "empty installation"):
+                check_install_hygiene.check_install(prefix, [])
+            binary = prefix / "sdcc.exe"
+            binary.write_bytes(b'MZ\0D:/a/_temp/msys64/ucrt64/include/boost/assert.hpp\0')
+            with self.assertRaises(SystemExit) as caught:
+                check_install_hygiene.check_install(prefix, ["/d/a/_temp"])
+            diagnostic = str(caught.exception)
+            for value in ("sdcc.exe", "offset=0x3", "token=", "boost/assert.hpp"):
+                self.assertIn(value, diagnostic)
+            binary.write_bytes(b'MZ\0.host/include/boost/assert.hpp\0')
+            self.assertEqual(
+                check_install_hygiene.check_install(prefix, ["/d/a/_temp"]), 1)
+
     def test_sanitizes_msys_native_and_escaped_windows_paths(self) -> None:
         source = r"D:\a\sdcc-upstream\sdcc-upstream"
         build = "/d/a/_temp/stc32-build"
@@ -656,6 +683,13 @@ class ReleaseToolTests(unittest.TestCase):
         self.assertIn('cpp_configargs="$BUILD_DIR/support/cpp/gcc/configargs.h"',
                       build_script)
         self.assertIn('sanitize_generated_paths.py', build_script)
+        self.assertIn('source "$SUPPORT_ROOT/scripts/host-path-maps.sh"', build_script)
+        self.assertIn('host_path_args+=(--host-prefix "$host_path_root")', build_script)
+        self.assertIn('check_install_hygiene.py', build_script)
+        self.assertLess(build_script.index('post-install'),
+                        build_script.index('check_install_hygiene.py'))
+        self.assertLess(build_script.index('check_install_hygiene.py'),
+                        build_script.index('install_identity.py'))
         for generated_name in ("SDCCy.c", "SDCCy.h", "SDCClex.c"):
             self.assertIn(f'"$BUILD_DIR/src/{generated_name}"', build_script)
         self.assertIn('make -C "$BUILD_DIR/src" -j"$JOBS"', build_script)

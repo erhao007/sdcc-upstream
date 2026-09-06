@@ -85,11 +85,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-root", required=True)
     parser.add_argument("--build-root", required=True)
+    parser.add_argument("--host-prefix", action="append", default=[])
     parser.add_argument("paths", nargs="+", type=Path)
     args = parser.parse_args()
     changed = sanitize_files(
         args.paths,
-        [(args.source_root, "."), (args.build_root, ".build")],
+        [(args.source_root, "."), (args.build_root, ".build")]
+        + [(prefix, ".host") for prefix in args.host_prefix],
     )
     print(f"Sanitized transient paths from {len(changed)} generated build files")
 

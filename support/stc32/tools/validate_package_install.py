@@ -152,8 +152,13 @@ def verify_package_hygiene(members: dict[PurePosixPath, bytes],
         if relative.suffix.lower() in BUILD_METADATA_SUFFIXES:
             raise SystemExit(f"build metadata in package: {relative}")
         for token in tokens:
-            if token in data:
-                raise SystemExit(f"absolute build path in package: {relative}")
+            offset = data.find(token)
+            if offset >= 0:
+                context = data[offset:offset + 180].split(b"\0", 1)[0]
+                raise SystemExit(
+                    f"absolute build path in package: {relative}; "
+                    f"token={token!r}; offset=0x{offset:x}; context={context!r}"
+                )
 
 
 def executable_members(package: Path) -> set[PurePosixPath]:
