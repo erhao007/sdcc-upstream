@@ -25,15 +25,6 @@ INSTALL_STAGE="$BUILD_DIR/.openstc32-install-stage"
 # CI or developer paths, so normalize both roots at compile time while keeping
 # caller-supplied optimization/warning flags intact.
 source "$SUPPORT_ROOT/scripts/host-path-maps.sh"
-if [[ "$(uname -s)" == MINGW* ]]; then
-  # MSYS2 rewrites POSIX paths embedded in -D arguments before invoking a
-  # native compiler.  In GitHub Actions its installation lives below
-  # RUNNER_TEMP, so sdbinutils' logical /opt/openstc32 BINDIR/LIBDIR values
-  # would otherwise become runner-specific paths in c++filt.exe and peers.
-  # Exclude only the configure-prefix defines; source/include arguments must
-  # continue to receive normal MSYS2 path conversion.
-  export MSYS2_ARG_CONV_EXCL="${MSYS2_ARG_CONV_EXCL:+$MSYS2_ARG_CONV_EXCL;}-DBINDIR=;-DLIBDIR=;-DLOCALEDIR=;-DDEBUGDIR="
-fi
 # An explicitly supplied CFLAGS/CXXFLAGS value tells Autoconf that the caller
 # supplied the complete host flags and suppresses its normal GCC defaults
 # (-g -O2). Keep those defaults when the caller did not provide an override;
@@ -277,7 +268,7 @@ fi
 # even on local Windows, where it does not happen to live under RUNNER_TEMP.
 hygiene_args=()
 for hygiene_root in "$ROOT" "$BUILD_DIR" "$PREFIX" "${RUNNER_TEMP:-}" \
-                    "${host_path_roots[@]}"; do
+                    "$msys_root_native" "${host_path_roots[@]}"; do
   [[ -z "$hygiene_root" ]] || hygiene_args+=(--forbid-path "$hygiene_root")
 done
 python3 "$SUPPORT_ROOT/tools/check_install_hygiene.py" "$PREFIX" \

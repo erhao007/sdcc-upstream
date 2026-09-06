@@ -19,6 +19,13 @@ pass while the GitHub package scan failed. The failed job did not upload its
 binary, so attribution is based on the log's toolchain location and the native
 binary/reproduction, not on inspection of the missing GitHub artifact.
 
+A whole-install scan found a second source that the first-failure-only check
+had hidden: `sdcpp.exe` and `libexec/.../cc1.exe` record MSYS-rewritten logical
+installation/include directory macros. The native baseline contains 199 MSYS
+path occurrences in `sdcc.exe`, 7 in `sdcpp.exe`, and 13 in `cc1.exe`; their first
+matches are all in PE `.rdata`. GCC's `PREFIX`, `STANDARD_*_PREFIX` and include
+directory macros need the same narrow conversion exclusions as sdbinutils.
+
 ## Bounded repair
 
 - Share the actual build prefix-map flags with a Windows-native regression.
@@ -31,6 +38,9 @@ binary/reproduction, not on inspection of the missing GitHub artifact.
   root even when it lives outside `RUNNER_TEMP` on a developer machine.
 - Report the matched token, byte offset and bounded context on failure.
   Keep the independent post-archive validation and every regression gate.
+- Preserve bundled GCC's logical directory macros with exact `-D` exclusions;
+  keep source and `-I` path conversion active. Forbid the entire native MSYS
+  installation root, not just its UCRT dependency subtree.
 
 ## Reproduction and acceptance
 
