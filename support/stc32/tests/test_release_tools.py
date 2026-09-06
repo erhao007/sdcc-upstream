@@ -706,9 +706,13 @@ class ReleaseToolTests(unittest.TestCase):
         self.assertIn('if [[ "${CFLAGS+x}" == x ]]; then', build_script)
         self.assertIn('host_cflags="-g -O2"', build_script)
         self.assertIn('host_cxxflags="-g -O2"', build_script)
-        self.assertIn('export MSYS2_ARG_CONV_EXCL=', build_script)
-        for define in ("-DBINDIR=", "-DLIBDIR=", "-DLOCALEDIR=", "-DDEBUGDIR="):
-            self.assertIn(define, build_script)
+        path_maps = (REPOSITORY / "support/stc32/scripts/host-path-maps.sh").read_text()
+        self.assertIn('export MSYS2_ARG_CONV_EXCL=', path_maps)
+        for define in ("BINDIR", "LIBDIR", "LOCALEDIR", "DEBUGDIR", "PREFIX",
+                       "STANDARD_EXEC_PREFIX", "GCC_INCLUDE_DIR",
+                       "NATIVE_SYSTEM_HEADER_DIR"):
+            self.assertIn(define, path_maps)
+        self.assertIn('"$msys_root_native" "${host_path_roots[@]}"', build_script)
         self.assertIn('command rm -rf "$INSTALL_STAGE"', build_script)
         self.assertIn('unset COMPILER_PATH', build_script)
         self.assertIn('export COMPILER_PATH="$saved_compiler_path"',

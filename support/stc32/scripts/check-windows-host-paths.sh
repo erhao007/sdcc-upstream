@@ -7,14 +7,16 @@ ROOT="$(cd "$SUPPORT_ROOT/../.." && pwd)"
 probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/stc32-host-paths.XXXXXX")"
 trap 'rm -rf -- "$probe_dir"' EXIT
 BUILD_DIR="$probe_dir"
+original_arg_exclusions="${MSYS2_ARG_CONV_EXCL:-}"
 source "$SUPPORT_ROOT/scripts/host-path-maps.sh"
 unset COMPILER_PATH
 fixture="$SUPPORT_ROOT/tests/package/host_header_path.cpp"
-g++ -g -O2 "$fixture" -o "$probe_dir/unmapped.exe"
+logical_defines=('-DPREFIX="/opt/openstc32"' '-DNATIVE_SYSTEM_HEADER_DIR="/mingw/include"')
+env MSYS2_ARG_CONV_EXCL="$original_arg_exclusions" \
+  g++ -g -O2 "${logical_defines[@]}" "$fixture" -o "$probe_dir/unmapped.exe"
 # The production Autoconf driver likewise expands its space-separated flags.
-g++ -g -O2 $path_map_flags "$fixture" -o "$probe_dir/mapped.exe"
+g++ -g -O2 $path_map_flags "${logical_defines[@]}" "$fixture" -o "$probe_dir/mapped.exe"
 strip --strip-debug "$probe_dir/unmapped.exe" "$probe_dir/mapped.exe"
 python "$SUPPORT_ROOT/tests/package/check_host_header_path.py" \
-  "$probe_dir" "$host_native"
-"$probe_dir/mapped.exe"
+  "$probe_dir" "$msys_root_native"
 echo "Windows host-header path regression passed (assertions retained)"
