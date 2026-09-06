@@ -659,6 +659,12 @@ class ReleaseToolTests(unittest.TestCase):
         for generated_name in ("SDCCy.c", "SDCCy.h", "SDCClex.c"):
             self.assertIn(f'"$BUILD_DIR/src/{generated_name}"', build_script)
         self.assertIn('make -C "$BUILD_DIR/src" -j"$JOBS"', build_script)
+        src_rebuild = build_script.index('make -C "$BUILD_DIR/src" -j"$JOBS"')
+        self.assertLess(build_script.index("unset COMPILER_PATH"), src_rebuild)
+        self.assertGreater(
+            build_script.index('export COMPILER_PATH="$saved_compiler_path"'),
+            src_rebuild,
+        )
         self.assertLess(
             build_script.index("sanitize_generated_paths.py"),
             build_script.index("model-mcs251"),
