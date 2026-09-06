@@ -139,12 +139,13 @@ if [[ -f "$cpp_configargs" ]]; then
   generated_path_files+=("$cpp_configargs")
 fi
 host_path_args=()
-for host_path_root in "${host_path_roots[@]}"; do
+# macOS ships Bash 3.2: an empty array is "unset" under nounset there.
+for host_path_root in ${host_path_roots[@]+"${host_path_roots[@]}"}; do
   host_path_args+=(--host-prefix "$host_path_root")
 done
 python3 "$SUPPORT_ROOT/tools/sanitize_generated_paths.py" \
   --source-root "$ROOT" --build-root "$BUILD_DIR" \
-  "${host_path_args[@]}" \
+  ${host_path_args[@]+"${host_path_args[@]}"} \
   "${generated_path_files[@]}"
 # COMPILER_PATH is required by the already-built native sdcpp.exe so it can
 # find cc1 on Windows.  It must not leak into either host-GCC rebuild below:
@@ -268,7 +269,7 @@ fi
 # even on local Windows, where it does not happen to live under RUNNER_TEMP.
 hygiene_args=()
 for hygiene_root in "$ROOT" "$BUILD_DIR" "$PREFIX" "${RUNNER_TEMP:-}" \
-                    "$msys_root_native" "${host_path_roots[@]}"; do
+                    "$msys_root_native" ${host_path_roots[@]+"${host_path_roots[@]}"}; do
   [[ -z "$hygiene_root" ]] || hygiene_args+=(--forbid-path "$hygiene_root")
 done
 python3 "$SUPPORT_ROOT/tools/check_install_hygiene.py" "$PREFIX" \
