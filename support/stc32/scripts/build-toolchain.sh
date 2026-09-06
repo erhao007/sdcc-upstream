@@ -30,6 +30,13 @@ if [[ "$(uname -s)" == MINGW* ]]; then
   build_native="$(cygpath -m "$BUILD_DIR")"
   path_map_flags+=" -ffile-prefix-map=$root_native=."
   path_map_flags+=" -ffile-prefix-map=$build_native=.build"
+  # MSYS2 rewrites POSIX paths embedded in -D arguments before invoking a
+  # native compiler.  In GitHub Actions its installation lives below
+  # RUNNER_TEMP, so sdbinutils' logical /opt/openstc32 BINDIR/LIBDIR values
+  # would otherwise become runner-specific paths in c++filt.exe and peers.
+  # Exclude only the configure-prefix defines; source/include arguments must
+  # continue to receive normal MSYS2 path conversion.
+  export MSYS2_ARG_CONV_EXCL="${MSYS2_ARG_CONV_EXCL:+$MSYS2_ARG_CONV_EXCL;}-DBINDIR=;-DLIBDIR=;-DLOCALEDIR=;-DDEBUGDIR="
 fi
 # An explicitly supplied CFLAGS/CXXFLAGS value tells Autoconf that the caller
 # supplied the complete host flags and suppresses its normal GCC defaults
