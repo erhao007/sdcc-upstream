@@ -26,6 +26,7 @@ sys.path.insert(0, str(TOOLS))
 
 import package_install  # noqa: E402
 import install_identity  # noqa: E402
+import sanitize_generated_paths  # noqa: E402
 import validate_package_install  # noqa: E402
 import verify_install  # noqa: E402
 import verify_release_assets  # noqa: E402
@@ -40,6 +41,49 @@ PLATFORM_BY_HOST = {
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+class GeneratedPathSanitizerTests(unittest.TestCase):
+    def test_sanitizes_msys_native_and_escaped_windows_paths(self) -> None:
+        source = r"D:\a\sdcc-upstream\sdcc-upstream"
+        build = "/d/a/_temp/stc32-build"
+        content = "\n".join(
+            (
+                "/d/a/sdcc-upstream/sdcc-upstream/src/SDCC.y",
+                r"D:\a\sdcc-upstream\sdcc-upstream\src\SDCC.lex",
+                r"D:\\a\\sdcc-upstream\\sdcc-upstream\\src\\SDCC.y",
+                "/d/a/_temp/stc32-build/src/SDCCy.c",
+                "D:/a/_temp/stc32-build/src/SDCClex.c",
+            )
+        )
+        sanitized = sanitize_generated_paths.sanitize_text(
+            content, [(source, "."), (build, ".build")]
+        )
+        self.assertNotIn("sdcc-upstream", sanitized)
+        self.assertNotIn("stc32-build", sanitized)
+        self.assertIn("./src/SDCC.y", sanitized)
+        self.assertIn(".build/src/SDCCy.c", sanitized)
+
+    def test_sanitization_is_idempotent_and_prefers_longest_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            generated = Path(temporary) / "generated.c"
+            generated.write_text(
+                '#line 1 "/workspace/build/generated.c"\n'
+                '#line 1 "/workspace/source.c"\n',
+                encoding="utf-8",
+            )
+            replacements = [("/workspace", "."), ("/workspace/build", ".build")]
+            self.assertEqual(
+                sanitize_generated_paths.sanitize_files([generated], replacements),
+                [generated],
+            )
+            self.assertEqual(
+                generated.read_text(encoding="utf-8"),
+                '#line 1 ".build/generated.c"\n#line 1 "./source.c"\n',
+            )
+            self.assertEqual(
+                sanitize_generated_paths.sanitize_files([generated], replacements), []
+            )
 
 
 class ReleaseToolTests(unittest.TestCase):
@@ -611,6 +655,14 @@ class ReleaseToolTests(unittest.TestCase):
         self.assertIn('install DESTDIR="$INSTALL_STAGE"', build_script)
         self.assertIn('cpp_configargs="$BUILD_DIR/support/cpp/gcc/configargs.h"',
                       build_script)
+        self.assertIn('sanitize_generated_paths.py', build_script)
+        for generated_name in ("SDCCy.c", "SDCCy.h", "SDCClex.c"):
+            self.assertIn(f'"$BUILD_DIR/src/{generated_name}"', build_script)
+        self.assertIn('make -C "$BUILD_DIR/src" -j"$JOBS"', build_script)
+        self.assertLess(
+            build_script.index("sanitize_generated_paths.py"),
+            build_script.index("model-mcs251"),
+        )
         self.assertIn('if [[ "${CFLAGS+x}" == x ]]; then', build_script)
         self.assertIn('host_cflags="-g -O2"', build_script)
         self.assertIn('host_cxxflags="-g -O2"', build_script)

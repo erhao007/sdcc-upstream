@@ -134,29 +134,27 @@ if [[ "$(uname -s)" == MINGW* ]]; then
 fi
 make -C "$BUILD_DIR" -j"$JOBS"
 
-# GCC's bundled preprocessor records its configure command in configargs.h;
-# compiler prefix-map flags do not rewrite that arbitrary string literal.
-# Normalize the generated header, then let its dependency edge rebuild sdcpp.
+# GCC's bundled preprocessor records its configure command in configargs.h.
+# Bison and Flex likewise copy their absolute input names into generated #line
+# directives; MinGW keeps those names in sdcc.exe even after debug stripping.
+# Compiler prefix-map flags cannot rewrite these generator-owned text files, so
+# normalize them before rebuilding the affected host tools.
 cpp_configargs="$BUILD_DIR/support/cpp/gcc/configargs.h"
+generated_path_files=(
+  "$BUILD_DIR/src/SDCCy.c"
+  "$BUILD_DIR/src/SDCCy.h"
+  "$BUILD_DIR/src/SDCClex.c"
+)
+for generated_path_file in "${generated_path_files[@]}"; do
+  test -f "$generated_path_file"
+done
 if [[ -f "$cpp_configargs" ]]; then
-  sanitize_args=("$ROOT" "." "$BUILD_DIR" ".build")
-  if [[ "$(uname -s)" == MINGW* ]]; then
-    sanitize_args+=("$root_native" "." "$build_native" ".build")
-  fi
-  python3 - "$cpp_configargs" "${sanitize_args[@]}" <<'PY'
-from pathlib import Path
-import sys
-
-header = Path(sys.argv[1])
-content = header.read_text(encoding="utf-8")
-sanitized = content
-values = sys.argv[2:]
-for old, new in zip(values[0::2], values[1::2]):
-    sanitized = sanitized.replace(old, new)
-    sanitized = sanitized.replace(old.replace("/", "\\\\"), new)
-if sanitized != content:
-    header.write_text(sanitized, encoding="utf-8")
-PY
+  generated_path_files+=("$cpp_configargs")
+fi
+python3 "$SUPPORT_ROOT/tools/sanitize_generated_paths.py" \
+  --source-root "$ROOT" --build-root "$BUILD_DIR" \
+  "${generated_path_files[@]}"
+if [[ -f "$cpp_configargs" ]]; then
   # COMPILER_PATH is required by the already-built native sdcpp.exe so it can
   # find cc1 on Windows.  It must not leak into the host-GCC rebuild below:
   # GCC would otherwise select support/cpp/gcc/as (its in-tree wrapper), whose
@@ -172,6 +170,12 @@ PY
   if ((restore_compiler_path)); then
     export COMPILER_PATH="$saved_compiler_path"
   fi
+fi
+make -C "$BUILD_DIR/src" -j"$JOBS"
+if [[ "$(uname -s)" == MINGW* ]]; then
+  # Refresh the extensionless copies used by the Windows target-library and
+  # regression harnesses after rebuilding both sdcc.exe and sdcpp.exe.
+  bash "$SUPPORT_ROOT/scripts/windows-build-fixups.sh" post-host-tools
 fi
 
 # Device-library objects do not depend on the compiler executable, so an
