@@ -684,7 +684,7 @@ class ReleaseToolTests(unittest.TestCase):
                       build_script)
         self.assertIn('sanitize_generated_paths.py', build_script)
         self.assertIn('source "$SUPPORT_ROOT/scripts/host-path-maps.sh"', build_script)
-        self.assertIn('host_path_args+=(--host-prefix "$host_path_root")', build_script)
+        self.assertIn('host_path_args+=("--host-prefix=$host_path_root")', build_script)
         self.assertIn('check_install_hygiene.py', build_script)
         self.assertLess(build_script.index('post-install'),
                         build_script.index('check_install_hygiene.py'))
@@ -708,6 +708,8 @@ class ReleaseToolTests(unittest.TestCase):
         self.assertIn('host_cxxflags="-g -O2"', build_script)
         path_maps = (REPOSITORY / "support/stc32/scripts/host-path-maps.sh").read_text()
         self.assertIn('export MSYS2_ARG_CONV_EXCL=', path_maps)
+        self.assertIn('--host-prefix=;--forbid-path=', path_maps)
+        self.assertIn('hygiene_args+=("--forbid-path=$hygiene_root")', build_script)
         for define in ("BINDIR", "LIBDIR", "LOCALEDIR", "DEBUGDIR", "PREFIX",
                        "STANDARD_EXEC_PREFIX", "GCC_INCLUDE_DIR",
                        "NATIVE_SYSTEM_HEADER_DIR"):

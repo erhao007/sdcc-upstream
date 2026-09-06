@@ -141,7 +141,7 @@ fi
 host_path_args=()
 # macOS ships Bash 3.2: an empty array is "unset" under nounset there.
 for host_path_root in ${host_path_roots[@]+"${host_path_roots[@]}"}; do
-  host_path_args+=(--host-prefix "$host_path_root")
+  host_path_args+=("--host-prefix=$host_path_root")
 done
 python3 "$SUPPORT_ROOT/tools/sanitize_generated_paths.py" \
   --source-root "$ROOT" --build-root "$BUILD_DIR" \
@@ -270,7 +270,7 @@ fi
 hygiene_args=()
 for hygiene_root in "$ROOT" "$BUILD_DIR" "$PREFIX" "${RUNNER_TEMP:-}" \
                     "$msys_root_native" ${host_path_roots[@]+"${host_path_roots[@]}"}; do
-  [[ -z "$hygiene_root" ]] || hygiene_args+=(--forbid-path "$hygiene_root")
+  [[ -z "$hygiene_root" ]] || hygiene_args+=("--forbid-path=$hygiene_root")
 done
 python3 "$SUPPORT_ROOT/tools/check_install_hygiene.py" "$PREFIX" \
   "${hygiene_args[@]}"

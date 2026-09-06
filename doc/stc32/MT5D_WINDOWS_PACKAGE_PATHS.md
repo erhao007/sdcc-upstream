@@ -41,6 +41,10 @@ directory macros need the same narrow conversion exclusions as sdbinutils.
 - Preserve bundled GCC's logical directory macros with exact `-D` exclusions;
   keep source and `-I` path conversion active. Forbid the entire native MSYS
   installation root, not just its UCRT dependency subtree.
+- Pass Python's literal-match options in excluded `--option=value` form.
+  Otherwise MSYS rewrites `/ucrt64` before the sanitizer/checker receives it,
+  leaving the POSIX spelling in recorded configuration flags. The native test
+  exercises this CLI boundary as well as compilation and stripping.
 
 ## Reproduction and acceptance
 

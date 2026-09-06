@@ -19,4 +19,15 @@ g++ -g -O2 $path_map_flags "${logical_defines[@]}" "$fixture" -o "$probe_dir/map
 strip --strip-debug "$probe_dir/unmapped.exe" "$probe_dir/mapped.exe"
 python "$SUPPORT_ROOT/tests/package/check_host_header_path.py" \
   "$probe_dir" "$msys_root_native"
+# Exercise the real MSYS-to-native-Python boundary, not only sanitize_text().
+printf '%s\n' "$path_map_flags" > "$probe_dir/configargs.h"
+python "$SUPPORT_ROOT/tools/sanitize_generated_paths.py" \
+  --source-root "$ROOT" --build-root "$BUILD_DIR" \
+  "--host-prefix=$MINGW_PREFIX" "--host-prefix=$host_native" \
+  "$probe_dir/configargs.h"
+if grep -F -- "$MINGW_PREFIX" "$probe_dir/configargs.h" || \
+   grep -F -- "$host_native" "$probe_dir/configargs.h"; then
+  echo "native sanitizer failed to preserve literal match arguments" >&2
+  exit 1
+fi
 echo "Windows host-header path regression passed (assertions retained)"
