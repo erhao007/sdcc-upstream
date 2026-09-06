@@ -35,4 +35,7 @@ if [[ "$(uname -s)" == MINGW* ]]; then
   for logical_path_define in "${logical_path_defines[@]}"; do
     export MSYS2_ARG_CONV_EXCL="${MSYS2_ARG_CONV_EXCL:+$MSYS2_ARG_CONV_EXCL;}-D$logical_path_define="
   done
+  # These options carry strings to match, not files to open. In equals form
+  # they can be excluded without disabling conversion of actual Python inputs.
+  export MSYS2_ARG_CONV_EXCL="$MSYS2_ARG_CONV_EXCL;--host-prefix=;--forbid-path="
 fi
