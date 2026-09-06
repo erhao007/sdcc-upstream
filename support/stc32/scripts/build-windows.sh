@@ -47,6 +47,8 @@ import yaml, serial
 PY
 [[ -x /usr/bin/python ]] || fail "MSYS python missing: pacman -S python"
 
+bash "$SUPPORT_ROOT/scripts/check-windows-host-paths.sh"
+
 echo "== build =="
 export SDCC_HOME="$PREFIX"           # Windows sdcc argv[0] path discovery is inert
 export PYTHONUTF8=1

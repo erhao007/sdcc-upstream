@@ -24,12 +24,8 @@ INSTALL_STAGE="$BUILD_DIR/.openstc32-install-stage"
 # checkout/build directory through __FILE__.  Release packages must not expose
 # CI or developer paths, so normalize both roots at compile time while keeping
 # caller-supplied optimization/warning flags intact.
-path_map_flags="-ffile-prefix-map=$ROOT=. -ffile-prefix-map=$BUILD_DIR=.build"
+source "$SUPPORT_ROOT/scripts/host-path-maps.sh"
 if [[ "$(uname -s)" == MINGW* ]]; then
-  root_native="$(cygpath -m "$ROOT")"
-  build_native="$(cygpath -m "$BUILD_DIR")"
-  path_map_flags+=" -ffile-prefix-map=$root_native=."
-  path_map_flags+=" -ffile-prefix-map=$build_native=.build"
   # MSYS2 rewrites POSIX paths embedded in -D arguments before invoking a
   # native compiler.  In GitHub Actions its installation lives below
   # RUNNER_TEMP, so sdbinutils' logical /opt/openstc32 BINDIR/LIBDIR values
@@ -151,8 +147,13 @@ done
 if [[ -f "$cpp_configargs" ]]; then
   generated_path_files+=("$cpp_configargs")
 fi
+host_path_args=()
+for host_path_root in "${host_path_roots[@]}"; do
+  host_path_args+=(--host-prefix "$host_path_root")
+done
 python3 "$SUPPORT_ROOT/tools/sanitize_generated_paths.py" \
   --source-root "$ROOT" --build-root "$BUILD_DIR" \
+  "${host_path_args[@]}" \
   "${generated_path_files[@]}"
 # COMPILER_PATH is required by the already-built native sdcpp.exe so it can
 # find cc1 on Windows.  It must not leak into either host-GCC rebuild below:
@@ -269,6 +270,18 @@ command rm -rf "$INSTALL_STAGE"
 if [[ "$(uname -s)" == MINGW* ]]; then
   bash "$SUPPORT_ROOT/scripts/windows-build-fixups.sh" post-install
 fi
+
+# Fail immediately on the installed bytes, including third-party DLLs. This
+# must precede the multi-hour regression lanes; package validation still runs
+# its independent check after archiving. The MSYS dependency root is forbidden
+# even on local Windows, where it does not happen to live under RUNNER_TEMP.
+hygiene_args=()
+for hygiene_root in "$ROOT" "$BUILD_DIR" "$PREFIX" "${RUNNER_TEMP:-}" \
+                    "${host_path_roots[@]}"; do
+  [[ -z "$hygiene_root" ]] || hygiene_args+=(--forbid-path "$hygiene_root")
+done
+python3 "$SUPPORT_ROOT/tools/check_install_hygiene.py" "$PREFIX" \
+  "${hygiene_args[@]}"
 
 SDCC="$PREFIX/bin/sdcc"
 HEADER="$PREFIX/share/sdcc/include/mcs251/stc32g12k128.h"
