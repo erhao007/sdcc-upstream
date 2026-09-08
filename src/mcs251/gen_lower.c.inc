@@ -2502,9 +2502,6 @@ loadDptrFromOperand (operand *op, bool loadBToo)
                     }
                   else
                     {
-                      if (cached_parsed && new_parsed)
-                        fprintf (stderr, "DPTR no-match: cached=(%s,0x%lx) new=(%s,0x%lx)\n",
-                                 cached_base, cached_off, new_base, new_off);
                       emitcode ("mov", "dptr,%s", dptr_buf);
                       emitcode ("mov", "dpxl,%s", dpxl_buf);
                       /* Update the cache. */
