@@ -7,7 +7,9 @@ import subprocess
 import tempfile
 
 
-def compile_source(sdcc, source, port, expect_success, workspace):
+def compile_source(
+    sdcc, source, port, expect_success, workspace, forbidden_output=None
+):
     object_file = workspace / f"{port}-{source.stem}.rel"
     command = [str(sdcc), f"-m{port}"]
     command.extend(["-c", "-o", str(object_file), str(source)])
@@ -31,6 +33,11 @@ def compile_source(sdcc, source, port, expect_success, workspace):
         not object_file.is_file() or not object_file.stat().st_size
     ):
         raise RuntimeError(f"{port} did not generate {object_file.name}")
+    if forbidden_output and forbidden_output in result.stdout:
+        raise RuntimeError(
+            f"{port} emitted internal diagnostic {forbidden_output!r} "
+            f"for {source.name}:\n{result.stdout}"
+        )
 
     outcome = "accepted" if expect_success else "rejected"
     print(f"PASS: {port} {outcome} {source.name}")
@@ -46,6 +53,7 @@ def main():
         "--incompatible-shadowed-struct-source", required=True
     )
     parser.add_argument("--invalid-wide-bitfield-source", required=True)
+    parser.add_argument("--quiet-dptr-cache-source", required=True)
     args = parser.parse_args()
 
     sdcc = Path(args.sdcc).resolve()
@@ -57,6 +65,7 @@ def main():
         Path(args.incompatible_shadowed_struct_source).resolve()
     invalid_wide_bitfield_source = \
         Path(args.invalid_wide_bitfield_source).resolve()
+    quiet_dptr_cache_source = Path(args.quiet_dptr_cache_source).resolve()
     for path in (
         sdcc,
         incompatible_source,
@@ -64,6 +73,7 @@ def main():
         compatible_block_source,
         incompatible_shadowed_source,
         invalid_wide_bitfield_source,
+        quiet_dptr_cache_source,
     ):
         if not path.exists():
             parser.error(f"required path does not exist: {path}")
@@ -86,6 +96,14 @@ def main():
             compile_source(
                 sdcc, invalid_wide_bitfield_source, port, False, workspace
             )
+        compile_source(
+            sdcc,
+            quiet_dptr_cache_source,
+            "mcs251",
+            True,
+            workspace,
+            forbidden_output="DPTR no-match",
+        )
 
 
 if __name__ == "__main__":
